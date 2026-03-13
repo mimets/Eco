@@ -285,3 +285,21 @@ app.listen(PORT, async () => {
   console.log(`🚀 EcoTrack v2.FF http://localhost:${PORT}`);
   await initDB();
 });
+// ── SETUP PRIMO ADMIN (rimuovi dopo il primo utilizzo!) ──
+app.post('/api/setup-admin', async (req, res) => {
+  const { email, secret } = req.body;
+  if (secret !== 'ecotrack-setup-2026') {
+    return res.status(403).json({ error: 'Chiave errata' });
+  }
+  try {
+    await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false');
+    const result = await pool.query(
+      'UPDATE users SET is_admin = true WHERE email = $1 RETURNING id, name, email',
+      [email]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Utente non trovato' });
+    res.json({ success: true, user: result.rows[0] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
