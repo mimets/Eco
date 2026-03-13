@@ -1,7 +1,6 @@
 {
   "name": "ecotrack",
   "version": "1.0.0",
-  "description": "EcoTrack CO2 Tracker",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
