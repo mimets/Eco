@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoTrack - CO₂ Work Tracker</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Login (nascondi dopo primo uso) -->
+  <div id="loginScreen" class="screen">
+    <div class="login-container">
+      <div class="login-form">
+        <div class="logo"><i class="fas fa-leaf"></i> EcoTrack</div>
+        <h1>Benvenuto!</h1>
+        <button class="login-btn" onclick="showDashboard()">Entra come <strong>Federico</strong></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Principale -->
+  <div id="dashboard" class="dashboard">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="logo"><i class="fas fa-leaf"></i> EcoTrack</div>
+      <div class="top-right">
+        <button class="nav-btn active" data-tab="dashboard"><i class="fas fa-chart-line"></i></button>
+        <button class="nav-btn" data-tab="log"><i class="fas fa-list"></i></button>
+        <button class="nav-btn" data-tab="challenges"><i class="fas fa-trophy"></i></button>
+        <button class="nav-btn" data-tab="leaderboard"><i class="fas fa-crown"></i></button>
+      </div>
+    </header>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card co2-card">
+        <div class="stat-icon"><i class="fas fa-fire"></i></div>
+        <div class="stat-value" data-value="0">0 kg</div>
+        <div class="stat-label">CO₂ Settimana</div>
+      </div>
+      <div class="stat-card points-card">
+        <div class="stat-icon"><i class="fas fa-star"></i></div>
+        <div class="stat-value" data-value="0">0</div>
+        <div class="stat-label">Punti</div>
+      </div>
+      <div class="stat-card activities-card">
+        <div class="stat-icon"><i class="fas fa-tasks"></i></div>
+        <div class="stat-value" data-value="0">0</div>
+        <div class="stat-label">Attività</div>
+      </div>
+      <div class="stat-card badges-card">
+        <div class="stat-icon"><i class="fas fa-medal"></i></div>
+        <div class="stat-value" data-value="0">0</div>
+        <div class="stat-label">Badge</div>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button class="nav-tab active" data-tab="dashboard-tab">
+        <i class="fas fa-home"></i>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-tab" data-tab="recent">
+        <i class="fas fa-history"></i>
+        <span>Recenti</span>
+      </button>
+      <button class="nav-tab" data-tab="challenges-tab">
+        <i class="fas fa-fire"></i>
+        <span>Sfide</span>
+      </button>
+      <button class="nav-tab" data-tab="leaderboard-tab">
+        <i class="fas fa-users"></i>
+        <span>Leaderboard</span>
+      </button>
+    </nav>
+
+    <!-- Tab Content -->
+    <main class="tab-content">
+      <!-- Dashboard Tab -->
+      <div id="dashboard-tab" class="tab-panel active">
+        <div class="recent-section">
+          <h3>📊 Recenti</h3>
+          <div class="activity-list">
+            <div class="activity-item">
+              <div class="activity-icon green">🚗</div>
+              <div class="activity-info">
+                <div class="activity-title">Ufficio 3gg</div>
+                <div class="activity-co2">+45kg CO₂</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="badges-grid">
+          <div class="badge-card unlocked">
+            <div class="badge-icon">🌱</div>
+            <div class="badge-name">Primo Passo</div>
+            <div class="badge-desc">Benvenuto!</div>
+          </div>
+          <div class="badge-card locked">
+            <div class="badge-icon locked">🏃</div>
+            <div class="badge-name">Eco Warrior</div>
+            <div class="badge-desc">0/5 giorni green</div>
+          </div>
+          <div class="badge-card locked">
+            <div class="badge-icon locked">✈️</div>
+            <div class="badge-name">Carbon Cutter</div>
+            <div class="badge-desc">Salva 100kg!</div>
+          </div>
+          <div class="badge-card locked">
+            <div class="badge-icon locked">👑</div>
+            <div class="badge-name">Green Leader</div>
+            <div class="badge-desc">#1 nel team</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Challenges Tab -->
+      <div id="challenges-tab" class="tab-panel">
+        <div class="challenge-section">
+          <h3>🔥 Le tue sfide</h3>
+          <div class="challenge-list">
+            <div class="challenge-item active">
+              <div class="challenge-icon">🚀</div>
+              <div class="challenge-info">
+                <h4>Primo Sprint Green</h4>
+                <p>Registra 5 giorni di lavoro e riduci di 20kg CO₂</p>
+                <div class="challenge-progress">
+                  <div class="progress-bar small">
+                    <div class="progress-fill" style="width: 40%"></div>
+                  </div>
+                  <span>2/5 giorni</span>
+                </div>
+              </div>
+              <button class="challenge-btn">Inizia!</button>
+            </div>
+            <div class="challenge-item">
+              <div class="challenge-icon">✈️</div>
+              <div class="challenge-info">
+                <h4>No Fly Week</h4>
+                <p>Sostituisci 1 viaggio con video call</p>
+                <div class="challenge-progress">
+                  <div class="progress-bar small">
+                    <div class="progress-fill" style="width: 0%"></div>
+                  </div>
+                  <span>0/1 viaggio</span>
+                </div>
+              </div>
+              <button class="challenge-btn secondary">Prova</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
