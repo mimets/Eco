@@ -3,205 +3,349 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EcoTrack v2.FF</title>
+  <title>EcoTrack — CO₂ Work Tracker</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
+<!-- TUTORIAL OVERLAY -->
+<div id="tutorial" class="tutorial-overlay">
+  <div class="tutorial-card">
+    <button class="tutorial-skip" onclick="skipTutorial()">Salta ✕</button>
+    <div class="tutorial-steps">
+
+      <div class="tutorial-step active" data-step="1">
+        <div class="tutorial-emoji">🌱</div>
+        <h2>Benvenuto su EcoTrack!</h2>
+        <p>Traccia le tue attività lavorative green e riduci la CO₂ insieme al tuo team.</p>
+      </div>
+
+      <div class="tutorial-step" data-step="2">
+        <div class="tutorial-emoji">📊</div>
+        <h2>Monitora il tuo impatto</h2>
+        <p>Ogni attività registrata calcola automaticamente kg di CO₂ risparmiata in base a km o ore.</p>
+      </div>
+
+      <div class="tutorial-step" data-step="3">
+        <div class="tutorial-emoji">🏆</div>
+        <h2>Guadagna punti e badge</h2>
+        <p>Scala la classifica del team, sblocca badge e partecipa alle sfide mensili!</p>
+      </div>
+
+      <div class="tutorial-step" data-step="4">
+        <div class="tutorial-emoji">🚗</div>
+        <h2>Car sharing = doppi punti!</h2>
+        <p>Inserisci l'email del collega nel carpooling: ricevete entrambi i punti.</p>
+      </div>
+
+    </div>
+    <div class="tutorial-dots">
+      <span class="dot active" onclick="goStep(1)"></span>
+      <span class="dot" onclick="goStep(2)"></span>
+      <span class="dot" onclick="goStep(3)"></span>
+      <span class="dot" onclick="goStep(4)"></span>
+    </div>
+    <div class="tutorial-btns">
+      <button class="tut-btn-prev" id="tutPrev" onclick="prevStep()" style="opacity:0">← Indietro</button>
+      <button class="tut-btn-next" id="tutNext" onclick="nextStep()">Avanti →</button>
+    </div>
+  </div>
+</div>
+
 <!-- AUTH SCREEN -->
-<div id="authScreen" class="screen">
+<div id="authScreen" class="auth-screen">
+  <div class="auth-bg">
+    <div class="auth-particles"></div>
+  </div>
   <div class="auth-container">
-    <div class="logo"><i class="fas fa-leaf"></i> EcoTrack</div>
-    <p class="auth-subtitle">Traccia il tuo impatto ambientale</p>
+    <div class="auth-logo">
+      <i class="fas fa-leaf"></i>
+      <span>EcoTrack</span>
+    </div>
+    <p class="auth-subtitle">Il tuo impatto ambientale, misurato.</p>
 
     <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuth('login')">Accedi</button>
-      <button class="auth-tab" onclick="switchAuth('register')">Registrati</button>
+      <button class="auth-tab active" id="tabLogin" onclick="switchAuth('login')">Accedi</button>
+      <button class="auth-tab" id="tabRegister" onclick="switchAuth('register')">Registrati</button>
     </div>
 
     <!-- LOGIN -->
-    <div id="loginForm">
-      <input class="auth-input" id="loginEmail" type="email" placeholder="Email">
-      <input class="auth-input" id="loginPassword" type="password" placeholder="Password">
+    <div id="loginForm" class="auth-form">
+      <div class="input-group">
+        <i class="fas fa-envelope"></i>
+        <input id="loginEmail" type="email" placeholder="Email aziendale">
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input id="loginPassword" type="password" placeholder="Password">
+        <button class="eye-btn" onclick="togglePw('loginPassword')"><i class="fas fa-eye"></i></button>
+      </div>
       <div id="loginError" class="error-msg"></div>
       <button class="auth-btn" onclick="doLogin()">
-        <i class="fas fa-sign-in-alt"></i> Entra
+        <span>Accedi</span> <i class="fas fa-arrow-right"></i>
       </button>
     </div>
 
     <!-- REGISTER -->
-    <div id="registerForm" style="display:none">
-      <input class="auth-input" id="regName" type="text" placeholder="Nome completo">
-      <input class="auth-input" id="regEmail" type="email" placeholder="Email aziendale">
-      <input class="auth-input" id="regPassword" type="password" placeholder="Password">
-      <div class="password-criteria">
-        <span id="c1">✗ Min 8 caratteri</span>
-        <span id="c2">✗ 1 Maiuscola</span>
-        <span id="c3">✗ 1 Numero</span>
-        <span id="c4">✗ 1 Simbolo (!@#$%)</span>
+    <div id="registerForm" class="auth-form" style="display:none">
+      <div class="input-group">
+        <i class="fas fa-user"></i>
+        <input id="regName" type="text" placeholder="Nome e Cognome">
+      </div>
+      <div class="input-group">
+        <i class="fas fa-envelope"></i>
+        <input id="regEmail" type="email" placeholder="Email aziendale">
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input id="regPassword" type="password" placeholder="Password" oninput="checkPw()">
+        <button class="eye-btn" onclick="togglePw('regPassword')"><i class="fas fa-eye"></i></button>
+      </div>
+      <div class="pw-criteria">
+        <span id="c1"><i class="fas fa-circle"></i> 8+ caratteri</span>
+        <span id="c2"><i class="fas fa-circle"></i> Maiuscola</span>
+        <span id="c3"><i class="fas fa-circle"></i> Numero</span>
+        <span id="c4"><i class="fas fa-circle"></i> Simbolo</span>
       </div>
       <div id="regError" class="error-msg"></div>
       <button class="auth-btn" onclick="doRegister()">
-        <i class="fas fa-user-plus"></i> Crea Account
+        <span>Crea Account</span> <i class="fas fa-user-plus"></i>
       </button>
     </div>
   </div>
 </div>
 
 <!-- DASHBOARD -->
-<div id="dashboard" class="dashboard" style="display:none">
+<div id="dashboard" class="app" style="display:none">
 
-  <!-- Top Bar -->
-  <header class="top-bar">
-    <div class="logo"><i class="fas fa-leaf"></i> EcoTrack</div>
-    <div class="top-right">
-      <span id="userName" class="user-name"></span>
-      <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <i class="fas fa-leaf"></i>
+      <span>EcoTrack</span>
     </div>
-  </header>
+    <nav class="sidebar-nav">
+      <button class="sn-btn active" onclick="switchTab('dashboard', this)">
+        <i class="fas fa-home"></i><span>Dashboard</span>
+      </button>
+      <button class="sn-btn" onclick="switchTab('log', this)">
+        <i class="fas fa-plus-circle"></i><span>Log Attività</span>
+      </button>
+      <button class="sn-btn" onclick="switchTab('challenges', this)">
+        <i class="fas fa-fire"></i><span>Sfide</span>
+      </button>
+      <button class="sn-btn" onclick="switchTab('leaderboard', this)">
+        <i class="fas fa-trophy"></i><span>Classifica</span>
+      </button>
+      <button class="sn-btn" onclick="switchTab('yearly', this)">
+        <i class="fas fa-calendar-alt"></i><span>Anno</span>
+      </button>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="userAvatar">F</div>
+      <div class="user-info">
+        <div class="user-name" id="userName"></div>
+        <div class="user-email" id="userEmail2"></div>
+      </div>
+      <button class="logout-btn" onclick="logout()" title="Logout">
+        <i class="fas fa-sign-out-alt"></i>
+      </button>
+    </div>
+  </aside>
 
-  <!-- Stats Cards -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-icon"><i class="fas fa-fire"></i></div>
-      <div class="stat-value" id="statCO2Week">0 kg</div>
-      <div class="stat-label">CO₂ Settimana</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><i class="fas fa-star"></i></div>
-      <div class="stat-value" id="statPoints">0</div>
-      <div class="stat-label">Punti</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><i class="fas fa-tasks"></i></div>
-      <div class="stat-value" id="statActivities">0</div>
-      <div class="stat-label">Attività</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><i class="fas fa-medal"></i></div>
-      <div class="stat-value" id="statBadges">0</div>
-      <div class="stat-label">Badge</div>
-    </div>
-  </div>
+  <!-- Main Content -->
+  <main class="main-content">
 
-  <!-- Tab Content -->
-  <main class="tab-content">
+    <!-- Header -->
+    <header class="main-header">
+      <div>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p id="pageSubtitle">Benvenuto! Ecco il tuo impatto questa settimana.</p>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" onclick="showTutorial()">
+          <i class="fas fa-question-circle"></i>
+        </button>
+      </div>
+    </header>
 
     <!-- DASHBOARD TAB -->
     <div id="tab-dashboard" class="tab-panel active">
 
-      <!-- LOG ATTIVITÀ -->
-      <div class="section-card">
-        <h3>➕ Aggiungi Attività</h3>
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <div class="stat-top">
+            <div class="stat-icon"><i class="fas fa-cloud"></i></div>
+            <span class="stat-trend up">↑ questa settimana</span>
+          </div>
+          <div class="stat-number" id="statCO2Week">0.0</div>
+          <div class="stat-unit">kg CO₂ salvati</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-top">
+            <div class="stat-icon"><i class="fas fa-star"></i></div>
+            <span class="stat-trend">totale</span>
+          </div>
+          <div class="stat-number" id="statPoints">0</div>
+          <div class="stat-unit">punti guadagnati</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-top">
+            <div class="stat-icon"><i class="fas fa-tasks"></i></div>
+            <span class="stat-trend">registrate</span>
+          </div>
+          <div class="stat-number" id="statActivities">0</div>
+          <div class="stat-unit">attività totali</div>
+        </div>
+        <div class="stat-card purple">
+          <div class="stat-top">
+            <div class="stat-icon"><i class="fas fa-medal"></i></div>
+            <span class="stat-trend">sbloccati</span>
+          </div>
+          <div class="stat-number" id="statBadges">0</div>
+          <div class="stat-unit">badge</div>
+        </div>
+      </div>
+
+      <!-- Recent + Badges -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <h3>📋 Ultime Attività</h3>
+            <button class="card-link" onclick="switchTab('log', null)">Vedi tutte →</button>
+          </div>
+          <div id="recentList" class="activity-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>🏅 I tuoi Badge</h3></div>
+          <div id="badgeGrid" class="badge-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOG ATTIVITÀ TAB -->
+    <div id="tab-log" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><h3>➕ Registra Attività</h3></div>
         <div class="activity-types">
-          <button class="act-btn" onclick="selectActivity('Remoto')">🏠 Remoto</button>
-          <button class="act-btn" onclick="selectActivity('Treno')">🚂 Treno</button>
-          <button class="act-btn" onclick="selectActivity('Bici')">🚴 Bici</button>
-          <button class="act-btn" onclick="selectActivity('Bus')">🚌 Bus</button>
-          <button class="act-btn" onclick="selectActivity('Carpooling')">🚗 Carpooling</button>
-          <button class="act-btn" onclick="selectActivity('Videocall')">💻 Videocall</button>
+          <button class="act-btn" onclick="selectAct('Remoto', this)">🏠<span>Remoto</span></button>
+          <button class="act-btn" onclick="selectAct('Treno', this)">🚂<span>Treno</span></button>
+          <button class="act-btn" onclick="selectAct('Bici', this)">🚴<span>Bici</span></button>
+          <button class="act-btn" onclick="selectAct('Bus', this)">🚌<span>Bus</span></button>
+          <button class="act-btn" onclick="selectAct('Carpooling', this)">🚗<span>Carpooling</span></button>
+          <button class="act-btn" onclick="selectAct('Videocall', this)">💻<span>Videocall</span></button>
         </div>
 
-        <div id="activityForm" style="display:none" class="activity-form">
-          <h4 id="activityFormTitle"></h4>
-          <div id="kmField">
-            <label>Km percorsi:</label>
-            <input class="form-input" id="inputKm" type="number" placeholder="es. 25" min="0">
+        <div id="actForm" class="act-form" style="display:none">
+          <div class="act-form-title" id="actFormTitle"></div>
+          <div class="form-row" id="kmRow" style="display:none">
+            <label>Km percorsi</label>
+            <div class="input-group"><i class="fas fa-road"></i><input id="inKm" type="number" placeholder="es. 30" min="0"></div>
           </div>
-          <div id="hoursField">
-            <label>Ore lavorate:</label>
-            <input class="form-input" id="inputHours" type="number" placeholder="es. 8" min="0" max="24">
+          <div class="form-row" id="hoursRow" style="display:none">
+            <label>Ore lavorate</label>
+            <div class="input-group"><i class="fas fa-clock"></i><input id="inHours" type="number" placeholder="es. 8" min="0" max="24"></div>
           </div>
-          <div id="carpoolField" style="display:none">
-            <label>Email collega (car sharing):</label>
-            <input class="form-input" id="inputCarpool" type="email" placeholder="collega@konverto.eu">
-            <small>Il collega riceverà gli stessi punti! 🎉</small>
+          <div class="form-row" id="carpoolRow" style="display:none">
+            <label>🚗 Email collega (car sharing)</label>
+            <div class="input-group"><i class="fas fa-user-friends"></i><input id="inCarpool" type="email" placeholder="collega@konverto.eu"></div>
+            <p class="helper-text">Riceverete entrambi i punti! 🎉</p>
           </div>
-          <label>Note (opzionale):</label>
-          <input class="form-input" id="inputNote" type="text" placeholder="es. riunione Milano">
-          <div class="form-buttons">
-            <button class="save-btn" onclick="saveActivity()">✅ Salva</button>
-            <button class="cancel-btn" onclick="cancelActivity()">❌ Annulla</button>
+          <div class="form-row">
+            <label>Note (opzionale)</label>
+            <div class="input-group"><i class="fas fa-pen"></i><input id="inNote" type="text" placeholder="es. Riunione Milano"></div>
+          </div>
+          <div class="co2-preview" id="co2Preview">
+            <span>Stima: <strong id="previewCO2">0</strong> kg CO₂ · <strong id="previewPts">0</strong> punti</span>
+          </div>
+          <div class="form-btns">
+            <button class="btn-primary" onclick="saveActivity()"><i class="fas fa-check"></i> Salva</button>
+            <button class="btn-ghost" onclick="cancelAct()"><i class="fas fa-times"></i> Annulla</button>
           </div>
         </div>
       </div>
 
-      <!-- RECENT ACTIVITIES -->
-      <div class="section-card">
-        <h3>📋 Ultime Attività</h3>
-        <div id="recentList" class="activity-list"></div>
-      </div>
-
-      <!-- BADGE -->
-      <div class="section-card">
-        <h3>🏅 Badge</h3>
-        <div id="badgeGrid" class="badges-grid"></div>
+      <div class="card">
+        <div class="card-header"><h3>📋 Storico Attività</h3></div>
+        <div id="allActivities" class="activity-list"></div>
       </div>
     </div>
 
     <!-- CHALLENGES TAB -->
     <div id="tab-challenges" class="tab-panel">
-      <div class="section-card">
-        <h3>🔥 Sfide</h3>
-        <button class="new-challenge-btn" onclick="showNewChallenge()">
-          <i class="fas fa-plus"></i> Nuova Sfida
-        </button>
-
-        <!-- Crea challenge -->
-        <div id="newChallengeForm" style="display:none" class="challenge-form">
-          <input class="form-input" id="chTitle" placeholder="Nome sfida">
-          <input class="form-input" id="chDesc" placeholder="Descrizione">
-          <input class="form-input" id="chTarget" type="number" placeholder="Target CO₂ (kg)">
-          <input class="form-input" id="chPoints" type="number" placeholder="Punti reward">
-          <input class="form-input" id="chEndDate" type="date">
-          <label class="checkbox-label">
-            <input type="checkbox" id="chPublic"> Rendi pubblica
-          </label>
-          <button class="save-btn" onclick="createChallenge()">Crea Sfida</button>
+      <div class="card">
+        <div class="card-header">
+          <h3>🔥 Le tue Sfide</h3>
+          <button class="btn-primary small" onclick="toggleNewChallenge()">
+            <i class="fas fa-plus"></i> Nuova
+          </button>
         </div>
-
+        <div id="newChallengeForm" class="challenge-form" style="display:none">
+          <div class="form-grid">
+            <div class="form-row">
+              <label>Nome sfida</label>
+              <div class="input-group"><i class="fas fa-fire"></i><input id="chTitle" placeholder="es. Sprint Green Aprile"></div>
+            </div>
+            <div class="form-row">
+              <label>Target CO₂ (kg)</label>
+              <div class="input-group"><i class="fas fa-cloud"></i><input id="chTarget" type="number" placeholder="50"></div>
+            </div>
+            <div class="form-row">
+              <label>Punti reward</label>
+              <div class="input-group"><i class="fas fa-star"></i><input id="chPoints" type="number" placeholder="200"></div>
+            </div>
+            <div class="form-row">
+              <label>Scadenza</label>
+              <div class="input-group"><i class="fas fa-calendar"></i><input id="chEndDate" type="date"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Descrizione</label>
+            <div class="input-group"><i class="fas fa-pen"></i><input id="chDesc" placeholder="Descrizione sfida..."></div>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" id="chPublic">
+            <span>🌍 Rendi pubblica (visibile a tutto il team)</span>
+          </label>
+          <button class="btn-primary" onclick="createChallenge()"><i class="fas fa-rocket"></i> Crea Sfida</button>
+        </div>
         <div id="challengeList" class="challenge-list"></div>
       </div>
     </div>
 
     <!-- LEADERBOARD TAB -->
     <div id="tab-leaderboard" class="tab-panel">
-      <div class="section-card">
-        <h3>🏆 Classifica Team</h3>
+      <div class="card">
+        <div class="card-header"><h3>🏆 Classifica Team</h3></div>
         <div id="leaderboardList"></div>
       </div>
     </div>
 
     <!-- YEARLY TAB -->
     <div id="tab-yearly" class="tab-panel">
-      <div class="section-card">
-        <h3>📅 Riepilogo Annuale</h3>
+      <div class="card">
+        <div class="card-header"><h3>📅 Riepilogo Annuale 2026</h3></div>
         <div id="yearlyList"></div>
       </div>
     </div>
 
   </main>
-
-  <!-- Bottom Nav -->
-  <nav class="bottom-nav">
-    <button class="nav-tab active" onclick="switchTab('dashboard')">
-      <i class="fas fa-home"></i><span>Home</span>
-    </button>
-    <button class="nav-tab" onclick="switchTab('challenges')">
-      <i class="fas fa-fire"></i><span>Sfide</span>
-    </button>
-    <button class="nav-tab" onclick="switchTab('leaderboard')">
-      <i class="fas fa-trophy"></i><span>Classifica</span>
-    </button>
-    <button class="nav-tab" onclick="switchTab('yearly')">
-      <i class="fas fa-calendar"></i><span>Anno</span>
-    </button>
-  </nav>
-
 </div>
 
-<div id="notification" class="notification" style="display:none"></div>
+<!-- Notification -->
+<div id="notif" class="notif"></div>
+
+<!-- Mobile nav -->
+<nav class="mobile-nav" id="mobileNav" style="display:none">
+  <button onclick="switchTab('dashboard', this)" class="mn-btn active"><i class="fas fa-home"></i><span>Home</span></button>
+  <button onclick="switchTab('log', this)" class="mn-btn"><i class="fas fa-plus-circle"></i><span>Log</span></button>
+  <button onclick="switchTab('challenges', this)" class="mn-btn"><i class="fas fa-fire"></i><span>Sfide</span></button>
+  <button onclick="switchTab('leaderboard', this)" class="mn-btn"><i class="fas fa-trophy"></i><span>Top</span></button>
+  <button onclick="switchTab('yearly', this)" class="mn-btn"><i class="fas fa-calendar"></i><span>Anno</span></button>
+</nav>
+
 <script src="script.js"></script>
 </body>
 </html>
