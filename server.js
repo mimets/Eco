@@ -10,14 +10,17 @@ const nodemailer = require('nodemailer');
 const crypto     = require('crypto');
 
 const app  = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET   = process.env.JWT_SECRET   || 'ecotrack_secret_2024';
-const BASE_URL     = process.env.BASE_URL      || `http://localhost:${PORT}`;
-const MAIL_FROM    = process.env.MAIL_FROM     || 'EcoTrack <noreply@ecotrack.app>';
-const MAIL_HOST    = process.env.MAIL_HOST     || 'smtp.gmail.com';
-const MAIL_PORT    = parseInt(process.env.MAIL_PORT||'587');
-const MAIL_USER    = process.env.MAIL_USER     || '';
-const MAIL_PASS    = process.env.MAIL_PASS     || '';
+const PORT      = process.env.PORT      || 3000;
+const JWT_SECRET= process.env.JWT_SECRET|| 'ecotrack_super_secret_2026';
+const BASE_URL  = process.env.BASE_URL  || `http://localhost:${PORT}`;
+
+// ✅ AGGIORNATO con account ufficiale
+const MAIL_FROM = process.env.MAIL_FROM || 'EcoTrack <ecotrackofficial@gmail.com>';
+const MAIL_HOST = process.env.MAIL_HOST || 'smtp.gmail.com';
+const MAIL_PORT = parseInt(process.env.MAIL_PORT || '587');
+const MAIL_USER = process.env.MAIL_USER || '';
+const MAIL_PASS = process.env.MAIL_PASS || '';
+
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://localhost/ecotrack',
