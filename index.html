@@ -17,13 +17,12 @@
 <body>
 
 <!-- NOTIFICATION TOAST -->
-<div id="notifToast" class="notif"></div>
+<div id="notifToast" class="notif-toast"></div>
 
 <!-- CONFIRM MODAL -->
-<div id="confirmOverlay" class="modal-overlay"
-  style="display:none;z-index:9999">
+<div id="confirmOverlay" class="modal-overlay" style="display:none;z-index:9999">
   <div class="confirm-card">
-    <div class="confirm-icon">❓</div>
+    <div class="confirm-icon" id="confirmIconEl">❓</div>
     <h3 id="confirmTitle">Conferma</h3>
     <p  id="confirmMsg">Sei sicuro?</p>
     <div class="confirm-btns">
@@ -35,7 +34,7 @@
 
 <!-- ══════════════════════════════════════
      AUTH
-════════════════════════════════════════ -->
+══════════════════════════════════════ -->
 <div id="authWrap" class="auth-wrap">
   <div class="auth-bg-shapes">
     <div class="shape s1"></div>
@@ -58,8 +57,7 @@
     </div>
 
     <!-- LOGIN -->
-    <form id="loginForm" class="auth-form"
-      onsubmit="doLogin(event)">
+    <form id="loginForm" class="auth-form" onsubmit="doLogin(event)">
       <div class="field">
         <label>EMAIL O USERNAME</label>
         <div class="input-wrap">
@@ -87,10 +85,10 @@
         <i class="fas fa-sign-in-alt"></i>
         <span>Accedi</span>
       </button>
-      <button type="button" class="card-link"
+      <button type="button"
         onclick="switchTab('forgot')"
         style="margin-top:8px;font-size:13px;background:none;
-               color:var(--muted);border:none;cursor:pointer">
+               color:var(--muted);border:none;cursor:pointer;width:100%">
         🔑 Password dimenticata?
       </button>
     </form>
@@ -137,18 +135,10 @@
         </div>
       </div>
       <div class="pw-hints">
-        <span class="pw-hint" id="r8">
-          <i class="fas fa-circle"></i> 8+ caratteri
-        </span>
-        <span class="pw-hint" id="rUp">
-          <i class="fas fa-circle"></i> Maiuscola
-        </span>
-        <span class="pw-hint" id="rN">
-          <i class="fas fa-circle"></i> Numero
-        </span>
-        <span class="pw-hint" id="rS">
-          <i class="fas fa-circle"></i> Simbolo
-        </span>
+        <span class="pw-hint" id="r8"><i class="fas fa-circle"></i> 8+ caratteri</span>
+        <span class="pw-hint" id="rUp"><i class="fas fa-circle"></i> Maiuscola</span>
+        <span class="pw-hint" id="rN"><i class="fas fa-circle"></i> Numero</span>
+        <span class="pw-hint" id="rS"><i class="fas fa-circle"></i> Simbolo</span>
       </div>
       <p id="rErr" class="err-msg"></p>
       <button type="submit" class="btn-auth">
@@ -176,7 +166,7 @@
       <button type="button"
         onclick="switchTab('login')"
         style="margin-top:8px;font-size:13px;background:none;
-               color:var(--muted);border:none;cursor:pointer">
+               color:var(--muted);border:none;cursor:pointer;width:100%">
         ← Torna al login
       </button>
     </form>
@@ -207,9 +197,10 @@
 
   </div><!-- /auth-card -->
 </div><!-- /authWrap -->
+
 <!-- ══════════════════════════════════════
      APP
-════════════════════════════════════════ -->
+══════════════════════════════════════ -->
 <div id="app" class="app" style="display:none">
 
   <!-- SIDEBAR -->
@@ -221,10 +212,10 @@
 
     <!-- USER CARD -->
     <div class="sb-user">
-      <canvas id="sbAvatarCanvas" class="sb-avatar-canvas"
-        width="36" height="36"></canvas>
+      <canvas id="sbAvatarCanvas" width="36" height="36"
+        style="border-radius:10px;flex-shrink:0"></canvas>
       <div class="sb-uinfo">
-        <div class="sb-uname" id="sbName">—</div>
+        <div class="sb-uname"  id="sbName">—</div>
         <div class="sb-uemail" id="sbEmail">—</div>
       </div>
       <button class="sb-logout" onclick="logout()" title="Logout">
@@ -232,8 +223,9 @@
       </button>
     </div>
 
+    <!-- MINI STATS -->
     <div style="margin:14px 0 6px;padding:0 4px">
-      <div class="sb-pts-row" style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px">
         <div style="flex:1;background:var(--green-light);
           border:1.5px solid var(--green-mid);border-radius:var(--r);
           padding:8px 10px;text-align:center">
@@ -253,57 +245,55 @@
       </div>
     </div>
 
+    <!-- NAV -->
     <div class="sb-section" style="margin-top:18px">Principale</div>
     <nav class="sb-nav">
       <button class="sb-btn nav-item active" data-section="dashboard">
-        <div class="sb-icon"><i class="fas fa-home"></i></div>
-        Dashboard
+        <div class="sb-icon"><i class="fas fa-home"></i></div>Dashboard
       </button>
       <button class="sb-btn nav-item" data-section="activities">
-        <div class="sb-icon"><i class="fas fa-leaf"></i></div>
-        Attività
+        <div class="sb-icon"><i class="fas fa-leaf"></i></div>Attività
       </button>
       <button class="sb-btn nav-item" data-section="challenges">
-        <div class="sb-icon"><i class="fas fa-trophy"></i></div>
-        Sfide
+        <div class="sb-icon"><i class="fas fa-trophy"></i></div>Sfide
       </button>
       <button class="sb-btn nav-item" data-section="leaderboard">
-        <div class="sb-icon"><i class="fas fa-medal"></i></div>
-        Classifica
+        <div class="sb-icon"><i class="fas fa-medal"></i></div>Classifica
       </button>
     </nav>
 
     <div class="sb-section">Community</div>
     <nav class="sb-nav">
       <button class="sb-btn nav-item" data-section="social">
-        <div class="sb-icon"><i class="fas fa-users"></i></div>
-        Social
+        <div class="sb-icon"><i class="fas fa-users"></i></div>Social
       </button>
       <button class="sb-btn nav-item" data-section="shop">
-        <div class="sb-icon"><i class="fas fa-store"></i></div>
-        Shop
+        <div class="sb-icon"><i class="fas fa-store"></i></div>Shop
+        <span class="new-badge">NEW</span>
       </button>
       <button class="sb-btn nav-item" data-section="notifiche"
         style="position:relative">
-        <div class="sb-icon"><i class="fas fa-bell"></i></div>
-        Notifiche
-        <span id="notifBadge" class="sb-notif-dot"
+        <div class="sb-icon"><i class="fas fa-bell"></i></div>Notifiche
+        <span id="notifBadge"
           style="display:none;position:absolute;right:12px;top:50%;
-          transform:translateY(-50%)"></span>
+          transform:translateY(-50%);background:#ef4444;color:#fff;
+          font-size:10px;font-weight:800;padding:1px 6px;border-radius:99px;
+          min-width:18px;text-align:center"></span>
       </button>
     </nav>
 
     <div class="sb-section">Profilo</div>
     <nav class="sb-nav">
       <button class="sb-btn nav-item" data-section="profile">
-        <div class="sb-icon"><i class="fas fa-user"></i></div>
-        Profilo
+        <div class="sb-icon"><i class="fas fa-user"></i></div>Profilo
       </button>
-      <button class="sb-btn nav-item admin-btn" data-section="admin"
+      <button class="sb-btn nav-item" data-section="admin"
         id="adminNavBtn" style="display:none">
-        <div class="sb-icon"><i class="fas fa-crown"></i></div>
-        Admin
-        <span class="admin-badge">ADMIN</span>
+        <div class="sb-icon"><i class="fas fa-crown"></i></div>Admin
+        <span style="font-size:9px;font-weight:800;background:#f59e0b;
+          color:#000;padding:1px 5px;border-radius:4px;margin-left:4px">
+          ADMIN
+        </span>
       </button>
     </nav>
 
@@ -311,7 +301,7 @@
   </aside>
 
   <!-- SIDEBAR OVERLAY (mobile) -->
-  <div id="sidebarOverlay" class="sidebar-overlay"
+  <div id="sidebarOverlay"
     style="display:none;position:fixed;inset:0;
     background:rgba(0,0,0,.4);z-index:49"
     onclick="toggleMobNav()"></div>
@@ -322,23 +312,40 @@
     <!-- TOPBAR -->
     <div class="topbar">
       <div class="topbar-left">
-        <h1 id="topbarTitle">Dashboard</h1>
-        <p  id="topbarSub">Bentornato! 🌱</p>
+        <button class="mob-menu-btn"
+          onclick="toggleMobNav()"
+          style="display:none">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div>
+          <h1 id="topbarTitle">Dashboard</h1>
+          <p  id="topbarSub">Bentornato! 🌱</p>
+        </div>
       </div>
       <div class="topbar-right">
+        <div style="display:flex;align-items:center;gap:6px;
+          background:var(--green-light);border:1.5px solid var(--green-mid);
+          border-radius:var(--r);padding:6px 12px">
+          <span style="font-size:12px;color:var(--muted)">🌱</span>
+          <span id="topCo2" style="font-weight:800;font-size:13px;
+            color:var(--green)">0 kg CO₂</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;
+          background:var(--bg);border:1.5px solid var(--border);
+          border-radius:var(--r);padding:6px 12px">
+          <span style="font-size:12px">⭐</span>
+          <span id="topPoints" style="font-weight:800;font-size:13px">0 pt</span>
+        </div>
         <button class="topbar-btn notif-btn"
           onclick="showSection('notifiche')" title="Notifiche">
           <i class="fas fa-bell"></i>
-          <span id="notifCount" class="notif-count"
-            style="display:none"></span>
+          <span id="notifCount" style="display:none;position:absolute;
+            top:-4px;right:-4px;background:#ef4444;color:#fff;
+            font-size:9px;font-weight:800;padding:1px 4px;border-radius:99px">
+          </span>
         </button>
-        <button class="topbar-btn" onclick="showSection('profile')"
-          title="Profilo">
+        <button class="topbar-btn" onclick="showSection('profile')" title="Profilo">
           <i class="fas fa-user"></i>
-        </button>
-        <button class="topbar-btn" onclick="logout()"
-          title="Logout">
-          <i class="fas fa-sign-out-alt"></i>
         </button>
       </div>
     </div>
@@ -349,14 +356,12 @@
       <div id="dashboard" class="section active">
         <div class="stats-row">
           <div class="stat-card sc-green">
-            <div class="stat-cardbefore"></div>
             <div class="stat-top">
               <span class="stat-badge">CO₂ Totale</span>
               <div class="stat-icon">🌿</div>
             </div>
             <div class="stat-val"><span id="co2Total">0</span> <small>kg</small></div>
             <div class="stat-lbl">CO₂ salvata in totale</div>
-            <div class="stat-glow g-green"></div>
           </div>
           <div class="stat-card sc-blue">
             <div class="stat-top">
@@ -365,7 +370,6 @@
             </div>
             <div class="stat-val"><span id="co2Week">0</span> <small>kg</small></div>
             <div class="stat-lbl">CO₂ salvata questa settimana</div>
-            <div class="stat-glow g-blue"></div>
           </div>
           <div class="stat-card sc-purple">
             <div class="stat-top">
@@ -374,7 +378,6 @@
             </div>
             <div class="stat-val"><span id="co2Month">0</span> <small>kg</small></div>
             <div class="stat-lbl">CO₂ salvata questo mese</div>
-            <div class="stat-glow g-purple"></div>
           </div>
           <div class="stat-card sc-yellow">
             <div class="stat-top">
@@ -383,48 +386,36 @@
             </div>
             <div class="stat-val"><span id="userPoints">0</span></div>
             <div class="stat-lbl">Punti accumulati</div>
-            <div class="stat-glow g-yellow"></div>
           </div>
         </div>
 
         <div class="two-col">
-          <!-- Grafico annuale -->
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-green"></span>
-                Andamento Annuale</h3>
+              <h3><span class="ch-dot dot-green"></span>Andamento Annuale</h3>
             </div>
             <div class="card-body">
-              <canvas id="yearlyChart"
-                style="width:100%;height:200px"></canvas>
+              <canvas id="yearlyChart" style="width:100%;height:200px"></canvas>
             </div>
           </div>
-
-          <!-- Badge preview -->
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-yellow"></span>
-                I tuoi Badge</h3>
-              <button class="card-link"
-                onclick="showSection('profile')">
+              <h3><span class="ch-dot dot-yellow"></span>I tuoi Badge</h3>
+              <button class="card-link" onclick="showSection('profile')">
                 Vedi tutti →
               </button>
             </div>
             <div class="card-body">
               <div id="dashBadges"
-                style="display:flex;flex-wrap:wrap;gap:10px">
-              </div>
+                style="display:flex;flex-wrap:wrap;gap:10px"></div>
             </div>
           </div>
         </div>
 
-        <!-- Attività recenti -->
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-green"></span>
-              Attività Recenti</h3>
-            <button class="card-link"
-              onclick="showSection('activities')">
+            <h3><span class="ch-dot dot-green"></span>Attività Recenti</h3>
+            <button class="card-link" onclick="showSection('activities')">
               Vedi tutte →
             </button>
           </div>
@@ -435,14 +426,13 @@
       <!-- ════════════ ACTIVITIES ════════════ -->
       <div id="activities" class="section">
         <div class="two-col">
-          <!-- Form log attività -->
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-green"></span>
-                Registra Attività</h3>
+              <h3><span class="ch-dot dot-green"></span>Registra Attività</h3>
             </div>
             <div class="card-body">
               <form id="actForm" onsubmit="logActivity(event)">
+
                 <div class="frow">
                   <label>TIPO DI ATTIVITÀ</label>
                   <div class="act-types">
@@ -498,16 +488,15 @@
                   </button>
                   <div id="map"
                     style="height:200px;border-radius:var(--r);
-                    border:1.5px solid var(--border);
-                    margin-bottom:12px"></div>
+                    border:1.5px solid var(--border);margin-bottom:12px">
+                  </div>
                 </div>
 
                 <div id="kmGroup" style="display:none">
                   <div class="frow">
                     <label>DISTANZA (km)</label>
                     <input class="input" type="number"
-                      id="actKm" min="0" step="0.1"
-                      placeholder="es: 12.5">
+                      id="actKm" min="0" step="0.1" placeholder="es: 12.5">
                   </div>
                 </div>
 
@@ -515,8 +504,7 @@
                   <div class="frow">
                     <label>ORE DI LAVORO REMOTO</label>
                     <input class="input" type="number"
-                      id="actHours" min="0" step="0.5"
-                      placeholder="es: 8">
+                      id="actHours" min="0" step="0.5" placeholder="es: 8">
                   </div>
                 </div>
 
@@ -533,11 +521,9 @@
             </div>
           </div>
 
-          <!-- Lista attività -->
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-blue"></span>
-                Le tue Attività</h3>
+              <h3><span class="ch-dot dot-blue"></span>Le tue Attività</h3>
             </div>
             <div class="card-body act-list" id="actList"></div>
           </div>
@@ -549,12 +535,10 @@
         <div class="two-col">
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-yellow"></span>
-                Crea Sfida</h3>
+              <h3><span class="ch-dot dot-yellow"></span>Crea Sfida</h3>
             </div>
             <div class="card-body">
-              <form id="challengeForm"
-                onsubmit="createChallenge(event)">
+              <form id="challengeForm" onsubmit="createChallenge(event)">
                 <div class="form-grid">
                   <div class="frow">
                     <label>TITOLO</label>
@@ -594,8 +578,7 @@
 
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-yellow"></span>
-                Sfide Attive</h3>
+              <h3><span class="ch-dot dot-yellow"></span>Sfide Attive</h3>
             </div>
             <div class="card-body ch-list" id="challengeList"></div>
           </div>
@@ -606,27 +589,25 @@
       <div id="leaderboard" class="section">
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-yellow"></span>
-              🏆 Classifica Globale</h3>
+            <h3><span class="ch-dot dot-yellow"></span>🏆 Classifica Globale</h3>
           </div>
           <div class="card-body lb-list" id="lbList"></div>
         </div>
       </div>
+
       <!-- ════════════ SOCIAL ════════════ -->
       <div id="social" class="section">
         <div class="two-col">
-          <!-- Crea post -->
           <div>
             <div class="card">
               <div class="card-head">
-                <h3><span class="ch-dot dot-green"></span>
-                  Nuovo Post</h3>
+                <h3><span class="ch-dot dot-green"></span>Nuovo Post</h3>
               </div>
               <div class="card-body">
                 <form id="postForm" onsubmit="createPost(event)">
                   <div class="frow">
-                    <textarea class="input" id="postContent"
-                      rows="3" placeholder="Condividi la tua esperienza eco..."
+                    <textarea class="input" id="postContent" rows="3"
+                      placeholder="Condividi la tua esperienza eco..."
                       style="resize:vertical;min-height:80px"
                       required></textarea>
                   </div>
@@ -642,21 +623,17 @@
               </div>
             </div>
 
-            <!-- Utenti da seguire -->
-            <div class="card" style="margin-top:0">
+            <div class="card" style="margin-top:16px">
               <div class="card-head">
-                <h3><span class="ch-dot dot-blue"></span>
-                  Utenti</h3>
+                <h3><span class="ch-dot dot-blue"></span>Utenti</h3>
               </div>
               <div class="card-body" id="userList"></div>
             </div>
           </div>
 
-          <!-- Feed -->
           <div class="card">
             <div class="card-head">
-              <h3><span class="ch-dot dot-green"></span>
-                Feed</h3>
+              <h3><span class="ch-dot dot-green"></span>Feed</h3>
             </div>
             <div class="card-body" id="socialFeed"></div>
           </div>
@@ -667,12 +644,20 @@
       <div id="shop" class="section">
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-yellow"></span>
-              🛍️ Shop Avatar</h3>
+            <h3><span class="ch-dot dot-yellow"></span>🛍️ Shop Avatar</h3>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;color:var(--muted)">I tuoi punti:</span>
+              <span id="shopPoints"
+                style="font-weight:800;color:var(--green);font-size:15px">0 ⭐</span>
+            </div>
           </div>
-          <div class="card-body" id="shopGrid"></div>
+          <div class="card-body" id="shopGrid">
+            <div class="empty">
+              <div class="ei">🛍️</div>
+              <p>Caricamento shop...</p>
+            </div>
+          </div>
         </div>
-        <!-- Preview overlay -->
         <div id="shopPreview"
           style="display:none;position:fixed;inset:0;
           background:rgba(0,0,0,.6);backdrop-filter:blur(10px);
@@ -684,15 +669,12 @@
       <div id="profile" class="section">
         <div class="two-col">
 
-          <!-- Info + Avatar builder -->
           <div>
             <div class="card">
               <div class="card-head">
-                <h3><span class="ch-dot dot-green"></span>
-                  Il tuo Profilo</h3>
+                <h3><span class="ch-dot dot-green"></span>Il tuo Profilo</h3>
               </div>
               <div class="card-body">
-                <!-- Stats -->
                 <div class="profile-stats">
                   <div class="ps-item">
                     <div class="ps-val" id="profPoints">0</div>
@@ -708,7 +690,6 @@
                   </div>
                 </div>
 
-                <!-- Livello + XP -->
                 <div style="margin:16px 0 20px">
                   <div style="display:flex;justify-content:space-between;
                     align-items:center;margin-bottom:6px">
@@ -718,16 +699,14 @@
                       id="xpText">0 / 100 XP</span>
                   </div>
                   <div style="background:var(--bg);border-radius:99px;
-                    height:10px;border:1px solid var(--border);
-                    overflow:hidden">
+                    height:10px;border:1px solid var(--border);overflow:hidden">
                     <div id="xpBar"
                       style="height:100%;border-radius:99px;width:0%;
-                      background:linear-gradient(90deg,var(--green),var(--green3));
-                      transition:width 1.2s var(--ease-out)"></div>
+                      background:linear-gradient(90deg,var(--green),#22c55e);
+                      transition:width 1.2s ease"></div>
                   </div>
                 </div>
 
-                <!-- Edit form -->
                 <form id="profileForm" onsubmit="saveProfile(event)">
                   <div class="frow">
                     <label>NOME</label>
@@ -751,11 +730,9 @@
               </div>
             </div>
 
-            <!-- Cambia password -->
-            <div class="card">
+            <div class="card" style="margin-top:16px">
               <div class="card-head">
-                <h3><span class="ch-dot dot-red"></span>
-                  🔐 Cambia Password</h3>
+                <h3><span class="ch-dot dot-red"></span>🔐 Cambia Password</h3>
               </div>
               <div class="card-body">
                 <form id="pwdForm" onsubmit="changePassword(event)">
@@ -764,8 +741,7 @@
                     <div class="input-wrap">
                       <i class="ic fas fa-lock"></i>
                       <input type="password" id="pwdCurrent"
-                        class="input" placeholder="••••••••"
-                        style="padding-left:40px" required>
+                        placeholder="••••••••" style="padding-left:40px" required>
                     </div>
                   </div>
                   <div class="frow">
@@ -773,10 +749,8 @@
                     <div class="input-wrap">
                       <i class="ic fas fa-lock"></i>
                       <input type="password" id="pwdNew"
-                        class="input" placeholder="••••••••"
-                        style="padding-left:40px"
-                        oninput="checkPwdStrength(this.value)"
-                        required>
+                        placeholder="••••••••" style="padding-left:40px"
+                        oninput="checkPwdStrength(this.value)" required>
                     </div>
                   </div>
                   <div class="frow">
@@ -784,8 +758,7 @@
                     <div class="input-wrap">
                       <i class="ic fas fa-lock"></i>
                       <input type="password" id="pwdConfirm"
-                        class="input" placeholder="••••••••"
-                        style="padding-left:40px" required>
+                        placeholder="••••••••" style="padding-left:40px" required>
                     </div>
                   </div>
                   <button type="submit" class="btn-save">
@@ -796,12 +769,11 @@
             </div>
           </div>
 
-          <!-- Avatar Mii Builder -->
+          <!-- AVATAR BUILDER -->
           <div>
             <div class="card">
               <div class="card-head">
-                <h3><span class="ch-dot dot-green"></span>
-                  🎨 Avatar Builder</h3>
+                <h3><span class="ch-dot dot-green"></span>🎨 Avatar Builder</h3>
               </div>
               <div class="card-body">
                 <div class="mii-preview-wrap">
@@ -810,11 +782,11 @@
                 </div>
 
                 <div class="mii-options">
-                  <!-- Colore -->
+
                   <div class="mii-opt-group">
                     <label>🎨 COLORE SFONDO</label>
                     <div class="color-row">
-                      <div class="color-swatch active"
+                      <div class="color-swatch sel"
                         style="background:#16a34a"
                         onclick="pickColor('#16a34a',this)"></div>
                       <div class="color-swatch"
@@ -841,11 +813,10 @@
                     </div>
                   </div>
 
-                  <!-- Skin -->
                   <div class="mii-opt-group">
                     <label>👤 CARNAGIONE</label>
                     <div class="color-row">
-                      <div class="color-swatch active"
+                      <div class="color-swatch sel"
                         style="background:#fde68a"
                         onclick="pickSkin('#fde68a',this)"></div>
                       <div class="color-swatch"
@@ -866,178 +837,117 @@
                     </div>
                   </div>
 
-                  <!-- Capelli -->
                   <div class="mii-opt-group">
                     <label>💇 CAPELLI</label>
                     <div class="mii-btn-row">
-                      <button class="mii-opt-btn active"
+                      <button class="mii-opt-btn sel"
                         data-cat="hair" data-val="none"
-                        onclick="pickMii('hair','none',this)">
-                        Nessuno
-                      </button>
+                        onclick="pickMii('hair','none',this)">Nessuno</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="short"
-                        onclick="pickMii('hair','short',this)">
-                        Corti
-                      </button>
+                        onclick="pickMii('hair','short',this)">Corti</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="long"
-                        onclick="pickMii('hair','long',this)">
-                        Lunghi
-                      </button>
+                        onclick="pickMii('hair','long',this)">Lunghi</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="curly"
-                        onclick="pickMii('hair','curly',this)">
-                        Ricci
-                      </button>
+                        onclick="pickMii('hair','curly',this)">Ricci</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="bun"
-                        onclick="pickMii('hair','bun',this)">
-                        Chignon
-                      </button>
+                        onclick="pickMii('hair','bun',this)">Chignon</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="mohawk"
-                        onclick="pickMii('hair','mohawk',this)">
-                        Mohawk
-                      </button>
+                        onclick="pickMii('hair','mohawk',this)">Mohawk</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="wavy"
-                        onclick="pickMii('hair','wavy',this)">
-                        Ondulati
-                      </button>
+                        onclick="pickMii('hair','wavy',this)">Ondulati</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="cap"
-                        onclick="pickMii('hair','cap',this)">
-                        Cappello
-                      </button>
+                        onclick="pickMii('hair','cap',this)">Cappello</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="rainbow"
-                        onclick="pickMii('hair','rainbow',this)"
-                        data-item-id="101">
-                        🌈 Rainbow
-                      </button>
+                        data-item-id="1"
+                        onclick="pickMii('hair','rainbow',this)">🌈 Rainbow</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="gold"
-                        onclick="pickMii('hair','gold',this)"
-                        data-item-id="102">
-                        ✨ Gold
-                      </button>
+                        data-item-id="2"
+                        onclick="pickMii('hair','gold',this)">✨ Gold</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="galaxy"
-                        onclick="pickMii('hair','galaxy',this)"
-                        data-item-id="103">
-                        🌌 Galaxy
-                      </button>
+                        data-item-id="3"
+                        onclick="pickMii('hair','galaxy',this)">🌌 Galaxy</button>
                       <button class="mii-opt-btn"
                         data-cat="hair" data-val="flame"
-                        onclick="pickMii('hair','flame',this)"
-                        data-item-id="104">
-                        🔥 Flame
-                      </button>
+                        data-item-id="4"
+                        onclick="pickMii('hair','flame',this)">🔥 Flame</button>
                     </div>
                   </div>
 
-                  <!-- Occhi -->
                   <div class="mii-opt-group">
                     <label>👀 OCCHI</label>
                     <div class="mii-btn-row">
-                      <button class="mii-opt-btn active"
+                      <button class="mii-opt-btn sel"
                         data-cat="eyes" data-val="normal"
-                        onclick="pickMii('eyes','normal',this)">
-                        Normali
-                      </button>
+                        onclick="pickMii('eyes','normal',this)">Normali</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="happy"
-                        onclick="pickMii('eyes','happy',this)">
-                        Felici
-                      </button>
+                        onclick="pickMii('eyes','happy',this)">Felici</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="sleepy"
-                        onclick="pickMii('eyes','sleepy',this)">
-                        Assonnati
-                      </button>
+                        onclick="pickMii('eyes','sleepy',this)">Assonnati</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="surprised"
-                        onclick="pickMii('eyes','surprised',this)">
-                        Sorpresi
-                      </button>
+                        onclick="pickMii('eyes','surprised',this)">Sorpresi</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="wink"
-                        onclick="pickMii('eyes','wink',this)">
-                        Occhiolino
-                      </button>
+                        onclick="pickMii('eyes','wink',this)">Occhiolino</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="cool"
-                        onclick="pickMii('eyes','cool',this)">
-                        Cool
-                      </button>
+                        onclick="pickMii('eyes','cool',this)">Cool</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="star"
-                        onclick="pickMii('eyes','star',this)"
-                        data-item-id="201">
-                        ⭐ Star
-                      </button>
+                        data-item-id="5"
+                        onclick="pickMii('eyes','star',this)">⭐ Star</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="heart"
-                        onclick="pickMii('eyes','heart',this)"
-                        data-item-id="202">
-                        ❤️ Heart
-                      </button>
+                        data-item-id="6"
+                        onclick="pickMii('eyes','heart',this)">❤️ Heart</button>
                       <button class="mii-opt-btn"
                         data-cat="eyes" data-val="laser"
-                        onclick="pickMii('eyes','laser',this)"
-                        data-item-id="203">
-                        🔴 Laser
-                      </button>
+                        data-item-id="7"
+                        onclick="pickMii('eyes','laser',this)">🔴 Laser</button>
                     </div>
                   </div>
 
-                  <!-- Bocca -->
                   <div class="mii-opt-group">
                     <label>👄 BOCCA</label>
                     <div class="mii-btn-row">
-                      <button class="mii-opt-btn active"
+                      <button class="mii-opt-btn sel"
                         data-cat="mouth" data-val="smile"
-                        onclick="pickMii('mouth','smile',this)">
-                        Sorriso
-                      </button>
+                        onclick="pickMii('mouth','smile',this)">Sorriso</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="grin"
-                        onclick="pickMii('mouth','grin',this)">
-                        Ghigno
-                      </button>
+                        onclick="pickMii('mouth','grin',this)">Ghigno</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="open"
-                        onclick="pickMii('mouth','open',this)">
-                        Aperta
-                      </button>
+                        onclick="pickMii('mouth','open',this)">Aperta</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="smirk"
-                        onclick="pickMii('mouth','smirk',this)">
-                        Smirk
-                      </button>
+                        onclick="pickMii('mouth','smirk',this)">Smirk</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="tongue"
-                        onclick="pickMii('mouth','tongue',this)">
-                        Linguaccia
-                      </button>
+                        onclick="pickMii('mouth','tongue',this)">Linguaccia</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="sad"
-                        onclick="pickMii('mouth','sad',this)">
-                        Triste
-                      </button>
+                        onclick="pickMii('mouth','sad',this)">Triste</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="rainbow"
-                        onclick="pickMii('mouth','rainbow',this)"
-                        data-item-id="301">
-                        🌈 Rainbow
-                      </button>
+                        data-item-id="8"
+                        onclick="pickMii('mouth','rainbow',this)">🌈 Rainbow</button>
                       <button class="mii-opt-btn"
                         data-cat="mouth" data-val="fire"
-                        onclick="pickMii('mouth','fire',this)"
-                        data-item-id="302">
-                        🔥 Fire
-                      </button>
+                        data-item-id="9"
+                        onclick="pickMii('mouth','fire',this)">🔥 Fire</button>
                     </div>
                   </div>
 
@@ -1051,11 +961,9 @@
               </div>
             </div>
 
-            <!-- Badges -->
-            <div class="card">
+            <div class="card" style="margin-top:16px">
               <div class="card-head">
-                <h3><span class="ch-dot dot-yellow"></span>
-                  🏅 Badge</h3>
+                <h3><span class="ch-dot dot-yellow"></span>🏅 Badge</h3>
               </div>
               <div class="card-body badge-list" id="badgeList"></div>
             </div>
@@ -1068,8 +976,7 @@
       <div id="notifiche" class="section">
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-blue"></span>
-              🔔 Notifiche</h3>
+            <h3><span class="ch-dot dot-blue"></span>🔔 Notifiche</h3>
           </div>
           <div class="card-body" id="notifList"></div>
         </div>
@@ -1078,39 +985,37 @@
       <!-- ════════════ ADMIN ════════════ -->
       <div id="admin" class="section">
         <div class="admin-banner">
-          <div class="admin-banner-left">
-            <div class="admin-crown-icon">👑</div>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="font-size:32px">👑</div>
             <div>
-              <h2>Pannello Admin</h2>
-              <p>Gestisci utenti, attività e contenuti</p>
+              <h2 style="margin:0;font-size:20px">Pannello Admin</h2>
+              <p style="margin:0;color:var(--muted);font-size:13px">
+                Gestisci utenti, attività e contenuti
+              </p>
             </div>
           </div>
-          <button class="btn-refresh" onclick="loadAdmin()">
+          <button class="btn-save" onclick="loadAdmin()"
+            style="padding:8px 16px;font-size:13px">
             <i class="fas fa-sync-alt"></i> Aggiorna
           </button>
         </div>
 
-        <!-- Stats globali -->
         <div id="adminStats"
           style="display:grid;grid-template-columns:repeat(4,1fr);
           gap:16px;margin-bottom:24px"></div>
 
-        <!-- Utenti -->
         <div class="card" style="margin-bottom:20px">
           <div class="card-head">
-            <h3><span class="ch-dot dot-yellow"></span>
-              👤 Utenti Registrati</h3>
+            <h3><span class="ch-dot dot-yellow"></span>👤 Utenti Registrati</h3>
           </div>
           <div class="card-body" style="overflow-x:auto">
             <div id="adminUsers"></div>
           </div>
         </div>
 
-        <!-- Attività recenti -->
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-green"></span>
-              🌱 Attività Recenti</h3>
+            <h3><span class="ch-dot dot-green"></span>🌱 Attività Recenti</h3>
           </div>
           <div class="card-body" style="overflow-x:auto">
             <div id="adminActivities"></div>
@@ -1119,34 +1024,58 @@
       </div>
 
     </div><!-- /page-body -->
-  </main><!-- /main -->
+  </main>
 
   <!-- MOBILE NAV -->
   <nav class="mob-nav" id="mobNav" style="display:none">
     <button class="mn-btn nav-item active" data-section="dashboard">
-      <i class="fas fa-home"></i>
-      <span>Home</span>
+      <i class="fas fa-home"></i><span>Home</span>
     </button>
     <button class="mn-btn nav-item" data-section="activities">
-      <i class="fas fa-leaf"></i>
-      <span>Attività</span>
+      <i class="fas fa-leaf"></i><span>Attività</span>
     </button>
     <button class="mn-btn nav-item" data-section="social">
-      <i class="fas fa-users"></i>
-      <span>Social</span>
+      <i class="fas fa-users"></i><span>Social</span>
     </button>
     <button class="mn-btn nav-item" data-section="shop">
-      <i class="fas fa-store"></i>
-      <span>Shop</span>
+      <i class="fas fa-store"></i><span>Shop</span>
     </button>
     <button class="mn-btn nav-item" data-section="profile">
-      <i class="fas fa-user"></i>
-      <span>Profilo</span>
+      <i class="fas fa-user"></i><span>Profilo</span>
     </button>
   </nav>
 
 </div><!-- /app -->
 
+<script>
+// ✅ Fix: selectType usato dall'HTML ma definito qui per sicurezza
+function togglePwd(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isText = el.type === 'text';
+  el.type = isText ? 'password' : 'text';
+  btn.querySelector('i').className = isText ? 'fas fa-eye' : 'fas fa-eye-slash';
+}
+
+function selectType(val, btn) {
+  document.getElementById('actType').value = val;
+  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (typeof onTypeChange === 'function') onTypeChange(val);
+}
+
+function switchTab(tab) {
+  const forms = { login:'loginForm', register:'registerForm',
+                  forgot:'forgotForm', reset:'resetForm' };
+  Object.entries(forms).forEach(([t, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = t === tab ? 'flex' : 'none';
+  });
+  document.querySelectorAll('.auth-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+}
+</script>
 <script src="script.js"></script>
 </body>
 </html>
