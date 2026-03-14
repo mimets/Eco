@@ -14,9 +14,13 @@ let markerFrom = null;
 let markerTo   = null;
 let routeLine  = null;
 let mapInited  = false;
-let geocodeTimer = null;
+let mapSat     = false;
+let tileLayer  = null;
+let geocodeTimer  = null;
+let searchTimer   = null;
 let shopData   = { items:[], owned:[], points:0 };
 let tutStep    = 0;
+let following  = [];   // cache follower per inviti
 
 const RATES = {
   Remoto:     { t:'h', co2:.5,  pts:10  },
@@ -32,12 +36,9 @@ const ICONS = {
   Bus:'🚌', Carpooling:'🚗', Videocall:'💻'
 };
 
-// ✅ FIX: profilo OSRM corretto per ogni mezzo
 const OSRM_PROFILE = {
-  Bici:       'bike',
-  Treno:      'driving',
-  Bus:        'driving',
-  Carpooling: 'driving'
+  Bici:'bike', Treno:'driving',
+  Bus:'driving', Carpooling:'driving'
 };
 
 const CO2_MILESTONES = [10,50,100,250,500,1000];
@@ -49,20 +50,20 @@ async function api(url, method='GET', body=null) {
   try {
     const opts = {
       method,
-      headers: {
+      headers:{
         'Content-Type':'application/json',
         ...(token ? { Authorization:`Bearer ${token}` } : {})
       }
     };
     if (body) opts.body = JSON.stringify(body);
-    const r   = await fetch(API + url, opts);
+    const r   = await fetch(API+url, opts);
     const txt = await r.text();
     if (!txt) return {};
     try { return JSON.parse(txt); }
-    catch { return { error: txt }; }
+    catch { return { error:txt }; }
   } catch(e) {
     console.error('API error:', url, e);
-    return { error: e.message };
+    return { error:e.message };
   }
 }
 
@@ -88,7 +89,7 @@ function showCo2Explosion(co2, pts) {
   document.getElementById('co2ExpKg').textContent  = `+${co2} kg`;
   document.getElementById('co2ExpPts').textContent = `+${pts} punti ⭐`;
   el.style.display = 'flex';
-  setTimeout(() => { el.style.display = 'none'; }, 2800);
+  setTimeout(() => { el.style.display='none'; }, 2800);
 }
 
 // ══════════════════════════════════════════
@@ -97,8 +98,8 @@ function showCo2Explosion(co2, pts) {
 function switchTab(tab, btn) {
   document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('loginForm').style.display    = tab==='login'    ? 'flex' : 'none';
-  document.getElementById('registerForm').style.display = tab==='register' ? 'flex' : 'none';
+  document.getElementById('loginForm').style.display    = tab==='login'    ? 'flex':'none';
+  document.getElementById('registerForm').style.display = tab==='register' ? 'flex':'none';
   document.getElementById('lErr').textContent = '';
   document.getElementById('rErr').textContent = '';
 }
@@ -107,23 +108,19 @@ window.switchTab = switchTab;
 function togglePwd(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
-  const show = el.type === 'password';
-  el.type    = show ? 'text' : 'password';
+  const show = el.type==='password';
+  el.type    = show ? 'text':'password';
   btn.innerHTML = `<i class="fas fa-eye${show?'-slash':''}"></i>`;
 }
 window.togglePwd = togglePwd;
 
 function checkPwd(val) {
-  const rules = [
-    { id:'ph1', ok: val.length >= 8 },
-    { id:'ph2', ok: /[A-Z]/.test(val) },
-    { id:'ph3', ok: /[0-9]/.test(val) },
-    { id:'ph4', ok: /[^A-Za-z0-9]/.test(val) }
-  ];
-  rules.forEach(r => {
-    const el = document.getElementById(r.id);
-    if (el) el.classList.toggle('ok', r.ok);
-  });
+  [
+    { id:'ph1', ok:val.length>=8 },
+    { id:'ph2', ok:/[A-Z]/.test(val) },
+    { id:'ph3', ok:/[0-9]/.test(val) },
+    { id:'ph4', ok:/[^A-Za-z0-9]/.test(val) }
+  ].forEach(r => document.getElementById(r.id)?.classList.toggle('ok',r.ok));
 }
 window.checkPwd = checkPwd;
 
@@ -133,99 +130,80 @@ async function doLogin(e) {
   const pwd   = document.getElementById('lPwd').value;
   const err   = document.getElementById('lErr');
   const btn   = e.target.querySelector('.btn-auth');
-
-  if (!email || !pwd) { err.textContent='Compila tutti i campi'; return; }
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Accesso...</span>';
-  btn.disabled  = true;
-
+  if (!email||!pwd) { err.textContent='Compila tutti i campi'; return; }
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i><span>Accesso...</span>';
+  btn.disabled=true;
   const d = await api('/api/login','POST',{ email, password:pwd });
-  btn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Accedi</span>';
-  btn.disabled  = false;
-
+  btn.innerHTML='<i class="fas fa-sign-in-alt"></i><span>Accedi</span>';
+  btn.disabled=false;
   if (d.error) {
-    err.textContent = d.error;
+    err.textContent=d.error;
     document.getElementById('lPwd').classList.add('shake');
-    setTimeout(() => document.getElementById('lPwd').classList.remove('shake'), 600);
+    setTimeout(()=>document.getElementById('lPwd').classList.remove('shake'),600);
     return;
   }
-  token = d.token;
-  localStorage.setItem('ecotoken', token);
+  token=d.token;
+  localStorage.setItem('ecotoken',token);
   bootApp(d.user);
 }
 window.doLogin = doLogin;
 
 async function doRegister(e) {
   e.preventDefault();
-  const name     = document.getElementById('rName').value.trim();
-  const username = document.getElementById('rUsername').value.trim();
-  const email    = document.getElementById('rEmail').value.trim();
-  const pwd      = document.getElementById('rPwd').value;
-  const err      = document.getElementById('rErr');
-  const btn      = e.target.querySelector('.btn-auth');
-
-  if (!name||!username||!email||!pwd) { err.textContent='Compila tutti i campi'; return; }
-  if (pwd.length < 8) { err.textContent='Password troppo corta (min 8 caratteri)'; return; }
-
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Registrazione...</span>';
-  btn.disabled  = true;
-
-  const d = await api('/api/register','POST',{ name, username, email, password:pwd });
-  btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Registrati</span>';
-  btn.disabled  = false;
-
-  if (d.error) { err.textContent = d.error; return; }
-  token = d.token;
-  localStorage.setItem('ecotoken', token);
+  const name=document.getElementById('rName').value.trim();
+  const username=document.getElementById('rUsername').value.trim();
+  const email=document.getElementById('rEmail').value.trim();
+  const pwd=document.getElementById('rPwd').value;
+  const err=document.getElementById('rErr');
+  const btn=e.target.querySelector('.btn-auth');
+  if (!name||!username||!email||!pwd){err.textContent='Compila tutti i campi';return;}
+  if (pwd.length<8){err.textContent='Password troppo corta';return;}
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i><span>Registrazione...</span>';
+  btn.disabled=true;
+  const d=await api('/api/register','POST',{name,username,email,password:pwd});
+  btn.innerHTML='<i class="fas fa-user-plus"></i><span>Registrati</span>';
+  btn.disabled=false;
+  if (d.error){err.textContent=d.error;return;}
+  token=d.token;
+  localStorage.setItem('ecotoken',token);
   bootApp(d.user);
-  setTimeout(() => showTutorial(), 500);
+  setTimeout(()=>showTutorial(),500);
 }
 window.doRegister = doRegister;
 
 function doLogout(e) {
   e?.stopPropagation();
-  token = null;
+  token=null;
   localStorage.removeItem('ecotoken');
-  myProfile = null;
-  mapInited = false;
-  map = null;
-  document.getElementById('authWrap').style.display = 'flex';
-  document.getElementById('app').style.display      = 'none';
+  myProfile=null; mapInited=false; map=null;
+  document.getElementById('authWrap').style.display='flex';
+  document.getElementById('app').style.display='none';
   showN('👋 Arrivederci!','info');
 }
 window.doLogout = doLogout;
 
 // ══════════════════════════════════════════
-//   BOOT APP
+//   BOOT
 // ══════════════════════════════════════════
 function bootApp(user) {
-  document.getElementById('authWrap').style.display = 'none';
-  document.getElementById('app').style.display      = 'flex';
-  myProfile = user;
-
-  if (window.innerWidth <= 768)
-    document.getElementById('mobNav').style.display = 'flex';
-
+  document.getElementById('authWrap').style.display='none';
+  document.getElementById('app').style.display='flex';
+  myProfile=user;
+  if (window.innerWidth<=768)
+    document.getElementById('mobNav').style.display='flex';
   if (user.is_admin) {
-    document.getElementById('adminNavBtn').style.display  = 'block';
-    document.getElementById('sbAdminBadge').style.display = 'inline-flex';
+    document.getElementById('adminNavBtn').style.display='block';
+    document.getElementById('sbAdminBadge').style.display='inline-flex';
   }
-
-  document.getElementById('sbEmail').textContent = user.email || '';
-  showTab('dashboard', null);
+  document.getElementById('sbEmail').textContent=user.email||'';
+  showTab('dashboard',null);
   loadAll();
 }
 
-// ══════════════════════════════════════════
-//   LOAD ALL
-// ══════════════════════════════════════════
 async function loadAll() {
   await Promise.all([
-    loadProfile(),
-    loadStats(),
-    loadActivities(),
-    loadBadges(),
-    loadYearly(),
-    loadNotifications()
+    loadProfile(), loadStats(), loadActivities(),
+    loadBadges(), loadYearly(), loadNotifications()
   ]);
 }
 
@@ -245,68 +223,52 @@ const TAB_TITLES = {
 };
 
 function showTab(name, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  const panel = document.getElementById(`tab-${name}`);
-  if (panel) panel.classList.add('active');
-
-  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`tab-${name}`)?.classList.add('active');
+  document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-
-  document.querySelectorAll('.mn-btn').forEach(b => b.classList.remove('active'));
-  if (btn && btn.classList.contains('mn-btn')) btn.classList.add('active');
-
-  const [title, sub] = TAB_TITLES[name] || [name,''];
-  document.getElementById('topTitle').textContent = title;
-  document.getElementById('topSub').textContent   = sub;
-
-  if (name === 'leaderboard') loadLeaderboard();
-  if (name === 'challenges')  loadChallenges();
-  if (name === 'social')      { loadFollowers(); loadFollowing(); loadGroups(); }
-  if (name === 'notifiche')   loadNotificationsPage();
-  if (name === 'admin')       loadAdminUsers();
-  if (name === 'shop')        loadShop();
-  if (name === 'log') {
-    setTimeout(() => {
-      if (!mapInited && curAct && ['Treno','Bici','Bus','Carpooling'].includes(curAct))
-        initMap();
-    }, 100);
+  document.querySelectorAll('.mn-btn').forEach(b=>b.classList.remove('active'));
+  if (btn?.classList.contains('mn-btn')) btn.classList.add('active');
+  const [title,sub]=TAB_TITLES[name]||[name,''];
+  document.getElementById('topTitle').textContent=title;
+  document.getElementById('topSub').textContent=sub;
+  if (name==='leaderboard') loadLeaderboard();
+  if (name==='challenges')  loadChallenges();
+  if (name==='social')      { loadFollowers(); loadFollowing(); loadGroups(); }
+  if (name==='notifiche')   loadNotificationsPage();
+  if (name==='admin')       loadAdminUsers();
+  if (name==='shop')        loadShop();
+  if (name==='log') {
+    setTimeout(()=>{
+      if (!mapInited&&curAct&&['Treno','Bici','Bus','Carpooling'].includes(curAct)) initMap();
+    },100);
   }
-
-  window.scrollTo({ top:0, behavior:'smooth' });
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 window.showTab = showTab;
 
 // ══════════════════════════════════════════
 //   TUTORIAL
 // ══════════════════════════════════════════
-function showTutorial() {
-  tutStep = 0;
-  document.getElementById('tutOverlay').style.display = 'flex';
-  updateTutStep();
-}
-function closeTut() {
-  document.getElementById('tutOverlay').style.display = 'none';
-}
+function showTutorial() { tutStep=0; document.getElementById('tutOverlay').style.display='flex'; updateTutStep(); }
+function closeTut()     { document.getElementById('tutOverlay').style.display='none'; }
 function tutNav(dir) {
-  const max = 4;
-  tutStep = Math.max(0, Math.min(max, tutStep + dir));
+  const max=4;
+  tutStep=Math.max(0,Math.min(max+1,tutStep+dir));
+  if (tutStep>max){closeTut();return;}
   updateTutStep();
-  const nextBtn = document.querySelector('.tut-next');
-  const prevBtn = document.querySelector('.tut-prev');
-  if (nextBtn) nextBtn.textContent = tutStep === max ? 'Inizia! 🚀' : 'Avanti →';
-  if (prevBtn) {
-    prevBtn.style.opacity       = tutStep === 0 ? '0' : '1';
-    prevBtn.style.pointerEvents = tutStep === 0 ? 'none' : 'auto';
-  }
-  if (tutStep > max) closeTut();
+  const nb=document.querySelector('.tut-next');
+  const pb=document.querySelector('.tut-prev');
+  if (nb) nb.textContent=tutStep===max?'Inizia! 🚀':'Avanti →';
+  if (pb) { pb.style.opacity=tutStep===0?'0':'1'; pb.style.pointerEvents=tutStep===0?'none':'auto'; }
 }
-function goTut(n) { tutStep = n; updateTutStep(); }
+function goTut(n) { tutStep=n; updateTutStep(); }
 function updateTutStep() {
-  document.querySelectorAll('.tut-step').forEach((s,i) => s.classList.toggle('active', i===tutStep));
-  document.querySelectorAll('.tut-dot').forEach((d,i)  => d.classList.toggle('active', i===tutStep));
+  document.querySelectorAll('.tut-step').forEach((s,i)=>s.classList.toggle('active',i===tutStep));
+  document.querySelectorAll('.tut-dot').forEach((d,i)=>d.classList.toggle('active',i===tutStep));
 }
-window.closeTut = closeTut; window.tutNav = tutNav; window.goTut = goTut;
-window.showTutorial = showTutorial;
+window.showTutorial=showTutorial; window.closeTut=closeTut;
+window.tutNav=tutNav; window.goTut=goTut;
 
 // ══════════════════════════════════════════
 //   PROFILE
@@ -315,159 +277,118 @@ async function loadProfile() {
   const d = await api('/api/profile');
   if (d.error) return;
   myProfile = d;
-
-  document.getElementById('pName').value     = d.name     || '';
-  document.getElementById('pUsername').value = d.username || '';
-  document.getElementById('pBio').value      = d.bio      || '';
-
+  document.getElementById('pName').value     = d.name||'';
+  document.getElementById('pUsername').value = d.username||'';
+  document.getElementById('pBio').value      = d.bio||'';
   const sbName = document.getElementById('sbName');
-  if (sbName) sbName.childNodes[0].textContent = (d.name || d.email) + ' ';
-  document.getElementById('sbEmail').textContent = '@' + (d.username || d.email);
-
-  document.getElementById('topCo2').textContent = parseFloat(d.co2_saved||0).toFixed(1);
-  document.getElementById('topPts').textContent = Math.round(d.points||0);
-
-  updateSidebarCo2(d.co2_saved || 0);
-
-  const ps = document.getElementById('profileStats');
-  if (ps) ps.innerHTML = `
-    <div class="ps-item">
-      <div class="ps-val">${Math.round(d.points||0)}</div>
-      <div class="ps-lbl">Punti</div>
-    </div>
-    <div class="ps-item">
-      <div class="ps-val">${parseFloat(d.co2_saved||0).toFixed(1)}</div>
-      <div class="ps-lbl">kg CO₂</div>
-    </div>
-    <div class="ps-item">
-      <div class="ps-val">${d.followers||0}</div>
-      <div class="ps-lbl">Follower</div>
-    </div>`;
-
-  miiState = {
-    color: d.avatar_color || '#16a34a',
-    skin:  d.avatar_skin  || '#fde68a',
-    eyes:  d.avatar_eyes  || 'normal',
-    mouth: d.avatar_mouth || 'smile',
-    hair:  d.avatar_hair  || 'none',
-    ownedItems: d.owned_items || []
+  if (sbName) sbName.childNodes[0].textContent=(d.name||d.email)+' ';
+  document.getElementById('sbEmail').textContent='@'+(d.username||d.email);
+  document.getElementById('topCo2').textContent=parseFloat(d.co2_saved||0).toFixed(1);
+  document.getElementById('topPts').textContent=Math.round(d.points||0);
+  updateSidebarCo2(d.co2_saved||0);
+  const ps=document.getElementById('profileStats');
+  if (ps) ps.innerHTML=`
+    <div class="ps-item"><div class="ps-val">${Math.round(d.points||0)}</div><div class="ps-lbl">Punti</div></div>
+    <div class="ps-item"><div class="ps-val">${parseFloat(d.co2_saved||0).toFixed(1)}</div><div class="ps-lbl">kg CO₂</div></div>
+    <div class="ps-item"><div class="ps-val">${d.followers||0}</div><div class="ps-lbl">Follower</div></div>`;
+  miiState={
+    color:d.avatar_color||'#16a34a', skin:d.avatar_skin||'#fde68a',
+    eyes:d.avatar_eyes||'normal',    mouth:d.avatar_mouth||'smile',
+    hair:d.avatar_hair||'none',      ownedItems:d.owned_items||[]
   };
-
   renderMiiBuilder();
   drawMii(miiState,'miiCanvas',120);
   drawMii(miiState,'sbAvatarCanvas',36);
 }
 
 function updateSidebarCo2(co2) {
-  const val  = parseFloat(co2) || 0;
-  const next = CO2_MILESTONES.find(m => m > val) || CO2_MILESTONES[CO2_MILESTONES.length-1];
-  const prev = CO2_MILESTONES.filter(m => m <= val).pop() || 0;
-  const pct  = Math.min(100, ((val - prev) / (next - prev)) * 100);
-
-  const fill = document.getElementById('sbCo2Fill');
-  const lbl  = document.getElementById('sbCo2Val');
-  const nxt  = document.getElementById('sbCo2Next');
-  if (fill) fill.style.width = pct + '%';
-  if (lbl)  lbl.textContent  = val.toFixed(1) + ' kg';
-  if (nxt) {
-    nxt.textContent = val < CO2_MILESTONES[CO2_MILESTONES.length-1]
-      ? `Prossimo badge: ${next} kg`
-      : '🏆 Tutti i badge sbloccati!';
-  }
+  const val=parseFloat(co2)||0;
+  const next=CO2_MILESTONES.find(m=>m>val)||CO2_MILESTONES[CO2_MILESTONES.length-1];
+  const prev=CO2_MILESTONES.filter(m=>m<=val).pop()||0;
+  const pct=Math.min(100,((val-prev)/(next-prev))*100);
+  document.getElementById('sbCo2Fill')?.style.setProperty('width',pct+'%');
+  const lbl=document.getElementById('sbCo2Val');
+  if (lbl) lbl.textContent=val.toFixed(1)+' kg';
+  const nxt=document.getElementById('sbCo2Next');
+  if (nxt) nxt.textContent=val<CO2_MILESTONES[CO2_MILESTONES.length-1]
+    ?`Prossimo badge: ${next} kg`:'🏆 Tutti i badge sbloccati!';
 }
 
 async function saveProfile() {
-  const payload = {
-    name:         document.getElementById('pName').value.trim(),
-    username:     document.getElementById('pUsername').value.trim(),
-    bio:          document.getElementById('pBio').value.trim(),
-    avatar_color: miiState.color,
-    avatar_eyes:  miiState.eyes,
-    avatar_mouth: miiState.mouth,
-    avatar_hair:  miiState.hair,
-    avatar_skin:  miiState.skin
-  };
-  const d = await api('/api/profile','PATCH', payload);
-  if (d.error) return showN('❌ ' + d.error,'error');
-  showN('✅ Profilo salvato!','success');
+  const d=await api('/api/profile','PATCH',{
+    name:document.getElementById('pName').value.trim(),
+    username:document.getElementById('pUsername').value.trim(),
+    bio:document.getElementById('pBio').value.trim(),
+    avatar_color:miiState.color, avatar_eyes:miiState.eyes,
+    avatar_mouth:miiState.mouth, avatar_hair:miiState.hair, avatar_skin:miiState.skin
+  });
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('✅ Profilo salvato!');
   loadProfile();
 }
-window.saveProfile = saveProfile;
+window.saveProfile=saveProfile;
 
 // ══════════════════════════════════════════
 //   STATS
 // ══════════════════════════════════════════
 async function loadStats() {
-  const d = await api('/api/stats');
+  const d=await api('/api/stats');
   if (d.error) return;
-
-  const co2Total = parseFloat(d.co2_total || 0);
-  const co2Week  = parseFloat(d.co2_week  || 0);
-  const co2Month = parseFloat(d.co2_month || 0);
-
-  const heroVal = document.getElementById('heroCo2');
-  if (heroVal) heroVal.textContent = co2Total.toFixed(1);
-
-  const trees   = Math.round(co2Total / 21);
-  const heroSub = document.getElementById('heroCo2Sub');
-  if (heroSub) heroSub.textContent = co2Total > 0
-    ? `Equivale a ${trees} alber${trees===1?'o':'i'} piantati 🌳`
-    : 'Inizia a tracciare le tue azioni eco!';
-
-  const next = CO2_MILESTONES.find(m => m > co2Total) || CO2_MILESTONES[CO2_MILESTONES.length-1];
-  const prev = CO2_MILESTONES.filter(m => m <= co2Total).pop() || 0;
-  const pct  = Math.min(100, ((co2Total - prev) / (next - prev)) * 100);
-  const fill = document.getElementById('heroCo2Fill');
-  if (fill) setTimeout(() => fill.style.width = pct + '%', 100);
-  const tgt = document.getElementById('heroCo2Target');
-  if (tgt) tgt.textContent = `/ ${next} kg`;
-
-  if (document.getElementById('heroCo2Week'))  document.getElementById('heroCo2Week').textContent  = co2Week.toFixed(2);
-  if (document.getElementById('heroCo2Month')) document.getElementById('heroCo2Month').textContent = co2Month.toFixed(2);
-
-  const planet = document.getElementById('co2Planet');
+  const co2Total=parseFloat(d.co2_total||0);
+  const co2Week=parseFloat(d.co2_week||0);
+  const co2Month=parseFloat(d.co2_month||0);
+  const heroVal=document.getElementById('heroCo2');
+  if (heroVal) heroVal.textContent=co2Total.toFixed(1);
+  const trees=Math.round(co2Total/21);
+  const heroSub=document.getElementById('heroCo2Sub');
+  if (heroSub) heroSub.textContent=co2Total>0
+    ?`Equivale a ${trees} alber${trees===1?'o':'i'} piantati 🌳`
+    :'Inizia a tracciare le tue azioni eco!';
+  const next=CO2_MILESTONES.find(m=>m>co2Total)||CO2_MILESTONES[CO2_MILESTONES.length-1];
+  const prev=CO2_MILESTONES.filter(m=>m<=co2Total).pop()||0;
+  const pct=Math.min(100,((co2Total-prev)/(next-prev))*100);
+  const fill=document.getElementById('heroCo2Fill');
+  if (fill) setTimeout(()=>fill.style.width=pct+'%',100);
+  const tgt=document.getElementById('heroCo2Target');
+  if (tgt) tgt.textContent=`/ ${next} kg`;
+  if (document.getElementById('heroCo2Week'))  document.getElementById('heroCo2Week').textContent=co2Week.toFixed(2);
+  if (document.getElementById('heroCo2Month')) document.getElementById('heroCo2Month').textContent=co2Month.toFixed(2);
+  const planet=document.getElementById('co2Planet');
   if (planet) {
-    if      (co2Total >= 500) planet.textContent = '🌳';
-    else if (co2Total >= 100) planet.textContent = '🌎';
-    else if (co2Total >= 50)  planet.textContent = '🌍';
-    else if (co2Total >= 10)  planet.textContent = '🌱';
-    else                      planet.textContent = '🌍';
+    if      (co2Total>=500) planet.textContent='🌳';
+    else if (co2Total>=100) planet.textContent='🌎';
+    else if (co2Total>=50)  planet.textContent='🌍';
+    else if (co2Total>=10)  planet.textContent='🌱';
+    else                    planet.textContent='🌍';
   }
-
-  if (document.getElementById('sPts'))  document.getElementById('sPts').textContent  = Math.round(d.points||0);
-  if (document.getElementById('sWeek')) document.getElementById('sWeek').textContent = co2Week.toFixed(2);
-  if (document.getElementById('sActs')) document.getElementById('sActs').textContent = d.total_activities||0;
+  if (document.getElementById('sPts'))  document.getElementById('sPts').textContent=Math.round(d.points||0);
+  if (document.getElementById('sWeek')) document.getElementById('sWeek').textContent=co2Week.toFixed(2);
+  if (document.getElementById('sActs')) document.getElementById('sActs').textContent=d.total_activities||0;
 }
 
 // ══════════════════════════════════════════
 //   ACTIVITIES
 // ══════════════════════════════════════════
 async function loadActivities() {
-  const list = await api('/api/activities');
+  const list=await api('/api/activities');
   if (!Array.isArray(list)) return;
-
-  const ra = document.getElementById('recentActs');
-  if (ra) {
-    ra.innerHTML = list.length
-      ? list.slice(0,5).map(a => actHTML(a)).join('')
-      : `<div class="empty"><div class="ei">🌱</div><p>Nessuna attività ancora.<br>Registra la tua prima azione eco!</p></div>`;
-  }
-
-  const aa = document.getElementById('allActs');
-  if (aa) {
-    aa.innerHTML = list.length
-      ? list.map(a => actHTML(a)).join('')
-      : `<div class="empty"><div class="ei">📋</div><p>Nessuna attività registrata.</p></div>`;
-  }
+  const ra=document.getElementById('recentActs');
+  if (ra) ra.innerHTML=list.length
+    ?list.slice(0,5).map(a=>actHTML(a)).join('')
+    :`<div class="empty"><div class="ei">🌱</div><p>Nessuna attività ancora.</p></div>`;
+  const aa=document.getElementById('allActs');
+  if (aa) aa.innerHTML=list.length
+    ?list.map(a=>actHTML(a)).join('')
+    :`<div class="empty"><div class="ei">📋</div><p>Nessuna attività registrata.</p></div>`;
 }
 
 function actHTML(a) {
-  const d    = new Date(a.date);
-  const dStr = d.toLocaleDateString('it-IT',{day:'2-digit',month:'short'}) + ' ' +
-               d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-  const sub  = a.km > 0
-    ? `${a.from_addr||''} ${a.to_addr?'→ '+a.to_addr:''} · ${a.km} km`.trim()
-    : a.hours > 0 ? `${a.hours}h` : '';
+  const d=new Date(a.date);
+  const dStr=d.toLocaleDateString('it-IT',{day:'2-digit',month:'short'})+' '+
+             d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  const sub=a.km>0
+    ?`${a.from_addr||''} ${a.to_addr?'→ '+a.to_addr:''} · ${a.km} km`.trim()
+    :a.hours>0?`${a.hours}h`:'';
   return `
     <div class="act-item">
       <div class="act-icon-wrap">${ICONS[a.type]||'📌'}</div>
@@ -483,66 +404,53 @@ function actHTML(a) {
 }
 
 // ══════════════════════════════════════════
-//   BADGES
+//   BADGES / YEARLY / LEADERBOARD
 // ══════════════════════════════════════════
 async function loadBadges() {
-  const list = await api('/api/badges');
+  const list=await api('/api/badges');
   if (!Array.isArray(list)) return;
-  const el = document.getElementById('badgeList');
+  const el=document.getElementById('badgeList');
   if (!el) return;
-  el.innerHTML = list.map(b => `
+  el.innerHTML=list.map(b=>`
     <div class="badge-item ${b.unlocked?'on':'off'}">
       <div class="badge-icon">${b.icon}</div>
-      <div>
-        <div class="badge-name">${b.name}</div>
-        <div class="badge-desc">${b.desc}</div>
-      </div>
+      <div><div class="badge-name">${b.name}</div><div class="badge-desc">${b.desc}</div></div>
     </div>`).join('');
 }
 
-// ══════════════════════════════════════════
-//   YEARLY
-// ══════════════════════════════════════════
 async function loadYearly() {
-  const list = await api('/api/yearly');
-  const el   = document.getElementById('yearlyChart');
-  if (!el || !Array.isArray(list)) return;
+  const list=await api('/api/yearly');
+  const el=document.getElementById('yearlyChart');
+  if (!el||!Array.isArray(list)) return;
   if (!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">📊</div><p>Nessun dato annuale ancora.</p></div>`;
+    el.innerHTML=`<div class="empty"><div class="ei">📊</div><p>Nessun dato annuale.</p></div>`;
     return;
   }
-  const max = Math.max(...list.map(r => parseFloat(r.co2)));
-  el.innerHTML = list.map(r => {
-    const co2 = parseFloat(r.co2);
-    const pct = max > 0 ? (co2/max)*100 : 0;
+  const max=Math.max(...list.map(r=>parseFloat(r.co2)));
+  el.innerHTML=list.map(r=>{
+    const co2=parseFloat(r.co2);
+    const pct=max>0?(co2/max)*100:0;
     return `
       <div class="yr-row">
         <div class="yr-month">${r.month}</div>
-        <div class="yr-bar">
-          <div class="yr-fill" style="width:0" data-w="${pct}"></div>
-        </div>
+        <div class="yr-bar"><div class="yr-fill" style="width:0" data-w="${pct}"></div></div>
         <div class="yr-co2">${co2.toFixed(1)} kg</div>
         <div class="yr-pts">⭐ ${Math.round(r.points)}</div>
       </div>`;
   }).join('');
-  setTimeout(() => {
-    el.querySelectorAll('.yr-fill').forEach(f => f.style.width = f.dataset.w + '%');
-  }, 80);
+  setTimeout(()=>el.querySelectorAll('.yr-fill').forEach(f=>f.style.width=f.dataset.w+'%'),80);
 }
 
-// ══════════════════════════════════════════
-//   LEADERBOARD
-// ══════════════════════════════════════════
 async function loadLeaderboard() {
-  const list = await api('/api/leaderboard');
-  const el   = document.getElementById('lbList');
-  if (!el || !Array.isArray(list)) return;
+  const list=await api('/api/leaderboard');
+  const el=document.getElementById('lbList');
+  if (!el||!Array.isArray(list)) return;
   if (!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">🏆</div><p>Nessun dato in classifica.</p></div>`;
+    el.innerHTML=`<div class="empty"><div class="ei">🏆</div><p>Nessun dato.</p></div>`;
     return;
   }
-  const medals = ['🥇','🥈','🥉'];
-  el.innerHTML = list.map((u,i) => `
+  const medals=['🥇','🥈','🥉'];
+  el.innerHTML=list.map((u,i)=>`
     <div class="lb-row ${i<3?'r'+(i+1):''}">
       <div class="lb-rank">${medals[i]||'#'+(i+1)}</div>
       <div class="lb-av"><canvas width="40" height="40" id="lbAv${u.id}"></canvas></div>
@@ -553,98 +461,546 @@ async function loadLeaderboard() {
       <div class="lb-co2">🌍 ${parseFloat(u.co2_saved).toFixed(1)} kg CO₂</div>
       <div class="lb-pts">⭐ ${Math.round(u.points)} pt</div>
     </div>`).join('');
-  setTimeout(() => list.forEach(u => drawMii(u,`lbAv${u.id}`,40)), 60);
+  setTimeout(()=>list.forEach(u=>drawMii(u,`lbAv${u.id}`,40)),60);
 }
 
 // ══════════════════════════════════════════
-//   CHALLENGES ✅ FIXED
+//   CHALLENGES
 // ══════════════════════════════════════════
 async function loadChallenges() {
-  const list = await api('/api/challenges');
-  const el   = document.getElementById('chList');
+  const list=await api('/api/challenges');
+  const el=document.getElementById('chList');
   if (!el) return;
-  if (!Array.isArray(list) || !list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">🏆</div><p>Nessuna sfida ancora. Creane una!</p></div>`;
+  if (!Array.isArray(list)||!list.length) {
+    el.innerHTML=`<div class="empty"><div class="ei">🏆</div><p>Nessuna sfida. Creane una!</p></div>`;
     return;
   }
-  el.innerHTML = list.map(c => `
+  el.innerHTML=list.map(c=>`
     <div class="ch-item">
       <div class="ch-ico">🏆</div>
       <div class="ch-info">
         <h4>${c.title}</h4>
         <p>${c.description||'Nessuna descrizione.'}</p>
         <div class="ch-tags">
-          ${c.co2_target>0    ? `<span class="ch-tag">🌍 Obiettivo: ${c.co2_target} kg CO₂</span>`   : ''}
-          ${c.points_reward>0 ? `<span class="ch-tag">⭐ Premio: ${c.points_reward} pt</span>`        : ''}
-          ${c.end_date        ? `<span class="ch-tag">📅 Scade: ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>` : ''}
-          ${c.is_public       ? `<span class="ch-tag">🌐 Pubblica</span>`                              : ''}
-          ${c.creator_name    ? `<span class="ch-tag">👤 ${c.creator_name}</span>`                    : ''}
+          ${c.co2_target>0    ?`<span class="ch-tag">🌍 ${c.co2_target} kg CO₂</span>`:''}
+          ${c.points_reward>0 ?`<span class="ch-tag">⭐ ${c.points_reward} pt</span>`:''}
+          ${c.end_date        ?`<span class="ch-tag">📅 ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>`:''}
+          ${c.is_public       ?`<span class="ch-tag">🌐 Pubblica</span>`:''}
+          ${c.creator_name    ?`<span class="ch-tag">👤 ${c.creator_name}</span>`:''}
         </div>
       </div>
     </div>`).join('');
 }
 
 function toggleChForm() {
-  const f = document.getElementById('chForm');
-  f.style.display = f.style.display==='none' ? 'block' : 'none';
+  const f=document.getElementById('chForm');
+  f.style.display=f.style.display==='none'?'block':'none';
 }
-window.toggleChForm = toggleChForm;
+window.toggleChForm=toggleChForm;
 
 async function saveChallenge() {
-  const title = document.getElementById('chTitle').value.trim();
-  if (!title) return showN('❌ Inserisci un titolo per la sfida','error');
-
-  const d = await api('/api/challenges','POST',{
+  const title=document.getElementById('chTitle').value.trim();
+  if (!title) return showN('❌ Inserisci un titolo','error');
+  const d=await api('/api/challenges','POST',{
     title,
-    description:   document.getElementById('chDesc').value,
-    co2_target:    parseFloat(document.getElementById('chCo2').value)||0,
-    points_reward: parseInt(document.getElementById('chPts').value)||0,
-    end_date:      document.getElementById('chDate').value||null,
-    is_public:     document.getElementById('chPublic').checked
+    description:document.getElementById('chDesc').value,
+    co2_target:parseFloat(document.getElementById('chCo2').value)||0,
+    points_reward:parseInt(document.getElementById('chPts').value)||0,
+    end_date:document.getElementById('chDate').value||null,
+    is_public:document.getElementById('chPublic').checked
   });
   if (d.error) return showN('❌ '+d.error,'error');
-  showN('✅ Sfida creata!','success');
-  document.getElementById('chForm').style.display = 'none';
-  // Reset form
-  ['chTitle','chDesc','chCo2','chPts','chDate'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
+  showN('✅ Sfida creata!');
+  document.getElementById('chForm').style.display='none';
+  ['chTitle','chDesc','chCo2','chPts','chDate'].forEach(id=>{
+    const el=document.getElementById(id); if (el) el.value='';
   });
   loadChallenges();
 }
-window.saveChallenge = saveChallenge;
+window.saveChallenge=saveChallenge;
 
 // ══════════════════════════════════════════
-//   SOCIAL
+//   NOTIFICATIONS
 // ══════════════════════════════════════════
-async function loadFollowers() {
-  const list = await api('/api/followers');
-  const el   = document.getElementById('followersList');
+async function loadNotifications() {
+  const list=await api('/api/notifications');
+  if (!Array.isArray(list)) return;
+  const unread=list.filter(n=>!n.is_read).length;
+  const dot=document.getElementById('sbNotifDot');
+  const count=document.getElementById('notifCount');
+  if (dot)   dot.style.display=unread>0?'block':'none';
+  if (count) { count.style.display=unread>0?'flex':'none'; count.textContent=unread>9?'9+':unread; }
+}
+
+async function loadNotificationsPage() {
+  const list=await api('/api/notifications');
+  const el=document.getElementById('notifList');
   if (!el) return;
   if (!Array.isArray(list)||!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">👥</div><p>Nessun follower ancora.</p></div>`;
+    el.innerHTML=`<div class="empty"><div class="ei">🔔</div><p>Nessuna notifica.</p></div>`;
     return;
   }
-  el.innerHTML = list.map(u => userCardHTML(u, false)).join('');
-  setTimeout(() => list.forEach(u => drawMii(u,`ucAv${u.id}`,44)), 60);
+  const typeIcon={ follow:'👥',warn:'⚠️',ban:'⛔',unban:'✅',shop:'🛍️',badge:'🏅',group_invite:'📨' };
+  el.innerHTML=list.map(n=>{
+    const isInvite = n.type==='group_invite';
+    const code     = isInvite ? n.message.match(/Codice: ([A-Z0-9]+)/)?.[1] : null;
+    return `
+      <div class="notif-item ${n.is_read?'':'unread'}">
+        <div class="notif-item-icon ni-${n.type}">${typeIcon[n.type]||'🔔'}</div>
+        <div style="flex:1">
+          <div class="notif-item-msg">${n.message}</div>
+          <div class="notif-item-time">${new Date(n.created_at).toLocaleString('it-IT')}</div>
+          ${isInvite&&code ? `
+            <button class="btn-join" style="margin-top:8px;font-size:12px"
+              onclick="joinByCode('${code}')">
+              <i class="fas fa-users"></i> Unisciti al gruppo
+            </button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  await api('/api/notifications/read','PATCH');
+  loadNotifications();
+}
+
+async function joinByCode(code) {
+  const d=await api(`/api/groups/join/${code}`,'POST');
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN(`✅ Sei entrato nel gruppo "${d.group?.name}"!`);
+  loadGroups();
+  showTab('social',null);
+}
+window.joinByCode=joinByCode;
+
+async function markAllRead() {
+  await api('/api/notifications/read','PATCH');
+  loadNotificationsPage();
+  loadNotifications();
+  showN('✅ Tutte lette','info');
+}
+window.markAllRead=markAllRead;
+// ══════════════════════════════════════════
+//   SHOP
+// ══════════════════════════════════════════
+async function loadShop() {
+  const d = await api('/api/shop');
+  if (d.error) return showN('❌ '+d.error,'error');
+  shopData = d;
+  renderShop('all');
+  const pts = document.getElementById('shopPts');
+  if (pts) pts.textContent = Math.round(d.points||0)+' pt';
+}
+
+function filterShop(cat, btn) {
+  document.querySelectorAll('.shop-filter').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderShop(cat);
+}
+window.filterShop = filterShop;
+
+function renderShop(cat) {
+  const el = document.getElementById('shopGrid');
+  if (!el) return;
+  const items = cat==='all'
+    ? shopData.items
+    : shopData.items.filter(i=>i.category===cat);
+  if (!items.length) {
+    el.innerHTML=`<div class="empty"><div class="ei">🛍️</div><p>Nessun item in questa categoria.</p></div>`;
+    return;
+  }
+  const catLabel = { hair:'Capelli', eyes:'Occhi', mouth:'Bocca', color:'Colore', skin:'Pelle' };
+  const grouped  = {};
+  items.forEach(i=>{ if (!grouped[i.category]) grouped[i.category]=[]; grouped[i.category].push(i); });
+  el.innerHTML = Object.entries(grouped).map(([c,list])=>`
+    <div class="shop-section">
+      <h3 class="shop-section-title">${catLabel[c]||c}</h3>
+      <div class="shop-items-grid">
+        ${list.map(item=>{
+          const owned   = shopData.owned.includes(item.id);
+          const canBuy  = shopData.points>=item.cost && !owned;
+          const pctNeed = owned?100:Math.min(100,Math.round((shopData.points/item.cost)*100));
+          return `
+            <div class="shop-item ${owned?'owned':''} ${item.is_rare?'rare':''}">
+              ${item.is_rare?'<div class="rare-badge">⭐ RARO</div>':''}
+              <div class="shop-item-preview" onclick="previewItem('${item.category}','${item.value}')">
+                <span style="font-size:32px">${item.emoji}</span>
+              </div>
+              <div class="shop-item-name">${item.name}</div>
+              <div class="shop-item-desc">${item.description}</div>
+              <div class="shop-progress">
+                <div class="shop-progress-fill" style="width:${pctNeed}%"></div>
+              </div>
+              <div class="shop-item-cost">
+                ${owned
+                  ? `<span class="owned-badge">✅ Posseduto</span>`
+                  : `<span class="cost-badge ${canBuy?'can':'cant'}">⭐ ${item.cost}</span>`}
+              </div>
+              ${!owned ? `
+                <button class="shop-buy-btn ${canBuy?'':'disabled'}"
+                  onclick="buyItem(${item.id})" ${canBuy?'':'disabled'}>
+                  ${canBuy
+                    ? '<i class="fas fa-shopping-cart"></i> Acquista'
+                    : `<i class="fas fa-lock"></i> Servono ${item.cost - Math.round(shopData.points||0)} pt`}
+                </button>` : ''}
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function previewItem(cat, val) {
+  if (!myProfile) return;
+  const preview = { ...miiState };
+  if      (cat==='hair')  preview.hair  = val;
+  else if (cat==='eyes')  preview.eyes  = val;
+  else if (cat==='mouth') preview.mouth = val;
+  else if (cat==='color') preview.color = val;
+  else if (cat==='skin')  preview.skin  = val;
+  drawMii(preview,'shopPreviewCanvas',80);
+  const el = document.getElementById('shopPreview');
+  if (el) el.style.display='flex';
+}
+window.previewItem = previewItem;
+
+function closeShopPreview() {
+  const el=document.getElementById('shopPreview');
+  if (el) el.style.display='none';
+}
+window.closeShopPreview = closeShopPreview;
+
+async function buyItem(itemId) {
+  const item = shopData.items.find(i=>i.id===itemId);
+  if (!item) return;
+  openConfirm('🛍️','Acquista item',
+    `Vuoi acquistare "${item.name}" per ⭐ ${item.cost} punti?`,
+    async () => {
+      const d = await api(`/api/shop/buy/${itemId}`,'POST');
+      if (d.error) return showN('❌ '+d.error,'error');
+      showN(`✅ "${item.name}" acquistato!`);
+      await loadShop();
+      await loadProfile();
+    }
+  );
+}
+window.buyItem = buyItem;
+
+// ══════════════════════════════════════════
+//   MII AVATAR BUILDER
+// ══════════════════════════════════════════
+let miiState = {
+  color:'#16a34a', skin:'#fde68a',
+  eyes:'normal',   mouth:'smile',
+  hair:'none',     ownedItems:[]
+};
+
+function renderMiiBuilder() {
+  const cats=[
+    { id:'miiHair',  cat:'hair',  label:'Capelli', options:['none','short','long','curly','bun','mohawk','wavy','cap','rainbow','gold','galaxy','flame'] },
+    { id:'miiEyes',  cat:'eyes',  label:'Occhi',   options:['normal','happy','sleepy','surprised','wink','cool','star','heart','laser'] },
+    { id:'miiMouth', cat:'mouth', label:'Bocca',   options:['smile','grin','open','smirk','tongue','sad','rainbow','fire'] },
+  ];
+  cats.forEach(c=>{
+    const el=document.getElementById(c.id);
+    if (!el) return;
+    el.innerHTML=c.options.map(o=>`
+      <div class="mii-opt ${miiState[c.cat]===o?'sel':''} ${
+        o==='none'||isItemOwned(c.cat,o)?'':'locked'}"
+        onclick="setMii('${c.cat}','${o}',this)"
+        title="${o}">
+        <canvas width="36" height="36"
+          id="miiPrev_${c.cat}_${o}"></canvas>
+      </div>`).join('');
+    c.options.forEach(o=>drawMii({...miiState,[c.cat]:o},`miiPrev_${c.cat}_${o}`,36));
+  });
+}
+
+function isItemOwned(cat, val) {
+  if (!shopData.items.length) return true;
+  const item = shopData.items.find(i=>i.category===cat&&i.value===val);
+  if (!item) return true;
+  return shopData.owned.includes(item.id);
+}
+
+function setMii(prop, val, btn) {
+  if (!isItemOwned(prop, val) && val!=='none') {
+    showN('🔒 Acquista questo item nello shop!','warn');
+    return;
+  }
+  miiState[prop]=val;
+  document.querySelectorAll(`#mii${prop.charAt(0).toUpperCase()+prop.slice(1)} .mii-opt`)
+    .forEach(b=>b.classList.remove('sel'));
+  btn?.classList.add('sel');
+  drawMii(miiState,'miiCanvas',120);
+  drawMii(miiState,'sbAvatarCanvas',36);
+}
+window.setMii = setMii;
+
+function pickColor(val) {
+  miiState.color=val;
+  document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('sel'));
+  document.querySelector(`.color-swatch[data-val="${val}"]`)?.classList.add('sel');
+  drawMii(miiState,'miiCanvas',120);
+  drawMii(miiState,'sbAvatarCanvas',36);
+}
+window.pickColor = pickColor;
+
+function pickSkin(val) {
+  miiState.skin=val;
+  document.querySelectorAll('.skin-swatch').forEach(s=>s.classList.remove('sel'));
+  document.querySelector(`.skin-swatch[data-val="${val}"]`)?.classList.add('sel');
+  drawMii(miiState,'miiCanvas',120);
+  drawMii(miiState,'sbAvatarCanvas',36);
+  renderMiiBuilder();
+}
+window.pickSkin = pickSkin;
+
+// ══════════════════════════════════════════
+//   MII CANVAS RENDERER
+// ══════════════════════════════════════════
+function drawMii(u, canvasId, size=44) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = size; canvas.height = size;
+  const s  = size/44;
+  const cx = size/2;
+
+  // BG
+  ctx.fillStyle = u.avatar_color||u.color||'#16a34a';
+  ctx.beginPath();
+  ctx.arc(cx, cx, cx-1, 0, Math.PI*2);
+  ctx.fill();
+
+  // HEAD
+  ctx.fillStyle = u.avatar_skin||u.skin||'#fde68a';
+  ctx.beginPath();
+  ctx.ellipse(cx, cx+2*s, 12*s, 13*s, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Ears
+  [-1,1].forEach(d=>{
+    ctx.beginPath();
+    ctx.arc(cx+d*12*s, cx+3*s, 3.5*s, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  const eye = u.avatar_eyes||u.eyes||'normal';
+  const ey  = cx-1*s;
+
+  // EYES
+  if (eye==='laser') {
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.fillStyle='#ef4444';
+      ctx.beginPath();
+      ctx.arc(ex,ey,2.5*s,0,Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle='rgba(239,68,68,0.5)';
+      ctx.lineWidth=1*s;
+      ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(ex,ey+14*s); ctx.stroke();
+    });
+  } else if (eye==='heart') {
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.fillStyle='#ef4444'; ctx.font=`${9*s}px serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('♥',ex,ey);
+    });
+  } else if (eye==='star') {
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.fillStyle='#fbbf24'; ctx.font=`${9*s}px serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('★',ex,ey);
+    });
+  } else if (eye==='cool') {
+    ctx.fillStyle='rgba(0,0,0,0.85)';
+    ctx.beginPath(); ctx.roundRect(cx-9*s,ey-2.5*s,18*s,5*s,2*s); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.15)';
+    ctx.beginPath(); ctx.arc(cx-5*s,ey,1.5*s,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+5*s,ey,1.5*s,0,Math.PI*2); ctx.fill();
+  } else if (eye==='wink') {
+    ctx.fillStyle='#1e293b'; ctx.beginPath(); ctx.arc(cx-5*s,ey,2.5*s,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#1e293b'; ctx.lineWidth=1.5*s;
+    ctx.beginPath(); ctx.moveTo(cx+3*s,ey); ctx.quadraticCurveTo(cx+5*s,ey+2*s,cx+7*s,ey); ctx.stroke();
+  } else if (eye==='sleepy') {
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.strokeStyle='#1e293b'; ctx.lineWidth=1.5*s;
+      ctx.beginPath(); ctx.arc(ex,ey+1*s,2.5*s,Math.PI,0); ctx.stroke();
+    });
+  } else if (eye==='surprised') {
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.strokeStyle='#1e293b'; ctx.lineWidth=1.5*s;
+      ctx.beginPath(); ctx.arc(ex,ey,3*s,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle='#1e293b'; ctx.beginPath(); ctx.arc(ex,ey,1.5*s,0,Math.PI*2); ctx.fill();
+    });
+  } else if (eye==='happy') {
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.strokeStyle='#1e293b'; ctx.lineWidth=1.5*s;
+      ctx.beginPath(); ctx.arc(ex,ey+1*s,2.5*s,Math.PI,0,true); ctx.stroke();
+    });
+  } else {
+    ctx.fillStyle='#1e293b';
+    [cx-5*s,cx+5*s].forEach(ex=>{
+      ctx.beginPath(); ctx.arc(ex,ey,2.5*s,0,Math.PI*2); ctx.fill();
+    });
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    [cx-4*s,cx+6*s].forEach(ex=>{
+      ctx.beginPath(); ctx.arc(ex,ey-1*s,0.8*s,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  // MOUTH
+  const mouth = u.avatar_mouth||u.mouth||'smile';
+  const my    = cx+7*s;
+  ctx.strokeStyle='#1e293b'; ctx.lineWidth=1.5*s; ctx.lineCap='round';
+
+  if (mouth==='rainbow') {
+    const grad=ctx.createLinearGradient(cx-6*s,my,cx+6*s,my);
+    grad.addColorStop(0,'#ef4444'); grad.addColorStop(.5,'#10b981'); grad.addColorStop(1,'#3b82f6');
+    ctx.strokeStyle=grad;
+    ctx.beginPath(); ctx.arc(cx,my-2*s,5*s,0.2,Math.PI-0.2); ctx.stroke();
+  } else if (mouth==='fire') {
+    ctx.strokeStyle='#f97316';
+    ctx.beginPath(); ctx.arc(cx,my-2*s,5*s,0.2,Math.PI-0.2); ctx.stroke();
+    ctx.font=`${7*s}px serif`; ctx.textAlign='center'; ctx.fillStyle='#ef4444';
+    ctx.fillText('🔥',cx,my+3*s);
+  } else if (mouth==='grin') {
+    ctx.strokeStyle='#1e293b';
+    ctx.beginPath(); ctx.arc(cx,my-2*s,6*s,0.15,Math.PI-0.15); ctx.stroke();
+    ctx.fillStyle='white'; ctx.fillRect(cx-4.5*s,my-3*s,9*s,3*s);
+    ctx.strokeStyle='#d1d5db'; ctx.lineWidth=.5*s;
+    for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(cx+i*2*s,my-3*s);ctx.lineTo(cx+i*2*s,my);ctx.stroke();}
+  } else if (mouth==='open') {
+    ctx.fillStyle='#1e293b';
+    ctx.beginPath(); ctx.ellipse(cx,my,4*s,3*s,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='white'; ctx.font=`${5*s}px serif`; ctx.textAlign='center';
+    ctx.fillText('o',cx,my+1.5*s);
+  } else if (mouth==='smirk') {
+    ctx.beginPath(); ctx.moveTo(cx-4*s,my); ctx.quadraticCurveTo(cx,my-1*s,cx+5*s,my-3*s); ctx.stroke();
+  } else if (mouth==='tongue') {
+    ctx.beginPath(); ctx.arc(cx,my-2*s,5*s,0.2,Math.PI-0.2); ctx.stroke();
+    ctx.fillStyle='#f87171'; ctx.beginPath(); ctx.ellipse(cx,my+1*s,2.5*s,2*s,0,0,Math.PI); ctx.fill();
+  } else if (mouth==='sad') {
+    ctx.beginPath(); ctx.arc(cx,my+3*s,5*s,Math.PI+0.3,-0.3); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(cx,my-2*s,5*s,0.2,Math.PI-0.2); ctx.stroke();
+  }
+
+  // HAIR
+  const hair = u.avatar_hair||u.hair||'none';
+  const hairColor = u.avatar_color||u.color||'#16a34a';
+  const skinColor = u.avatar_skin||u.skin||'#fde68a';
+
+  if (hair==='short') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,12*s,7*s,0,Math.PI,0); ctx.fill();
+  } else if (hair==='long') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,12*s,7*s,0,Math.PI,0); ctx.fill();
+    [-1,1].forEach(d=>{
+      ctx.beginPath(); ctx.ellipse(cx+d*11*s,cx+8*s,3.5*s,10*s,d*0.2,0,Math.PI*2); ctx.fill();
+    });
+  } else if (hair==='curly') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath(); ctx.arc(cx,cx-10*s,12*s,Math.PI,0); ctx.fill();
+    for(let i=0;i<6;i++){
+      ctx.beginPath(); ctx.arc(cx-10*s+i*4*s,cx-10*s,2.5*s,0,Math.PI*2); ctx.fill();
+    }
+  } else if (hair==='bun') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,12*s,7*s,0,Math.PI,0); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cx-18*s,5*s,0,Math.PI*2); ctx.fill();
+  } else if (hair==='mohawk') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath();
+    ctx.moveTo(cx-3*s,cx-10*s); ctx.lineTo(cx-1*s,cx-22*s);
+    ctx.lineTo(cx+1*s,cx-22*s); ctx.lineTo(cx+3*s,cx-10*s);
+    ctx.closePath(); ctx.fill();
+  } else if (hair==='wavy') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,12*s,7*s,0,Math.PI,0); ctx.fill();
+    ctx.beginPath();
+    for(let i=0;i<5;i++){
+      const x=cx-10*s+i*5*s;
+      ctx.arc(x+2.5*s,cx-4*s,2.5*s,Math.PI,0,i%2===0);
+    }
+    ctx.fill();
+  } else if (hair==='cap') {
+    ctx.fillStyle=hairColor;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,14*s,8*s,0,Math.PI,0); ctx.fill();
+    ctx.fillRect(cx-14*s,cx-11*s,28*s,5*s);
+    ctx.fillRect(cx+10*s,cx-10*s,6*s,3*s);
+  } else if (hair==='rainbow') {
+    const g=ctx.createLinearGradient(cx-12*s,0,cx+12*s,0);
+    g.addColorStop(0,'#ef4444'); g.addColorStop(.33,'#fbbf24');
+    g.addColorStop(.66,'#10b981'); g.addColorStop(1,'#3b82f6');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,13*s,8*s,0,Math.PI,0); ctx.fill();
+  } else if (hair==='gold') {
+    const g=ctx.createLinearGradient(0,cx-18*s,0,cx-10*s);
+    g.addColorStop(0,'#fbbf24'); g.addColorStop(1,'#d97706');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,13*s,8*s,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(cx-3*s,cx-15*s,2*s,4*s,-0.3,0,Math.PI*2); ctx.fill();
+  } else if (hair==='galaxy') {
+    const g=ctx.createLinearGradient(cx-12*s,0,cx+12*s,cx);
+    g.addColorStop(0,'#4338ca'); g.addColorStop(.5,'#7c3aed'); g.addColorStop(1,'#db2777');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.ellipse(cx,cx-10*s,13*s,8*s,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.8)';
+    [[cx-5*s,cx-14*s,1*s],[cx+3*s,cx-16*s,.8*s],[cx+7*s,cx-12*s,.6*s],
+     [cx-8*s,cx-11*s,.7*s],[cx,cx-18*s,1.2*s]].forEach(([x,y,r])=>{
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    });
+  } else if (hair==='flame') {
+    [
+      { x:cx,    h:20, c:'#ef4444' },
+      { x:cx-5*s,h:14, c:'#f97316' },
+      { x:cx+5*s,h:14, c:'#f97316' },
+      { x:cx-2*s,h:17, c:'#fbbf24' },
+      { x:cx+2*s,h:17, c:'#fbbf24' },
+    ].forEach(f=>{
+      ctx.fillStyle=f.c;
+      ctx.beginPath();
+      ctx.moveTo(f.x-3*s,cx-10*s);
+      ctx.quadraticCurveTo(f.x,cx-f.h*s,f.x+3*s,cx-10*s);
+      ctx.fill();
+    });
+  }
+}
+window.drawMii = drawMii;
+
+// ══════════════════════════════════════════
+//   SOCIAL — FOLLOWERS / FOLLOWING
+// ══════════════════════════════════════════
+async function loadFollowers() {
+  const list=await api('/api/followers');
+  const el=document.getElementById('followersList');
+  if (!el) return;
+  if (!Array.isArray(list)||!list.length) {
+    el.innerHTML=`<div class="empty"><div class="ei">👥</div><p>Nessun follower ancora.</p></div>`;
+    return;
+  }
+  el.innerHTML=list.map(u=>userCardHTML(u,false)).join('');
+  setTimeout(()=>list.forEach(u=>drawMii(u,`ucAv${u.id}`,44)),60);
 }
 
 async function loadFollowing() {
-  const list = await api('/api/following');
-  const el   = document.getElementById('followingList');
+  const list=await api('/api/following');
+  const el=document.getElementById('followingList');
   if (!el) return;
-  if (!Array.isArray(list)||!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">👤</div><p>Non segui ancora nessuno.</p></div>`;
+  following = Array.isArray(list) ? list : [];
+  if (!list.length) {
+    el.innerHTML=`<div class="empty"><div class="ei">👣</div><p>Non segui nessuno ancora.</p></div>`;
     return;
   }
-  el.innerHTML = list.map(u => userCardHTML(u, true)).join('');
-  setTimeout(() => list.forEach(u => drawMii(u,`ucAv${u.id}`,44)), 60);
+  el.innerHTML=list.map(u=>userCardHTML(u,true)).join('');
+  setTimeout(()=>list.forEach(u=>drawMii(u,`ucAv${u.id}`,44)),60);
 }
 
 function userCardHTML(u, isFollowing) {
   return `
     <div class="user-card">
-      <div class="uc-av"><canvas width="44" height="44" id="ucAv${u.id}"></canvas></div>
+      <div class="uc-av">
+        <canvas width="44" height="44" id="ucAv${u.id}"></canvas>
+      </div>
       <div class="uc-info">
         <div class="uc-name">${u.name||'Utente'}</div>
         <div class="uc-username">@${u.username||'—'}</div>
@@ -652,864 +1008,494 @@ function userCardHTML(u, isFollowing) {
       </div>
       <button class="btn-follow ${isFollowing?'following':''}"
         onclick="toggleFollow(${u.id},${isFollowing},this)">
-        ${isFollowing?'✓ Seguito':'+ Segui'}
+        ${isFollowing
+          ? '<i class="fas fa-user-minus"></i> Smetti'
+          : '<i class="fas fa-user-plus"></i> Segui'}
       </button>
     </div>`;
 }
 
 async function toggleFollow(userId, isFollowing, btn) {
-  const d = await api(`/api/follow/${userId}`, isFollowing?'DELETE':'POST');
+  btn.disabled=true;
+  const d = isFollowing
+    ? await api(`/api/follow/${userId}`,'DELETE')
+    : await api(`/api/follow/${userId}`,'POST');
+  btn.disabled=false;
   if (d.error) return showN('❌ '+d.error,'error');
-  if (isFollowing) {
-    btn.textContent = '+ Segui';
-    btn.classList.remove('following');
-    btn.onclick = () => toggleFollow(userId, false, btn);
-  } else {
-    btn.textContent = '✓ Seguito';
-    btn.classList.add('following');
-    btn.onclick = () => toggleFollow(userId, true, btn);
-  }
+  showN(isFollowing?'✅ Non segui più':'✅ Stai seguendo!');
+  loadFollowing(); loadFollowers();
 }
-window.toggleFollow = toggleFollow;
+window.toggleFollow=toggleFollow;
 
+// ══════════════════════════════════════════
+//   GROUPS ✅ v5 + LEADERBOARD + INVITI
+// ══════════════════════════════════════════
 async function loadGroups() {
   const list = await api('/api/groups');
-  const el   = document.getElementById('groupList');
+  const el   = document.getElementById('groupsList');
   if (!el) return;
   if (!Array.isArray(list)||!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">👥</div><p>Nessun gruppo ancora. Creane uno!</p></div>`;
+    el.innerHTML=`<div class="empty"><div class="ei">👥</div><p>Nessun gruppo. Creane uno!</p></div>`;
     return;
   }
-  el.innerHTML = list.map(g => `
-    <div class="group-card">
-      <div class="group-icon">👥</div>
-      <div class="group-info">
-        <div class="group-name">${g.name}</div>
-        <div class="group-desc">${g.description||''}</div>
-        <div class="group-meta">👤 ${g.member_count} membri · ${g.is_public?'🌐 Pubblico':'🔒 Privato'}</div>
+  el.innerHTML = list.map(g=>`
+    <div class="group-card" id="gc${g.id}">
+      <div class="gc-head">
+        <div class="gc-icon">👥</div>
+        <div class="gc-info">
+          <div class="gc-name">${g.name}</div>
+          <div class="gc-desc">${g.description||'Nessuna descrizione.'}</div>
+          <div class="gc-meta">
+            <span>👤 ${g.member_count} membri</span>
+            <span class="invite-code-pill">🔑 ${g.invite_code||'—'}</span>
+            ${g.is_public?'<span class="pub-badge">🌐 Pubblico</span>':'<span class="priv-badge">🔒 Privato</span>'}
+          </div>
+        </div>
+        <div class="gc-actions">
+          ${g.is_member
+            ? `<button class="btn-leave" onclick="leaveGroup(${g.id},this)">
+                 <i class="fas fa-sign-out-alt"></i> Esci
+               </button>`
+            : `<button class="btn-join" onclick="joinGroup(${g.id},this)">
+                 <i class="fas fa-sign-in-alt"></i> Unisciti
+               </button>`}
+          ${g.is_member
+            ? `<button class="btn-invite-followers" onclick="openInviteModal(${g.id},'${g.name.replace(/'/g,"\\'")}')">
+                 <i class="fas fa-paper-plane"></i> Invita
+               </button>`
+            : ''}
+        </div>
       </div>
-      <button class="btn-join ${g.is_member?'leave':''}"
-        onclick="toggleGroup(${g.id},${g.is_member},this)">
-        ${g.is_member?'Abbandona':'Unisciti'}
-      </button>
+      <!-- ✅ CLASSIFICA GRUPPO -->
+      <div class="gc-lb-toggle" onclick="toggleGroupLb(${g.id})">
+        <i class="fas fa-trophy"></i> Classifica gruppo
+        <i class="fas fa-chevron-down" id="gcLbArrow${g.id}" style="margin-left:auto;transition:.3s"></i>
+      </div>
+      <div class="gc-lb" id="gcLb${g.id}" style="display:none"></div>
     </div>`).join('');
 }
 
-async function toggleGroup(id, isMember) {
-  const d = await api(`/api/groups/${id}/${isMember?'leave':'join'}`, isMember?'DELETE':'POST');
+async function toggleGroupLb(gid) {
+  const el    = document.getElementById(`gcLb${gid}`);
+  const arrow = document.getElementById(`gcLbArrow${gid}`);
+  if (!el) return;
+  if (el.style.display==='block') {
+    el.style.display='none';
+    if (arrow) arrow.style.transform='rotate(0)';
+    return;
+  }
+  el.innerHTML=`<div style="text-align:center;padding:12px">
+    <i class="fas fa-spinner fa-spin" style="color:var(--green)"></i>
+  </div>`;
+  el.style.display='block';
+  if (arrow) arrow.style.transform='rotate(180deg)';
+  const list=await api(`/api/groups/${gid}/leaderboard`);
+  if (!Array.isArray(list)||!list.length) {
+    el.innerHTML=`<div class="empty" style="padding:12px"><div class="ei">🏆</div><p>Nessun membro.</p></div>`;
+    return;
+  }
+  const medals=['🥇','🥈','🥉'];
+  el.innerHTML=`
+    <div class="gc-lb-list">
+      ${list.map((u,i)=>`
+        <div class="gc-lb-row">
+          <div class="gc-lb-rank">${medals[i]||'#'+(i+1)}</div>
+          <div class="gc-lb-av"><canvas width="32" height="32" id="gcAv${gid}_${u.id}"></canvas></div>
+          <div class="gc-lb-name">
+            <span class="gc-lb-uname">${u.name||'Utente'}</span>
+            <span class="gc-lb-username">@${u.username}</span>
+          </div>
+          <div class="gc-lb-co2">🌍 ${parseFloat(u.co2_saved).toFixed(1)} kg</div>
+          <div class="gc-lb-pts">⭐ ${Math.round(u.points)}</div>
+        </div>`).join('')}
+    </div>`;
+  setTimeout(()=>list.forEach(u=>drawMii(u,`gcAv${gid}_${u.id}`,32)),60);
+}
+window.toggleGroupLb=toggleGroupLb;
+
+async function joinGroup(gid, btn) {
+  btn.disabled=true;
+  const d=await api(`/api/groups/${gid}/join`,'POST');
+  btn.disabled=false;
   if (d.error) return showN('❌ '+d.error,'error');
+  showN('✅ Gruppo unito!');
   loadGroups();
 }
-window.toggleGroup = toggleGroup;
+window.joinGroup=joinGroup;
+
+async function leaveGroup(gid, btn) {
+  openConfirm('🚪','Lascia gruppo','Vuoi lasciare questo gruppo?', async ()=>{
+    btn.disabled=true;
+    const d=await api(`/api/groups/${gid}/leave`,'DELETE');
+    btn.disabled=false;
+    if (d.error) return showN('❌ '+d.error,'error');
+    showN('✅ Hai lasciato il gruppo','info');
+    loadGroups();
+  });
+}
+window.leaveGroup=leaveGroup;
 
 function toggleGroupForm() {
-  const f = document.getElementById('groupForm');
-  f.style.display = f.style.display==='none' ? 'block' : 'none';
+  const f=document.getElementById('groupForm');
+  f.style.display=f.style.display==='none'?'block':'none';
 }
-window.toggleGroupForm = toggleGroupForm;
+window.toggleGroupForm=toggleGroupForm;
 
-async function createGroup() {
-  const name = document.getElementById('gName').value.trim();
-  if (!name) return showN('❌ Inserisci un nome per il gruppo','error');
-  const d = await api('/api/groups','POST',{
+async function saveGroup() {
+  const name=document.getElementById('gName').value.trim();
+  if (!name) return showN('❌ Nome obbligatorio','error');
+  const d=await api('/api/groups','POST',{
     name,
-    description: document.getElementById('gDesc').value,
-    is_public:   document.getElementById('gPublic').checked
+    description:document.getElementById('gDesc').value,
+    is_public:document.getElementById('gPublic').checked
   });
   if (d.error) return showN('❌ '+d.error,'error');
-  showN('✅ Gruppo creato!','success');
-  document.getElementById('groupForm').style.display = 'none';
-  document.getElementById('gName').value = '';
-  document.getElementById('gDesc').value = '';
+  showN(`✅ Gruppo "${d.name}" creato! Codice: ${d.invite_code}`);
+  document.getElementById('groupForm').style.display='none';
+  document.getElementById('gName').value='';
+  document.getElementById('gDesc').value='';
   loadGroups();
 }
-window.createGroup = createGroup;
+window.saveGroup=saveGroup;
 
 // ══════════════════════════════════════════
-//   NOTIFICHE
+//   MODALE INVITI GRUPPO ✅ v5
 // ══════════════════════════════════════════
-async function loadNotifications() {
-  const list = await api('/api/notifications');
-  if (!Array.isArray(list)) return;
-  const unread = list.filter(n => !n.is_read).length;
-  const dot    = document.getElementById('sbNotifDot');
-  const count  = document.getElementById('notifCount');
-  if (dot)   dot.style.display   = unread > 0 ? 'block' : 'none';
-  if (count) {
-    count.style.display = unread > 0 ? 'flex' : 'none';
-    count.textContent   = unread > 9 ? '9+' : unread;
-  }
-}
+let inviteGroupId   = null;
+let inviteGroupName = '';
 
-async function loadNotificationsPage() {
-  const list = await api('/api/notifications');
-  const el   = document.getElementById('notifList');
-  if (!el) return;
-  if (!Array.isArray(list)||!list.length) {
-    el.innerHTML = `<div class="empty"><div class="ei">🔔</div><p>Nessuna notifica.</p></div>`;
+async function openInviteModal(gid, gname) {
+  inviteGroupId   = gid;
+  inviteGroupName = gname;
+  const modal  = document.getElementById('inviteModal');
+  const title  = document.getElementById('inviteModalTitle');
+  const list   = document.getElementById('inviteFollowerList');
+  if (!modal) return;
+  title.textContent=`Invita nel gruppo "${gname}"`;
+  list.innerHTML=`<div style="text-align:center;padding:20px">
+    <i class="fas fa-spinner fa-spin" style="color:var(--green)"></i>
+  </div>`;
+  modal.style.display='flex';
+
+  // Carica following freschi
+  const fol = await api('/api/following');
+  following  = Array.isArray(fol) ? fol : [];
+
+  if (!following.length) {
+    list.innerHTML=`<div class="empty"><div class="ei">👥</div>
+      <p>Non segui nessuno. Segui utenti per invitarli!</p></div>`;
     return;
   }
-  const typeIcon = { follow:'👥', warn:'⚠️', ban:'⛔', unban:'✅', carsharing:'🚗', shop:'🛍️', badge:'🏅' };
-  el.innerHTML = list.map(n => `
-    <div class="notif-item ${n.is_read?'':'unread'}">
-      <div class="notif-item-icon ni-${n.type}">${typeIcon[n.type]||'🔔'}</div>
-      <div>
-        <div class="notif-item-msg">${n.message}</div>
-        <div class="notif-item-time">${new Date(n.created_at).toLocaleString('it-IT')}</div>
+  list.innerHTML=following.map(u=>`
+    <label class="invite-follower-row">
+      <input type="checkbox" class="invite-cb" value="${u.id}">
+      <div class="if-av"><canvas width="36" height="36" id="ifAv${u.id}"></canvas></div>
+      <div class="if-info">
+        <div class="if-name">${u.name||'Utente'}</div>
+        <div class="if-user">@${u.username}</div>
       </div>
-    </div>`).join('');
-  await api('/api/notifications/read','PATCH');
-  loadNotifications();
+    </label>`).join('');
+  setTimeout(()=>following.forEach(u=>drawMii(u,`ifAv${u.id}`,36)),60);
 }
+window.openInviteModal=openInviteModal;
 
-async function markAllRead() {
-  await api('/api/notifications/read','PATCH');
-  loadNotificationsPage();
-  loadNotifications();
-  showN('✅ Tutte le notifiche lette','info');
+function closeInviteModal() {
+  const modal=document.getElementById('inviteModal');
+  if (modal) modal.style.display='none';
+  inviteGroupId=null;
 }
-window.markAllRead = markAllRead;
-// ══════════════════════════════════════════
-//   SHOP ✅ FIXED
-// ══════════════════════════════════════════
-async function loadShop() {
-  const d = await api('/api/shop');
+window.closeInviteModal=closeInviteModal;
+
+function selectAllInvite(checked) {
+  document.querySelectorAll('.invite-cb').forEach(cb=>cb.checked=checked);
+}
+window.selectAllInvite=selectAllInvite;
+
+async function sendGroupInvites() {
+  const ids=[...document.querySelectorAll('.invite-cb:checked')].map(cb=>parseInt(cb.value));
+  if (!ids.length) return showN('❌ Seleziona almeno un follower','error');
+  const btn=document.getElementById('sendInviteBtn');
+  btn.disabled=true;
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Invio...';
+  const d=await api(`/api/groups/${inviteGroupId}/invite`,'POST',{ follower_ids:ids });
+  btn.disabled=false;
+  btn.innerHTML='<i class="fas fa-paper-plane"></i> Invia inviti';
   if (d.error) return showN('❌ '+d.error,'error');
-  shopData = d;
-
-  const shopPts = document.getElementById('shopUserPts');
-  if (shopPts) shopPts.textContent = Math.round(d.points||0);
-
-  drawMii(miiState,'shopPreviewCanvas',100);
-  renderShop('all');
+  showN(`✅ Inviti inviati a ${d.sent} utent${d.sent===1?'e':'i'}! Codice: ${d.invite_code}`);
+  closeInviteModal();
 }
-
-function filterShop(cat, btn) {
-  document.querySelectorAll('.shop-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderShop(cat);
-}
-window.filterShop = filterShop;
-
-function renderShop(cat) {
-  const grid = document.getElementById('shopGrid');
-  if (!grid) return;
-
-  const items = cat === 'all'
-    ? shopData.items
-    : shopData.items.filter(i => i.category === cat);
-
-  if (!items || !items.length) {
-    grid.innerHTML = `
-      <div class="empty" style="grid-column:1/-1">
-        <div class="ei">🛍️</div>
-        <p>Nessun item in questa categoria.</p>
-      </div>`;
-    return;
-  }
-
-  grid.innerHTML = items.map(item => {
-    const owned   = shopData.owned.includes(item.id);
-    const canBuy  = !owned && shopData.points >= item.cost;
-    const isColor = item.category === 'color' || item.category === 'skin';
-
-    return `
-      <div class="shop-item ${item.is_rare?'rare':''} ${owned?'owned':''}">
-        ${isColor
-          ? `<div style="
-              width:60px;height:60px;border-radius:50%;
-              background:${item.value};
-              margin:0 auto 12px;
-              border:3px solid ${owned?'var(--green2)':'var(--border)'};
-              box-shadow:0 4px 12px rgba(0,0,0,.1)">
-            </div>`
-          : `<span class="shop-item-emoji">${item.emoji||'🎁'}</span>`
-        }
-        <div class="shop-item-name">${item.name}</div>
-        <div class="shop-item-desc">${item.description}</div>
-        <div class="shop-item-cost">
-          <i class="fas fa-star"></i> ${item.cost} pt
-        </div>
-        ${owned
-          ? `<button class="btn-buy owned-btn"
-               onclick="equipItem(${item.id},'${item.category}','${item.value}')">
-               <i class="fas fa-tshirt"></i> Equipaggia
-             </button>`
-          : `<button class="btn-buy" ${canBuy?'':'disabled'}
-               onclick="${canBuy ? `buyItem(${item.id})` : ''}">
-               ${canBuy
-                 ? `<i class="fas fa-shopping-cart"></i> Acquista`
-                 : shopData.points < item.cost
-                   ? `<i class="fas fa-lock"></i> Mancano ${item.cost - Math.round(shopData.points)} pt`
-                   : `<i class="fas fa-check"></i> Già tuo`
-               }
-             </button>`
-        }
-      </div>`;
-  }).join('');
-}
-
-async function buyItem(itemId) {
-  const item = shopData.items.find(i => i.id === itemId);
-  if (!item) return;
-
-  openConfirm('🛍️', `Acquista "${item.name}"`,
-    `Costerà ${item.cost} punti. Hai ${Math.round(shopData.points)} pt disponibili.`,
-    async () => {
-      const d = await api(`/api/shop/buy/${itemId}`,'POST');
-      if (d.error) return showN('❌ '+d.error,'error');
-
-      shopData.owned.push(itemId);
-      shopData.points -= item.cost;
-
-      const shopPts = document.getElementById('shopUserPts');
-      if (shopPts) shopPts.textContent = Math.round(shopData.points);
-      document.getElementById('topPts').textContent = Math.round(shopData.points);
-
-      if (miiState) miiState.ownedItems = shopData.owned;
-      renderMiiBuilder();
-
-      const activeTab = document.querySelector('.shop-tab.active');
-      const activeCat = activeTab ? (
-        activeTab.textContent.trim().toLowerCase().includes('tutti') ? 'all' : item.category
-      ) : 'all';
-      renderShop(activeCat);
-
-      showN(`🛍️ "${item.name}" acquistato! Vai su Profilo → Avatar Builder per equipaggiarlo.`,'success');
-    }
-  );
-}
-window.buyItem = buyItem;
-
-function equipItem(itemId, category, value) {
-  const catMap = {
-    hair:  'hair',
-    eyes:  'eyes',
-    mouth: 'mouth',
-    color: 'color',
-    skin:  'skin'
-  };
-  const key = catMap[category];
-  if (!key) return showN('❌ Categoria non riconosciuta','error');
-
-  miiState[key] = value;
-
-  // Ridisegna avatar ovunque
-  ['miiCanvas','sbAvatarCanvas','shopPreviewCanvas'].forEach(id => {
-    const c = document.getElementById(id);
-    if (c) drawMii(miiState, id, c.width);
-  });
-
-  renderMiiBuilder();
-  showN(`✨ "${category}" equipaggiato! Premi Salva Profilo per mantenere il look.`,'success');
-}
-window.equipItem = equipItem;
+window.sendGroupInvites=sendGroupInvites;
 
 // ══════════════════════════════════════════
-//   MII AVATAR BUILDER
+//   JOIN DA CODICE MANUALE
 // ══════════════════════════════════════════
-const AVATAR_COLORS = ['#16a34a','#3b82f6','#8b5cf6','#ef4444','#f59e0b','#ec4899','#14b8a6','#f97316'];
-const SKIN_COLORS   = ['#fde68a','#fcd9a0','#d4a76a','#a0714a','#7c4a2d','#f5cba7','#e8a87c','#c68642'];
-const EYE_OPTS      = ['normal','happy','sleepy','surprised','wink','cool'];
-const MOUTH_OPTS    = ['smile','grin','open','sad','smirk','tongue'];
-const HAIR_OPTS     = ['none','short','long','curly','bun','mohawk','wavy','cap'];
-const PREMIUM_EYES  = ['star','heart','laser'];
-const PREMIUM_MOUTH = ['rainbow','fire'];
-const PREMIUM_HAIR  = ['rainbow','gold','galaxy','flame'];
-
-let miiState = {
-  color:'#16a34a', skin:'#fde68a',
-  eyes:'normal', mouth:'smile', hair:'none',
-  ownedItems:[]
-};
-
-function getOwnedValues(category) {
-  if (!shopData.items.length) return [];
-  return shopData.items
-    .filter(i => i.category === category && shopData.owned.includes(i.id))
-    .map(i => i.value);
+async function joinGroupByCode() {
+  const code=document.getElementById('joinCodeInput')?.value?.trim().toUpperCase();
+  if (!code||code.length<4) return showN('❌ Inserisci un codice valido','error');
+  const d=await api(`/api/groups/join/${code}`,'POST');
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN(`✅ Sei entrato nel gruppo "${d.group?.name}"!`);
+  document.getElementById('joinCodeInput').value='';
+  loadGroups();
 }
-
-function setMii(key, val, el) {
-  miiState[key] = val;
-  if (el) {
-    el.closest('.mii-btn-row,.color-row')
-      ?.querySelectorAll('.active')
-      .forEach(b => b.classList.remove('active'));
-    el.classList.add('active');
-  }
-  ['miiCanvas','sbAvatarCanvas','shopPreviewCanvas'].forEach(id => {
-    const c = document.getElementById(id);
-    if (c) drawMii(miiState, id, c.width);
-  });
-}
-window.setMii = setMii;
-
-function renderMiiBuilder() {
-  const ownedColors = getOwnedValues('color');
-  const ownedSkins  = getOwnedValues('skin');
-  const ownedEyes   = getOwnedValues('eyes');
-  const ownedMouths = getOwnedValues('mouth');
-  const ownedHairs  = getOwnedValues('hair');
-
-  // Colori avatar
-  const acEl = document.getElementById('avatarColors');
-  if (acEl) acEl.innerHTML = [...new Set([...AVATAR_COLORS,...ownedColors])].map(c => `
-    <div class="color-swatch ${miiState.color===c?'active':''}"
-      style="background:${c}"
-      onclick="setMii('color','${c}',this)">
-    </div>`).join('');
-
-  // Pelle
-  const scEl = document.getElementById('skinColors');
-  if (scEl) scEl.innerHTML = [...new Set([...SKIN_COLORS,...ownedSkins])].map(c => `
-    <div class="color-swatch ${miiState.skin===c?'active':''}"
-      style="background:${c}"
-      onclick="setMii('skin','${c}',this)">
-    </div>`).join('');
-
-  // Capelli
-  const haEl = document.getElementById('hairOpts');
-  if (haEl) haEl.innerHTML = [
-    ...HAIR_OPTS.map(o => buildMiiBtn('hair',o,false)),
-    ...PREMIUM_HAIR.map(o => buildMiiBtn('hair',o,!ownedHairs.includes(o)))
-  ].join('');
-
-  // Occhi
-  const eyEl = document.getElementById('eyeOpts');
-  if (eyEl) eyEl.innerHTML = [
-    ...EYE_OPTS.map(o => buildMiiBtn('eyes',o,false)),
-    ...PREMIUM_EYES.map(o => buildMiiBtn('eyes',o,!ownedEyes.includes(o)))
-  ].join('');
-
-  // Bocca
-  const moEl = document.getElementById('mouthOpts');
-  if (moEl) moEl.innerHTML = [
-    ...MOUTH_OPTS.map(o => buildMiiBtn('mouth',o,false)),
-    ...PREMIUM_MOUTH.map(o => buildMiiBtn('mouth',o,!ownedMouths.includes(o)))
-  ].join('');
-}
-
-function buildMiiBtn(type, val, locked) {
-  const EMOJIS = {
-    none:'🙅',short:'💇',long:'💆',curly:'🌀',bun:'🎀',
-    mohawk:'⚡',wavy:'〰️',cap:'🧢',rainbow:'🌈',gold:'✨',
-    galaxy:'🌌',flame:'🔥',
-    normal:'😐',happy:'😊',sleepy:'😴',surprised:'😲',
-    wink:'😉',cool:'😎',star:'⭐',heart:'❤️',laser:'🔴',
-    smile:'🙂',grin:'😁',open:'😮',sad:'🙁',smirk:'😏',
-    tongue:'😛',fire:'🔥'
-  };
-  const active = miiState[type] === val;
-  if (locked) {
-    return `<button class="mii-opt-btn locked"
-      title="Acquista nello Shop!"
-      onclick="showTab('shop',null)">
-      ${EMOJIS[val]||'?'} ${val}
-    </button>`;
-  }
-  return `<button class="mii-opt-btn ${active?'active':''}"
-    onclick="setMii('${type}','${val}',this)">
-    ${EMOJIS[val]||'?'} ${val}
-  </button>`;
-}
-
-// ══════════════════════════════════════════
-//   DRAW MII (Canvas)
-// ══════════════════════════════════════════
-function drawMii(user, canvasId, size=120, canvasEl=null) {
-  const canvas = canvasEl || document.getElementById(canvasId);
-  if (!canvas || !(canvas instanceof HTMLCanvasElement)) return;
-  canvas.width  = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const cx = size/2, cy = size/2, r = size/2;
-
-  const color = user?.color || user?.avatar_color || miiState?.color || '#16a34a';
-  const skin  = user?.skin  || user?.avatar_skin  || miiState?.skin  || '#fde68a';
-  const eyes  = user?.eyes  || user?.avatar_eyes  || miiState?.eyes  || 'normal';
-  const mouth = user?.mouth || user?.avatar_mouth || miiState?.mouth || 'smile';
-  const hair  = user?.hair  || user?.avatar_hair  || miiState?.hair  || 'none';
-
-  // Background circle
-  ctx.beginPath();
-  ctx.arc(cx,cy,r,0,Math.PI*2);
-  const bg = ctx.createRadialGradient(cx-r*.2,cy-r*.2,r*.1,cx,cy,r);
-  bg.addColorStop(0,lighten(color,40));
-  bg.addColorStop(1,color);
-  ctx.fillStyle = bg; ctx.fill();
-
-  // Body
-  ctx.beginPath();
-  ctx.ellipse(cx,cy+r*.85,r*.55,r*.35,0,Math.PI,0);
-  ctx.fillStyle = darken(color,15); ctx.fill();
-
-  // Neck
-  ctx.beginPath();
-  ctx.roundRect(cx-r*.12,cy+r*.28,r*.24,r*.22,4);
-  ctx.fillStyle = skin; ctx.fill();
-
-  // Face
-  ctx.beginPath();
-  ctx.ellipse(cx,cy+r*.05,r*.38,r*.42,0,0,Math.PI*2);
-  const fg = ctx.createRadialGradient(cx-r*.1,cy-.05,r*.05,cx,cy,r*.5);
-  fg.addColorStop(0,lighten(skin,20));
-  fg.addColorStop(1,skin);
-  ctx.fillStyle = fg; ctx.fill();
-
-  // Blush
-  [[cx-r*.22,cy+r*.18],[cx+r*.22,cy+r*.18]].forEach(([x,y]) => {
-    ctx.beginPath();
-    ctx.ellipse(x,y,r*.1,r*.07,0,0,Math.PI*2);
-    ctx.fillStyle='rgba(255,150,150,.3)'; ctx.fill();
-  });
-
-  drawHair(ctx,cx,cy,r,color,hair);
-  drawEyes(ctx,cx,cy,r,eyes,skin);
-  drawMouth(ctx,cx,cy,r,mouth);
-
-  // Nose
-  ctx.beginPath();
-  ctx.arc(cx,cy+r*.1,r*.03,0,Math.PI*2);
-  ctx.fillStyle=darken(skin,20); ctx.fill();
-}
-
-function drawHair(ctx,cx,cy,r,color,style) {
-  const hc = darken(color,25);
-
-  if (style==='rainbow') {
-    const g = ctx.createLinearGradient(cx-r*.4,0,cx+r*.4,0);
-    g.addColorStop(0,'#ef4444'); g.addColorStop(.3,'#f59e0b');
-    g.addColorStop(.6,'#3b82f6'); g.addColorStop(1,'#8b5cf6');
-    ctx.fillStyle=g;
-    ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.4,r*.26,0,Math.PI,0); ctx.fill();
-    return;
-  }
-  if (style==='gold') {
-    const g = ctx.createLinearGradient(cx,cy-r*.5,cx,cy);
-    g.addColorStop(0,'#fbbf24'); g.addColorStop(1,'#d97706');
-    ctx.fillStyle=g;
-    ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.4,r*.26,0,Math.PI,0); ctx.fill();
-    return;
-  }
-  if (style==='galaxy') {
-    const g = ctx.createLinearGradient(cx-r*.4,0,cx+r*.4,0);
-    g.addColorStop(0,'#6d28d9'); g.addColorStop(.5,'#7c3aed'); g.addColorStop(1,'#4f46e5');
-    ctx.fillStyle=g;
-    ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.4,r*.26,0,Math.PI,0); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.7)';
-    [[cx-r*.15,cy-r*.32],[cx+r*.1,cy-r*.38],[cx,cy-r*.25]].forEach(([x,y]) => {
-      ctx.beginPath(); ctx.arc(x,y,r*.025,0,Math.PI*2); ctx.fill();
-    });
-    return;
-  }
-  if (style==='flame') {
-    const g = ctx.createLinearGradient(cx,cy-r*.55,cx,cy-r*.1);
-    g.addColorStop(0,'#fbbf24'); g.addColorStop(.5,'#f97316'); g.addColorStop(1,'#ef4444');
-    ctx.fillStyle=g;
-    ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.14,r*.38,0,0,Math.PI*2); ctx.fill();
-    return;
-  }
-
-  ctx.fillStyle = hc;
-  switch(style) {
-    case 'short':
-      ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.38,r*.22,0,Math.PI,0); ctx.fill(); break;
-    case 'long':
-      ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.4,r*.24,0,Math.PI,0); ctx.fill();
-      ctx.fillRect(cx-r*.4,cy-r*.25,r*.18,r*.55);
-      ctx.fillRect(cx+r*.22,cy-r*.25,r*.18,r*.55); break;
-    case 'curly':
-      for(let i=0;i<6;i++){
-        const a=(Math.PI/5)*i-Math.PI*.1;
-        ctx.beginPath();
-        ctx.arc(cx+Math.cos(a)*r*.32,cy-r*.18+Math.sin(a)*r*.15,r*.12,0,Math.PI*2);
-        ctx.fill();
-      } break;
-    case 'bun':
-      ctx.beginPath(); ctx.ellipse(cx,cy-r*.3,r*.36,r*.2,0,Math.PI,0); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx,cy-r*.38,r*.12,0,Math.PI*2); ctx.fill(); break;
-    case 'mohawk':
-      ctx.beginPath(); ctx.ellipse(cx,cy-r*.28,r*.14,r*.32,0,0,Math.PI*2); ctx.fill(); break;
-    case 'wavy':
-      ctx.beginPath(); ctx.moveTo(cx-r*.38,cy-r*.15);
-      for(let x=-r*.38;x<=r*.38;x+=r*.1)
-        ctx.quadraticCurveTo(cx+x+r*.05,cy-r*.38,cx+x+r*.1,cy-r*.2);
-      ctx.lineTo(cx+r*.38,cy-r*.15);
-      ctx.arc(cx,cy-r*.15,r*.38,0,Math.PI,true); ctx.fill(); break;
-    case 'cap':
-      ctx.beginPath(); ctx.ellipse(cx+r*.12,cy-r*.12,r*.3,r*.08,-.2,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(cx,cy-r*.2,r*.38,r*.26,0,Math.PI,0); ctx.fill(); break;
-    default: break; // none
-  }
-}
-
-function drawEyes(ctx,cx,cy,r,style,skin) {
-  const ey=cy-r*.07, ex1=cx-r*.14, ex2=cx+r*.14, es=r*.065;
-
-  if (style==='star') {
-    [ex1,ex2].forEach(x => {
-      ctx.save(); ctx.translate(x,ey);
-      ctx.beginPath();
-      for(let i=0;i<5;i++){
-        const a=i*Math.PI*.4-Math.PI/2, ia=a+Math.PI*.2;
-        if(i===0) ctx.moveTo(Math.cos(a)*es,Math.sin(a)*es);
-        else ctx.lineTo(Math.cos(a)*es,Math.sin(a)*es);
-        ctx.lineTo(Math.cos(ia)*es*.4,Math.sin(ia)*es*.4);
-      }
-      ctx.closePath(); ctx.fillStyle='#f59e0b'; ctx.fill(); ctx.restore();
-    }); return;
-  }
-  if (style==='heart') {
-    [ex1,ex2].forEach(x => {
-      ctx.save(); ctx.translate(x,ey);
-      ctx.beginPath(); ctx.moveTo(0,es*.3);
-      ctx.bezierCurveTo(es*.7,-es*.3,es*1.2,es*.5,0,es*1.2);
-      ctx.bezierCurveTo(-es*1.2,es*.5,-es*.7,-es*.3,0,es*.3);
-      ctx.fillStyle='#ef4444'; ctx.fill(); ctx.restore();
-    }); return;
-  }
-  if (style==='laser') {
-    [ex1,ex2].forEach(x => {
-      ctx.beginPath(); ctx.arc(x,ey,es,0,Math.PI*2);
-      ctx.fillStyle='#ef4444'; ctx.fill();
-      ctx.beginPath(); ctx.arc(x,ey,es*.5,0,Math.PI*2);
-      ctx.fillStyle='#fff'; ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+es,ey); ctx.lineTo(x+r*.4,ey);
-      const lg=ctx.createLinearGradient(x+es,ey,x+r*.4,ey);
-      lg.addColorStop(0,'rgba(239,68,68,.8)'); lg.addColorStop(1,'rgba(239,68,68,0)');
-      ctx.strokeStyle=lg; ctx.lineWidth=r*.04; ctx.stroke();
-    }); return;
-  }
-
-  switch(style) {
-    case 'happy':
-      [ex1,ex2].forEach(x => {
-        ctx.beginPath(); ctx.arc(x,ey,es,Math.PI,0);
-        ctx.strokeStyle='#1e293b'; ctx.lineWidth=r*.04; ctx.stroke();
-      }); break;
-    case 'sleepy':
-      [ex1,ex2].forEach(x => {
-        ctx.beginPath(); ctx.arc(x,ey+es*.3,es,Math.PI,0);
-        ctx.fillStyle='#1e293b'; ctx.fill();
-        ctx.beginPath(); ctx.rect(x-es,ey-es*.3,es*2,es*.8);
-        ctx.fillStyle=lighten(skin||'#fde68a',10); ctx.fill();
-      }); break;
-    case 'surprised':
-      [ex1,ex2].forEach(x => {
-        ctx.beginPath(); ctx.arc(x,ey,es*1.3,0,Math.PI*2);
-        ctx.fillStyle='white'; ctx.fill();
-        ctx.beginPath(); ctx.arc(x,ey,es*.7,0,Math.PI*2);
-        ctx.fillStyle='#1e293b'; ctx.fill();
-      }); break;
-    case 'wink':
-      ctx.beginPath(); ctx.arc(ex1,ey,es,Math.PI,0);
-      ctx.strokeStyle='#1e293b'; ctx.lineWidth=r*.04; ctx.stroke();
-      ctx.beginPath(); ctx.arc(ex2,ey,es,0,Math.PI*2);
-      ctx.fillStyle='#1e293b'; ctx.fill();
-      ctx.beginPath(); ctx.arc(ex2+es*.25,ey-es*.25,es*.3,0,Math.PI*2);
-      ctx.fillStyle='rgba(255,255,255,.7)'; ctx.fill(); break;
-    case 'cool':
-      ctx.fillStyle='#1e293b';
-      [ex1,ex2].forEach(x => {
-        ctx.beginPath(); ctx.roundRect(x-es*1.1,ey-es*.8,es*2.2,es*1.6,es*.4); ctx.fill();
-      });
-      ctx.beginPath(); ctx.moveTo(ex1+es*1.1,ey); ctx.lineTo(ex2-es*1.1,ey);
-      ctx.strokeStyle='#1e293b'; ctx.lineWidth=es*.4; ctx.stroke(); break;
-    default: // normal
-      [ex1,ex2].forEach(x => {
-        ctx.beginPath(); ctx.arc(x,ey,es,0,Math.PI*2);
-        ctx.fillStyle='#1e293b'; ctx.fill();
-        ctx.beginPath(); ctx.arc(x+es*.3,ey-es*.3,es*.35,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,255,.7)'; ctx.fill();
-      });
-  }
-}
-
-function drawMouth(ctx,cx,cy,r,style) {
-  const my=cy+r*.22;
-  ctx.strokeStyle='#b45309'; ctx.lineWidth=r*.04; ctx.lineCap='round';
-
-  if (style==='rainbow') {
-    ctx.beginPath(); ctx.arc(cx,my-r*.06,r*.16,.15*Math.PI,.85*Math.PI);
-    const mg=ctx.createLinearGradient(cx-r*.16,my,cx+r*.16,my);
-    mg.addColorStop(0,'#ef4444'); mg.addColorStop(.5,'#3b82f6'); mg.addColorStop(1,'#8b5cf6');
-    ctx.strokeStyle=mg; ctx.lineWidth=r*.05; ctx.stroke(); return;
-  }
-  if (style==='fire') {
-    ctx.beginPath(); ctx.arc(cx,my-r*.06,r*.14,.15*Math.PI,.85*Math.PI);
-    const fg=ctx.createLinearGradient(cx-r*.14,my,cx+r*.14,my);
-    fg.addColorStop(0,'#fbbf24'); fg.addColorStop(1,'#ef4444');
-    ctx.strokeStyle=fg; ctx.lineWidth=r*.05; ctx.stroke(); return;
-  }
-
-  switch(style) {
-    case 'grin':
-      ctx.beginPath(); ctx.arc(cx,my-r*.06,r*.16,.15*Math.PI,.85*Math.PI);
-      ctx.fillStyle='#7f1d1d'; ctx.fill();
-      ctx.strokeStyle='#b45309'; ctx.stroke();
-      ctx.fillStyle='white'; ctx.fillRect(cx-r*.12,my-r*.09,r*.24,r*.07); break;
-    case 'open':
-      ctx.beginPath(); ctx.ellipse(cx,my,r*.1,r*.08,0,0,Math.PI*2);
-      ctx.fillStyle='#7f1d1d'; ctx.fill(); break;
-    case 'sad':
-      ctx.beginPath(); ctx.arc(cx,my+r*.1,r*.14,1.2*Math.PI,1.8*Math.PI);
-      ctx.stroke(); break;
-    case 'smirk':
-      ctx.beginPath();
-      ctx.moveTo(cx-r*.1,my+r*.02);
-      ctx.quadraticCurveTo(cx,my-r*.04,cx+r*.14,my-r*.06);
-      ctx.stroke(); break;
-    case 'tongue':
-      ctx.beginPath(); ctx.arc(cx,my-r*.04,r*.13,.1*Math.PI,.9*Math.PI); ctx.stroke();
-      ctx.beginPath(); ctx.ellipse(cx,my+r*.04,r*.07,r*.06,0,0,Math.PI*2);
-      ctx.fillStyle='#f87171'; ctx.fill(); break;
-    default: // smile
-      ctx.beginPath(); ctx.arc(cx,my-r*.06,r*.14,.15*Math.PI,.85*Math.PI); ctx.stroke();
-  }
-}
-
-// Color helpers
-function lighten(hex,pct) {
-  if (!hex||!hex.startsWith('#')) return hex||'#16a34a';
-  const n=parseInt(hex.replace('#',''),16);
-  return `rgb(${Math.min(255,((n>>16)&255)+pct*2.55|0)},${Math.min(255,((n>>8)&255)+pct*2.55|0)},${Math.min(255,(n&255)+pct*2.55|0)})`;
-}
-function darken(hex,pct) {
-  if (!hex||!hex.startsWith('#')) return hex||'#16a34a';
-  const n=parseInt(hex.replace('#',''),16);
-  return `rgb(${Math.max(0,((n>>16)&255)-pct*2.55|0)},${Math.max(0,((n>>8)&255)-pct*2.55|0)},${Math.max(0,(n&255)-pct*2.55|0)})`;
-}
+window.joinGroupByCode=joinGroupByCode;
 // ══════════════════════════════════════════
 //   LOG ACTIVITY
 // ══════════════════════════════════════════
 function selectAct(type, btn) {
   curAct = type;
-  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('sel'));
+  document.querySelectorAll('.at-btn').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel');
-
   const form = document.getElementById('logForm');
-  form.style.display = 'block';
-  document.getElementById('formTitle').textContent = `${ICONS[type]} ${type}`;
-
+  form.style.display='block';
+  document.getElementById('formTitle').textContent=`${ICONS[type]} ${type}`;
   const r    = RATES[type];
-  const isKm = r.t === 'k';
-
-  document.getElementById('kmField').style.display    = isKm  ? 'block' : 'none';
-  document.getElementById('hoursField').style.display = !isKm ? 'block' : 'none';
-  document.getElementById('mapSection').style.display = isKm  ? 'block' : 'none';
-
-  // Reset valori
-  const kmInp = document.getElementById('kmInput');
-  const hrInp = document.getElementById('hoursInput');
-  if (kmInp) kmInp.value = '';
-  if (hrInp) hrInp.value = '';
-  calcedKm = 0;
-
+  const isKm = r.t==='k';
+  document.getElementById('kmField').style.display    = isKm  ? 'block':'none';
+  document.getElementById('hoursField').style.display = !isKm ? 'block':'none';
+  document.getElementById('mapSection').style.display = isKm  ? 'block':'none';
+  const kmInp=document.getElementById('kmInput');
+  const hrInp=document.getElementById('hoursInput');
+  if (kmInp) kmInp.value='';
+  if (hrInp) hrInp.value='';
+  calcedKm=0;
   updateCo2Estimate();
-
   if (isKm) {
-    setTimeout(() => {
-      if (!mapInited) initMap();
-      else map?.invalidateSize();
-    }, 200);
+    setTimeout(()=>{ if (!mapInited) initMap(); else map?.invalidateSize(); },200);
   }
 }
-window.selectAct = selectAct;
+window.selectAct=selectAct;
 
 function cancelLog() {
-  document.getElementById('logForm').style.display = 'none';
-  curAct   = null;
-  calcedKm = 0;
-  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('sel'));
-  const co2El = document.getElementById('co2Estimate');
-  if (co2El) co2El.style.display = 'none';
+  document.getElementById('logForm').style.display='none';
+  curAct=null; calcedKm=0;
+  document.querySelectorAll('.at-btn').forEach(b=>b.classList.remove('sel'));
+  const co2El=document.getElementById('co2Estimate');
+  if (co2El) co2El.style.display='none';
   resetMap();
 }
-window.cancelLog = cancelLog;
+window.cancelLog=cancelLog;
 
 function updateCo2Estimate() {
   if (!curAct) return;
   const r    = RATES[curAct];
-  const isKm = r.t === 'k';
-
+  const isKm = r.t==='k';
   let val;
   if (isKm) {
-    val = calcedKm > 0
+    val = calcedKm>0
       ? calcedKm
-      : parseFloat(document.getElementById('kmInput')?.value) || 0;
+      : parseFloat(document.getElementById('kmInput')?.value)||0;
   } else {
-    val = parseFloat(document.getElementById('hoursInput')?.value) || 0;
+    val = parseFloat(document.getElementById('hoursInput')?.value)||0;
   }
-
-  const co2  = (val * r.co2).toFixed(2);
-  const pts  = Math.round(val * r.pts);
-  const unit = isKm ? 'km' : 'ore';
-
-  const el  = document.getElementById('co2Estimate');
-  const eco = document.getElementById('co2EstCo2');
-  const epo = document.getElementById('co2EstPts');
-  const eun = document.getElementById('co2EstUnit');
-
-  if (el)  el.style.display = 'flex';
-  if (eco) eco.textContent  = `${co2} kg`;
-  if (epo) epo.textContent  = `+${pts}`;
-  if (eun) eun.textContent  = `${val} ${unit}`;
+  const co2  = (val*r.co2).toFixed(2);
+  const pts  = Math.round(val*r.pts);
+  const unit = isKm?'km':'ore';
+  const el   = document.getElementById('co2Estimate');
+  const eco  = document.getElementById('co2EstCo2');
+  const epo  = document.getElementById('co2EstPts');
+  const eun  = document.getElementById('co2EstUnit');
+  if (el)  el.style.display='flex';
+  if (eco) eco.textContent=`${co2} kg`;
+  if (epo) epo.textContent=`+${pts}`;
+  if (eun) eun.textContent=`${val} ${unit}`;
 }
-window.updateCo2Estimate = updateCo2Estimate;
+window.updateCo2Estimate=updateCo2Estimate;
 
 async function saveActivity() {
   if (!curAct) return showN('❌ Seleziona un tipo di attività','error');
-
   const r    = RATES[curAct];
-  const isKm = r.t === 'k';
-
-  let km=0, hours=0, fromA='', toA='';
-
+  const isKm = r.t==='k';
+  let km=0,hours=0,fromA='',toA='';
   if (isKm) {
-    if (calcedKm > 0) {
-      km    = calcedKm;
-      fromA = document.getElementById('fromAddr')?.value || '';
-      toA   = document.getElementById('toAddr')?.value   || '';
+    if (calcedKm>0) {
+      km=calcedKm;
+      fromA=document.getElementById('fromAddr')?.value||'';
+      toA  =document.getElementById('toAddr')?.value||'';
     } else {
-      km = parseFloat(document.getElementById('kmInput')?.value) || 0;
+      km=parseFloat(document.getElementById('kmInput')?.value)||0;
     }
-    if (km <= 0) return showN('❌ Inserisci i km o calcola il percorso sulla mappa','error');
+    if (km<=0) return showN('❌ Inserisci i km o calcola il percorso','error');
   } else {
-    hours = parseFloat(document.getElementById('hoursInput')?.value) || 0;
-    if (hours <= 0) return showN('❌ Inserisci le ore di attività','error');
+    hours=parseFloat(document.getElementById('hoursInput')?.value)||0;
+    if (hours<=0) return showN('❌ Inserisci le ore','error');
   }
-
-  const note = document.getElementById('noteInput')?.value?.trim() || '';
-  const btn  = document.getElementById('saveBtnLog');
-  if (btn) {
-    btn.disabled  = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
-  }
-
-  const co2 = parseFloat(((isKm ? km : hours) * r.co2).toFixed(2));
-  const pts = Math.round((isKm ? km : hours) * r.pts);
-
-  const d = await api('/api/activities','POST',{
-    type:curAct, km, hours, note, from_addr:fromA, to_addr:toA
-  });
-
-  if (btn) {
-    btn.disabled  = false;
-    btn.innerHTML = '<i class="fas fa-leaf"></i> Salva Attività';
-  }
-
-  if (d.error) return showN('❌ ' + d.error,'error');
-
-  showCo2Explosion(co2, pts);
-  showN(`✅ Attività salvata! +${co2} kg CO₂ · +${pts} pt`,'success');
-
+  const note=document.getElementById('noteInput')?.value?.trim()||'';
+  const btn=document.getElementById('saveBtnLog');
+  if (btn){ btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Salvataggio...'; }
+  const co2=parseFloat(((isKm?km:hours)*r.co2).toFixed(2));
+  const pts=Math.round((isKm?km:hours)*r.pts);
+  const d=await api('/api/activities','POST',{ type:curAct,km,hours,note,from_addr:fromA,to_addr:toA });
+  if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-leaf"></i> Salva Attività'; }
+  if (d.error) return showN('❌ '+d.error,'error');
+  showCo2Explosion(co2,pts);
+  showN(`✅ Attività salvata! +${co2} kg CO₂ · +${pts} pt`);
   cancelLog();
-  await Promise.all([loadStats(), loadActivities(), loadBadges(), loadYearly(), loadProfile()]);
+  await Promise.all([loadStats(),loadActivities(),loadBadges(),loadYearly(),loadProfile()]);
 }
-window.saveActivity = saveActivity;
+window.saveActivity=saveActivity;
 
 // ══════════════════════════════════════════
-//   MAPPA LEAFLET ✅ FIXED (profili OSRM)
+//   MAPPA LEAFLET ✅ v5 MIGLIORATA
 // ══════════════════════════════════════════
+const TILE_STREET = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_SAT    = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const TILE_SAT_ATT= 'Tiles © Esri';
+
 function initMap() {
   if (mapInited) return;
-  const container = document.getElementById('leafletMap');
+  const container=document.getElementById('leafletMap');
   if (!container) return;
-
   try {
-    map = L.map('leafletMap', {
-      center: [45.464, 9.190],
-      zoom:   12,
-      zoomControl: true
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-      maxZoom: 19
+    map=L.map('leafletMap',{ center:[45.464,9.190], zoom:12, zoomControl:true });
+    tileLayer=L.tileLayer(TILE_STREET,{
+      attribution:'© OpenStreetMap', maxZoom:19
     }).addTo(map);
 
+    // ✅ Pulsante satellite
+    const satBtn=L.control({ position:'topright' });
+    satBtn.onAdd=()=>{
+      const d=L.DomUtil.create('button','map-sat-btn');
+      d.innerHTML='🛰️ Satellite';
+      d.title='Cambia vista';
+      d.onclick=(e)=>{ L.DomEvent.stopPropagation(e); toggleSatellite(d); };
+      return d;
+    };
+    satBtn.addTo(map);
+
+    // ✅ Pulsante geolocalizzazione
+    const geoBtn=L.control({ position:'topright' });
+    geoBtn.onAdd=()=>{
+      const d=L.DomUtil.create('button','map-geo-btn');
+      d.innerHTML='📍 La mia posizione';
+      d.title='Usa posizione attuale';
+      d.onclick=(e)=>{ L.DomEvent.stopPropagation(e); useMyLocation(d); };
+      return d;
+    };
+    geoBtn.addTo(map);
+
+    // ✅ Pulsante reset
+    const resetBtn=L.control({ position:'topright' });
+    resetBtn.onAdd=()=>{
+      const d=L.DomUtil.create('button','map-reset-btn');
+      d.innerHTML='🗑️ Reset mappa';
+      d.onclick=(e)=>{ L.DomEvent.stopPropagation(e); resetMap(); };
+      return d;
+    };
+    resetBtn.addTo(map);
+
     map.on('click', handleMapClick);
-    mapInited = true;
-    setTimeout(() => map.invalidateSize(), 150);
+    mapInited=true;
+    setTimeout(()=>map.invalidateSize(),150);
+    showN('🗺️ Clicca sulla mappa per impostare partenza e arrivo','info');
   } catch(e) {
-    console.error('Leaflet init error:', e);
+    console.error('Leaflet init error:',e);
     showN('❌ Errore caricamento mappa','error');
   }
 }
 
+function toggleSatellite(btn) {
+  if (!map||!tileLayer) return;
+  mapSat=!mapSat;
+  map.removeLayer(tileLayer);
+  tileLayer=L.tileLayer(mapSat?TILE_SAT:TILE_STREET,{
+    attribution: mapSat?TILE_SAT_ATT:'© OpenStreetMap',
+    maxZoom:19
+  }).addTo(map);
+  btn.innerHTML=mapSat?'🗺️ Mappa':'🛰️ Satellite';
+  btn.classList.toggle('active',mapSat);
+}
+
+function useMyLocation(btn) {
+  if (!navigator.geolocation) return showN('❌ Geolocalizzazione non supportata','error');
+  btn.innerHTML='⏳ Localizzazione...';
+  btn.disabled=true;
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      btn.innerHTML='📍 La mia posizione';
+      btn.disabled=false;
+      const { latitude:lat, longitude:lng } = pos.coords;
+      map.setView([lat,lng],15);
+      if (!markerFrom) {
+        setMarker('from',lat,lng);
+        reverseGeocode(lat,lng,'fromAddr');
+        showN('✅ Posizione attuale impostata come partenza','success');
+      } else if (!markerTo) {
+        setMarker('to',lat,lng);
+        reverseGeocode(lat,lng,'toAddr');
+        setTimeout(calcRoute,400);
+      }
+    },
+    err=>{
+      btn.innerHTML='📍 La mia posizione';
+      btn.disabled=false;
+      showN('❌ Impossibile ottenere la posizione: '+err.message,'error');
+    },
+    { enableHighAccuracy:true, timeout:8000 }
+  );
+}
+
 function handleMapClick(e) {
-  const { lat, lng } = e.latlng;
+  const { lat,lng }=e.latlng;
   if (!markerFrom) {
-    setMarker('from', lat, lng);
-    reverseGeocode(lat, lng, 'fromAddr');
+    setMarker('from',lat,lng);
+    reverseGeocode(lat,lng,'fromAddr');
   } else if (!markerTo) {
-    setMarker('to', lat, lng);
-    reverseGeocode(lat, lng, 'toAddr');
-    setTimeout(calcRoute, 400);
+    setMarker('to',lat,lng);
+    reverseGeocode(lat,lng,'toAddr');
+    setTimeout(calcRoute,400);
   }
 }
 
-function setMarker(type, lat, lng) {
-  const cfg = {
-    from: { color:'#16a34a', label:'🟢 Partenza', anchor:[52,14] },
-    to:   { color:'#ef4444', label:'🔴 Arrivo',   anchor:[40,14] }
+function setMarker(type,lat,lng) {
+  const cfg={
+    from:{ color:'#16a34a', label:'🟢 Partenza', anchor:[52,14] },
+    to:  { color:'#ef4444', label:'🔴 Arrivo',   anchor:[40,14] }
   }[type];
-
-  const icon = L.divIcon({
-    html: `<div style="
+  const icon=L.divIcon({
+    html:`<div style="
       background:${cfg.color};color:white;
       padding:5px 10px;border-radius:20px;
       font-size:11px;font-weight:700;
-      box-shadow:0 3px 10px rgba(0,0,0,.3);
+      box-shadow:0 3px 10px rgba(0,0,0,.35);
       white-space:nowrap;border:2px solid white;">
       ${cfg.label}
     </div>`,
-    className: '',
-    iconAnchor: cfg.anchor
+    className:'',
+    iconAnchor:cfg.anchor
   });
-
-  if (type === 'from') {
+  if (type==='from') {
     if (markerFrom) map.removeLayer(markerFrom);
-    markerFrom = L.marker([lat,lng],{ icon, draggable:true })
-      .addTo(map)
-      .on('dragend', e => {
-        const p = e.target.getLatLng();
-        reverseGeocode(p.lat, p.lng, 'fromAddr');
-        if (markerTo) calcRoute();
-      });
+    markerFrom=L.marker([lat,lng],{ icon,draggable:true }).addTo(map)
+      .on('dragend',e=>{ const p=e.target.getLatLng(); reverseGeocode(p.lat,p.lng,'fromAddr'); if(markerTo) calcRoute(); });
   } else {
     if (markerTo) map.removeLayer(markerTo);
-    markerTo = L.marker([lat,lng],{ icon, draggable:true })
-      .addTo(map)
-      .on('dragend', e => {
-        const p = e.target.getLatLng();
-        reverseGeocode(p.lat, p.lng, 'toAddr');
-        calcRoute();
-      });
+    markerTo=L.marker([lat,lng],{ icon,draggable:true }).addTo(map)
+      .on('dragend',e=>{ const p=e.target.getLatLng(); reverseGeocode(p.lat,p.lng,'toAddr'); calcRoute(); });
   }
 }
 
 function resetMap() {
   if (!map) return;
-  if (markerFrom) { map.removeLayer(markerFrom); markerFrom = null; }
-  if (markerTo)   { map.removeLayer(markerTo);   markerTo   = null; }
-  if (routeLine)  { map.removeLayer(routeLine);   routeLine  = null; }
-  const ri = document.getElementById('routeInfo');
-  if (ri) ri.style.display = 'none';
-  const fa = document.getElementById('fromAddr');
-  const ta = document.getElementById('toAddr');
-  if (fa) fa.value = '';
-  if (ta) ta.value = '';
-  calcedKm = 0;
+  if (markerFrom){ map.removeLayer(markerFrom); markerFrom=null; }
+  if (markerTo)  { map.removeLayer(markerTo);   markerTo=null;   }
+  if (routeLine) { map.removeLayer(routeLine);  routeLine=null;  }
+  const ri=document.getElementById('routeInfo');
+  if (ri) ri.style.display='none';
+  const fa=document.getElementById('fromAddr');
+  const ta=document.getElementById('toAddr');
+  if (fa) fa.value='';
+  if (ta) ta.value='';
+  calcedKm=0;
   updateCo2Estimate();
+  showN('🗑️ Mappa resettata','info');
 }
-window.resetMap = resetMap;
+window.resetMap=resetMap;
 
 async function geocodeAddress(addr) {
-  if (!addr || addr.length < 3) return null;
+  if (!addr||addr.length<3) return null;
   try {
-    const r = await fetch(
+    const r=await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=5`,
       { headers:{ 'Accept-Language':'it' } }
     );
@@ -1517,122 +1503,127 @@ async function geocodeAddress(addr) {
   } catch { return null; }
 }
 
-async function reverseGeocode(lat, lng, inputId) {
+async function reverseGeocode(lat,lng,inputId) {
   try {
-    const r = await fetch(
+    const r=await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
       { headers:{ 'Accept-Language':'it' } }
     );
-    const d  = await r.json();
-    const el = document.getElementById(inputId);
-    if (el && d.display_name)
-      el.value = d.display_name.split(',').slice(0,3).join(',').trim();
-  } catch(e) { console.warn('Reverse geocode failed:', e); }
+    const d=await r.json();
+    const el=document.getElementById(inputId);
+    if (el&&d.display_name)
+      el.value=d.display_name.split(',').slice(0,3).join(',').trim();
+  } catch(e){ console.warn('Reverse geocode:',e); }
 }
 
-function onAddrInput(inputId, suggId, type) {
+function onAddrInput(inputId,suggId,type) {
   clearTimeout(geocodeTimer);
-  const val = document.getElementById(inputId)?.value;
-  if (!val || val.length < 3) {
-    const s = document.getElementById(suggId);
-    if (s) s.innerHTML = '';
+  const val=document.getElementById(inputId)?.value;
+  if (!val||val.length<3) {
+    const s=document.getElementById(suggId);
+    if (s) s.innerHTML='';
     return;
   }
-  geocodeTimer = setTimeout(async () => {
-    const results = await geocodeAddress(val);
+  geocodeTimer=setTimeout(async()=>{
+    const results=await geocodeAddress(val);
     if (!results?.length) return;
-    const sugg = document.getElementById(suggId);
+    const sugg=document.getElementById(suggId);
     if (!sugg) return;
-    sugg.innerHTML = results.map(res => `
+    sugg.innerHTML=results.map(res=>`
       <div class="addr-sugg-item"
         onclick="selectAddr('${inputId}','${suggId}','${type}',
           ${res.lat},${res.lon},\`${res.display_name.replace(/`/g,"'")}\`)">
         <i class="fas fa-map-marker-alt"></i>
         ${res.display_name.split(',').slice(0,3).join(', ')}
       </div>`).join('');
-  }, 450);
+  },450);
 }
-window.onAddrInput = onAddrInput;
+window.onAddrInput=onAddrInput;
 
-function selectAddr(inputId, suggId, type, lat, lon, name) {
-  const el = document.getElementById(inputId);
-  if (el) el.value = name.split(',').slice(0,3).join(',').trim();
-  const s = document.getElementById(suggId);
-  if (s) s.innerHTML = '';
-
-  setMarker(type, parseFloat(lat), parseFloat(lon));
-  map.setView([parseFloat(lat), parseFloat(lon)], 14);
-
-  if (markerFrom && markerTo) calcRoute();
+function selectAddr(inputId,suggId,type,lat,lon,name) {
+  const el=document.getElementById(inputId);
+  if (el) el.value=name.split(',').slice(0,3).join(',').trim();
+  const s=document.getElementById(suggId);
+  if (s) s.innerHTML='';
+  setMarker(type,parseFloat(lat),parseFloat(lon));
+  map.setView([parseFloat(lat),parseFloat(lon)],14);
+  if (markerFrom&&markerTo) calcRoute();
 }
-window.selectAddr = selectAddr;
+window.selectAddr=selectAddr;
 
-// ✅ FIX PRINCIPALE: profilo OSRM corretto per tipo attività
 async function calcRoute() {
-  if (!markerFrom || !markerTo) {
-    showN('❌ Inserisci partenza e arrivo prima di calcolare','error');
+  if (!markerFrom||!markerTo) {
+    showN('❌ Imposta partenza e arrivo prima','error');
     return;
   }
+  const btn=document.getElementById('calcRouteBtn');
+  if (btn){ btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Calcolo...'; }
 
-  const btn = document.getElementById('calcRouteBtn');
-  if (btn) {
-    btn.disabled  = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calcolo...';
-  }
-
-  const f       = markerFrom.getLatLng();
-  const t       = markerTo.getLatLng();
-
-  // ✅ Sceglie profilo OSRM corretto
-  const profile = OSRM_PROFILE[curAct] || 'driving';
+  const f=markerFrom.getLatLng();
+  const t=markerTo.getLatLng();
+  const profile=OSRM_PROFILE[curAct]||'driving';
 
   try {
-    const res = await fetch(
-      `https://router.project-osrm.org/route/v1/${profile}/` +
+    const res=await fetch(
+      `https://router.project-osrm.org/route/v1/${profile}/`+
       `${f.lng},${f.lat};${t.lng},${t.lat}?overview=full&geometries=geojson`
     );
-    const d = await res.json();
-
-    if (btn) {
-      btn.disabled  = false;
-      btn.innerHTML = '<i class="fas fa-route"></i> Calcola Percorso';
-    }
-
+    const d=await res.json();
+    if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-route"></i> Calcola Percorso'; }
     if (!d.routes?.length) {
-      showN('❌ Percorso non trovato. Prova indirizzi più precisi.','error');
+      showN('❌ Percorso non trovato. Prova indirizzi diversi.','error');
       return;
     }
+    const route=d.routes[0];
+    const km   =(route.distance/1000).toFixed(1);
+    const mins =Math.round(route.duration/60);
 
-    const route = d.routes[0];
-    const km    = (route.distance / 1000).toFixed(1);
-    const mins  = Math.round(route.duration / 60);
-
-    // Disegna percorso
+    // ✅ Percorso con stile migliorato — doppio layer (glow + linea)
     if (routeLine) map.removeLayer(routeLine);
-    routeLine = L.geoJSON(route.geometry, {
-      style: { color:'#16a34a', weight:5, opacity:.9, dashArray:'8,4' }
+    const routeGlow=L.geoJSON(route.geometry,{
+      style:{ color:'rgba(22,163,74,0.25)', weight:10, opacity:1 }
     }).addTo(map);
-    map.fitBounds(routeLine.getBounds(), { padding:[30,30] });
+    routeLine=L.geoJSON(route.geometry,{
+      style:{ color:'#16a34a', weight:4, opacity:1, dashArray:'10,6', lineCap:'round' }
+    }).addTo(map);
 
-    // Aggiorna stato
-    calcedKm = parseFloat(km);
+    // Animazione percorso — cambia opacity glow
+    setTimeout(()=>{ try{ map.removeLayer(routeGlow); }catch{} },1500);
+
+    // ✅ Freccia direzionale sul percorso
+    if (typeof L.polylineDecorator !== 'undefined') {
+      L.polylineDecorator(routeLine, {
+        patterns:[{
+          offset:'10%', repeat:'20%',
+          symbol:L.Symbol.arrowHead({
+            pixelSize:10, headAngle:45,
+            pathOptions:{ fillOpacity:1, weight:0, color:'#16a34a' }
+          })
+        }]
+      }).addTo(map);
+    }
+
+    map.fitBounds(routeLine.getBounds(),{ padding:[40,40] });
+    calcedKm=parseFloat(km);
     updateCo2Estimate();
 
-    // Aggiorna route info
-    const ri = document.getElementById('routeInfo');
+    const ri=document.getElementById('routeInfo');
     if (ri) {
-      ri.style.display = 'flex';
-      const rate = RATES[curAct];
-      const co2  = (calcedKm * rate.co2).toFixed(2);
-      const pts  = Math.round(calcedKm * rate.pts);
-      ri.innerHTML = `
+      ri.style.display='flex';
+      const rate=RATES[curAct];
+      const co2=(calcedKm*rate.co2).toFixed(2);
+      const pts=Math.round(calcedKm*rate.pts);
+      const hours=Math.floor(mins/60);
+      const minRem=mins%60;
+      const timeStr=hours>0?`${hours}h ${minRem}min`:`${mins} min`;
+      ri.innerHTML=`
         <div class="route-info-item">
           <i class="fas fa-road" style="color:var(--blue)"></i>
           <strong>${km} km</strong>
         </div>
         <div class="route-info-item">
           <i class="fas fa-clock" style="color:var(--yellow)"></i>
-          ~${mins} min
+          ~${timeStr}
         </div>
         <div class="route-info-item co2-highlight">
           <i class="fas fa-leaf"></i>
@@ -1643,39 +1634,30 @@ async function calcRoute() {
           <strong>+${pts} pt</strong>
         </div>`;
     }
-
-    showN(`✅ Percorso: ${km} km · ~${mins} min`,'success');
-
+    showN(`✅ Percorso: ${km} km · ~${timeStr}`,'success');
   } catch(e) {
-    if (btn) {
-      btn.disabled  = false;
-      btn.innerHTML = '<i class="fas fa-route"></i> Calcola Percorso';
-    }
-    console.error('Route error:', e);
-    showN('❌ Errore nel calcolo del percorso. Riprova.','error');
+    if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-route"></i> Calcola Percorso'; }
+    console.error('Route error:',e);
+    showN('❌ Errore nel calcolo del percorso','error');
   }
 }
-window.calcRoute = calcRoute;
+window.calcRoute=calcRoute;
 
 // ══════════════════════════════════════════
 //   ADMIN
 // ══════════════════════════════════════════
 async function loadAdminUsers() {
   if (!myProfile?.is_admin) return;
-  const list  = await api('/api/admin/users');
-  const tbody = document.getElementById('adminUsersTbody');
-  if (!tbody || !Array.isArray(list)) return;
-
-  tbody.innerHTML = list.map(u => `
+  const list=await api('/api/admin/users');
+  const tbody=document.getElementById('adminUsersTbody');
+  if (!tbody||!Array.isArray(list)) return;
+  tbody.innerHTML=list.map(u=>`
     <tr>
       <td>
         <div class="u-info">
-          <div class="u-av">
-            <canvas width="36" height="36" id="adAv${u.id}"></canvas>
-          </div>
+          <div class="u-av"><canvas width="36" height="36" id="adAv${u.id}"></canvas></div>
           <div>
-            <div class="u-name">
-              ${u.name||'—'}
+            <div class="u-name">${u.name||'—'}
               ${u.is_admin?'<span class="admin-badge">👑 Admin</span>':''}
             </div>
             <div class="u-email">${u.email}</div>
@@ -1718,49 +1700,43 @@ async function loadAdminUsers() {
         </div>
       </td>
     </tr>`).join('');
-
-  setTimeout(() => list.forEach(u => drawMii(u,`adAv${u.id}`,36)), 60);
+  setTimeout(()=>list.forEach(u=>drawMii(u,`adAv${u.id}`,36)),60);
 }
 
-async function adminAction(action, userId) {
-  const labels = {
-    ban:          ['⛔','Banna utente',     'Vuoi bannare questo utente dalla piattaforma?'],
-    unban:        ['✅','Sbanna utente',    'Vuoi sbannare questo utente?'],
-    delete:       ['🗑️','Elimina utente',  '⚠️ Questa azione è IRREVERSIBILE!'],
-    toggle_admin: ['👑','Toggle Admin',    'Cambia il ruolo admin per questo utente?'],
-    warn:         ['⚠️','Avvisa utente',   'Invia un avviso ufficiale a questo utente?'],
-    reset_points: ['🔄','Reset punti',     'Azzera tutti i punti di questo utente?']
+async function adminAction(action,userId) {
+  const labels={
+    ban:          ['⛔','Banna utente',    'Vuoi bannare questo utente?'],
+    unban:        ['✅','Sbanna utente',   'Vuoi sbannare questo utente?'],
+    delete:       ['🗑️','Elimina utente', '⚠️ Azione IRREVERSIBILE!'],
+    toggle_admin: ['👑','Toggle Admin',   'Cambia il ruolo admin?'],
+    warn:         ['⚠️','Avvisa utente',  'Invia un avviso ufficiale?'],
+    reset_points: ['🔄','Reset punti',    'Azzera tutti i punti?']
   };
-  const [icon,title,msg] = labels[action] || ['❓','Azione','Sei sicuro?'];
-
-  openConfirm(icon, title, msg, async () => {
-    const d = await api(`/api/admin/users/${userId}/${action}`,'POST');
+  const [icon,title,msg]=labels[action]||['❓','Azione','Sei sicuro?'];
+  openConfirm(icon,title,msg,async()=>{
+    const d=await api(`/api/admin/users/${userId}/${action}`,'POST');
     if (d.error) return showN('❌ '+d.error,'error');
-    showN(`✅ ${title} eseguito!`,'success');
+    showN(`✅ ${title} eseguito!`);
     loadAdminUsers();
   });
 }
-window.adminAction = adminAction;
+window.adminAction=adminAction;
 
-async function openUserActs(userId, name) {
-  const modal = document.getElementById('userActsModal');
-  const title = document.getElementById('userActsTitle');
-  const body  = document.getElementById('userActsBody');
+async function openUserActs(userId,name) {
+  const modal=document.getElementById('userActsModal');
+  const title=document.getElementById('userActsTitle');
+  const body=document.getElementById('userActsBody');
   if (!modal) return;
-
-  title.textContent = `Attività di ${name}`;
-  body.innerHTML    = `<div style="text-align:center;padding:30px">
-    <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--green)"></i>
-  </div>`;
-  modal.style.display = 'flex';
-
-  const list = await api(`/api/admin/users/${userId}/activities`);
+  title.textContent=`Attività di ${name}`;
+  body.innerHTML=`<div style="text-align:center;padding:30px">
+    <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--green)"></i></div>`;
+  modal.style.display='flex';
+  const list=await api(`/api/admin/users/${userId}/activities`);
   if (!Array.isArray(list)||!list.length) {
-    body.innerHTML = `<div class="empty"><div class="ei">📋</div><p>Nessuna attività.</p></div>`;
+    body.innerHTML=`<div class="empty"><div class="ei">📋</div><p>Nessuna attività.</p></div>`;
     return;
   }
-
-  body.innerHTML = list.map(a => `
+  body.innerHTML=list.map(a=>`
     <div class="adm-act-item">
       <div style="font-size:22px">${ICONS[a.type]||'📌'}</div>
       <div style="flex:1">
@@ -1769,8 +1745,8 @@ async function openUserActs(userId, name) {
         </div>
         <div style="font-size:11px;color:var(--muted)">
           ${new Date(a.date).toLocaleString('it-IT')}
-          ${a.km>0 ? ' · '+a.km+' km' : ''}
-          ${a.hours>0 ? ' · '+a.hours+'h' : ''}
+          ${a.km>0?' · '+a.km+' km':''}
+          ${a.hours>0?' · '+a.hours+'h':''}
         </div>
       </div>
       <button class="adm-act-del" onclick="deleteAct(${a.id},this)">
@@ -1778,124 +1754,199 @@ async function openUserActs(userId, name) {
       </button>
     </div>`).join('');
 }
-window.openUserActs = openUserActs;
+window.openUserActs=openUserActs;
 
-async function deleteAct(actId, btn) {
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-  const d = await api(`/api/admin/activities/${actId}`,'DELETE');
-  if (d.error) {
-    btn.innerHTML = '<i class="fas fa-trash"></i>';
-    return showN('❌ '+d.error,'error');
-  }
-  const item = btn.closest('.adm-act-item');
-  if (item) {
-    item.style.transition = 'opacity .3s';
-    item.style.opacity    = '0';
-    setTimeout(() => item.remove(), 300);
-  }
+async function deleteAct(actId,btn) {
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>';
+  const d=await api(`/api/admin/activities/${actId}`,'DELETE');
+  if (d.error){ btn.innerHTML='<i class="fas fa-trash"></i>'; return showN('❌ '+d.error,'error'); }
+  const item=btn.closest('.adm-act-item');
+  if (item){ item.style.transition='opacity .3s'; item.style.opacity='0'; setTimeout(()=>item.remove(),300); }
   showN('🗑️ Attività eliminata','info');
 }
-window.deleteAct = deleteAct;
+window.deleteAct=deleteAct;
 
 function closeUserActsModal() {
-  const modal = document.getElementById('userActsModal');
-  if (modal) modal.style.display = 'none';
+  const modal=document.getElementById('userActsModal');
+  if (modal) modal.style.display='none';
 }
-window.closeUserActsModal = closeUserActsModal;
+window.closeUserActsModal=closeUserActsModal;
 
 // ══════════════════════════════════════════
 //   CONFIRM MODAL
 // ══════════════════════════════════════════
-let confirmCallback = null;
-
-function openConfirm(icon, title, msg, cb) {
-  confirmCallback = cb;
-  document.getElementById('confirmIcon').textContent  = icon;
-  document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMsg').textContent   = msg;
-  document.getElementById('confirmOverlay').style.display = 'flex';
+let confirmCallback=null;
+function openConfirm(icon,title,msg,cb) {
+  confirmCallback=cb;
+  document.getElementById('confirmIcon').textContent=icon;
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmMsg').textContent=msg;
+  document.getElementById('confirmOverlay').style.display='flex';
 }
 function confirmYes() {
-  document.getElementById('confirmOverlay').style.display = 'none';
-  if (typeof confirmCallback === 'function') confirmCallback();
-  confirmCallback = null;
+  document.getElementById('confirmOverlay').style.display='none';
+  if (typeof confirmCallback==='function') confirmCallback();
+  confirmCallback=null;
 }
 function confirmNo() {
-  document.getElementById('confirmOverlay').style.display = 'none';
-  confirmCallback = null;
+  document.getElementById('confirmOverlay').style.display='none';
+  confirmCallback=null;
 }
-window.openConfirm = openConfirm;
-window.confirmYes  = confirmYes;
-window.confirmNo   = confirmNo;
+window.openConfirm=openConfirm;
+window.confirmYes=confirmYes;
+window.confirmNo=confirmNo;
 
 // ══════════════════════════════════════════
 //   RICERCA UTENTI
 // ══════════════════════════════════════════
-let searchTimer = null;
-
 function onSearchInput() {
   clearTimeout(searchTimer);
-  const val = document.getElementById('searchInput')?.value?.trim();
-  if (!val || val.length < 2) {
-    const el = document.getElementById('searchResults');
-    if (el) el.innerHTML = '';
+  const val=document.getElementById('searchInput')?.value?.trim();
+  if (!val||val.length<2) {
+    const el=document.getElementById('searchResults');
+    if (el) el.innerHTML='';
     return;
   }
-  searchTimer = setTimeout(() => searchUsers(val), 400);
+  searchTimer=setTimeout(()=>searchUsers(val),400);
 }
-window.onSearchInput = onSearchInput;
+window.onSearchInput=onSearchInput;
 
 async function searchUsers(query) {
-  const list = await api(`/api/users/search?q=${encodeURIComponent(query)}`);
-  const el   = document.getElementById('searchResults');
+  const list=await api(`/api/users/search?q=${encodeURIComponent(query)}`);
+  const el=document.getElementById('searchResults');
   if (!el) return;
   if (!Array.isArray(list)||!list.length) {
-    el.innerHTML = `<div class="empty" style="padding:20px">
-      <div class="ei">🔍</div><p>Nessun utente trovato per "${query}".</p>
-    </div>`;
+    el.innerHTML=`<div class="empty" style="padding:20px">
+      <div class="ei">🔍</div><p>Nessun utente trovato.</p></div>`;
     return;
   }
-  el.innerHTML = list.map(u => userCardHTML(u, u.is_following)).join('');
-  setTimeout(() => list.forEach(u => drawMii(u,`ucAv${u.id}`,44)), 60);
+  el.innerHTML=list.map(u=>userCardHTML(u,u.is_following)).join('');
+  setTimeout(()=>list.forEach(u=>drawMii(u,`ucAv${u.id}`,44)),60);
+}
+
+// ══════════════════════════════════════════
+//   CSS DINAMICO per nuovi elementi
+// ══════════════════════════════════════════
+function injectExtraStyles() {
+  const style=document.createElement('style');
+  style.textContent=`
+    /* MAP BUTTONS */
+    .map-sat-btn,.map-geo-btn,.map-reset-btn {
+      background:var(--card,#1e293b);color:var(--text,'#f1f5f9');
+      border:1.5px solid var(--border,'rgba(255,255,255,.1)');
+      padding:6px 12px;border-radius:8px;cursor:pointer;
+      font-size:12px;font-weight:600;margin-bottom:4px;
+      box-shadow:0 2px 8px rgba(0,0,0,.3);transition:.2s;
+      display:block;
+    }
+    .map-sat-btn:hover,.map-geo-btn:hover,.map-reset-btn:hover{ filter:brightness(1.2); }
+    .map-sat-btn.active{ background:var(--green,'#16a34a');border-color:var(--green,'#16a34a'); }
+
+    /* GROUP LEADERBOARD */
+    .gc-lb-toggle {
+      display:flex;align-items:center;gap:8px;
+      padding:10px 16px;cursor:pointer;font-size:13px;
+      font-weight:600;color:var(--muted);border-top:1px solid var(--border);
+      transition:.2s;user-select:none;
+    }
+    .gc-lb-toggle:hover{ color:var(--text);background:rgba(255,255,255,.03); }
+    .gc-lb-list{ padding:8px 12px 12px; }
+    .gc-lb-row {
+      display:flex;align-items:center;gap:10px;
+      padding:8px 6px;border-radius:8px;transition:.15s;
+    }
+    .gc-lb-row:hover{ background:rgba(255,255,255,.04); }
+    .gc-lb-rank{ font-size:16px;width:28px;text-align:center; }
+    .gc-lb-av canvas{ border-radius:50%; }
+    .gc-lb-name{ flex:1;display:flex;flex-direction:column; }
+    .gc-lb-uname{ font-size:13px;font-weight:600; }
+    .gc-lb-username{ font-size:11px;color:var(--muted); }
+    .gc-lb-co2{ font-size:12px;color:#10b981;font-weight:700; }
+    .gc-lb-pts{ font-size:12px;color:#fbbf24;font-weight:700; }
+
+    /* INVITE CODE PILL */
+    .invite-code-pill {
+      background:rgba(99,102,241,.15);color:#818cf8;
+      padding:2px 8px;border-radius:20px;font-size:11px;
+      font-weight:700;font-family:monospace;letter-spacing:1px;
+    }
+
+    /* INVITE MODAL */
+    #inviteModal {
+      position:fixed;inset:0;background:rgba(0,0,0,.7);
+      display:none;align-items:center;justify-content:center;z-index:1000;
+    }
+    .invite-modal-box {
+      background:var(--card);border-radius:16px;
+      width:min(440px,95vw);max-height:80vh;
+      display:flex;flex-direction:column;overflow:hidden;
+      border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5);
+    }
+    .invite-modal-head {
+      padding:20px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .invite-modal-head h3{ font-size:15px;font-weight:700; }
+    .invite-modal-body{ overflow-y:auto;padding:12px; }
+    .invite-modal-foot{
+      padding:14px 16px;border-top:1px solid var(--border);
+      display:flex;gap:10px;align-items:center;
+    }
+    .invite-follower-row {
+      display:flex;align-items:center;gap:10px;
+      padding:10px 8px;border-radius:10px;cursor:pointer;
+      transition:.15s;
+    }
+    .invite-follower-row:hover{ background:rgba(255,255,255,.05); }
+    .invite-follower-row input[type=checkbox]{ width:16px;height:16px;accent-color:var(--green); }
+    .if-av canvas{ border-radius:50%; }
+    .if-info{ flex:1; }
+    .if-name{ font-size:13px;font-weight:600; }
+    .if-user{ font-size:11px;color:var(--muted); }
+    #sendInviteBtn {
+      flex:1;background:var(--green);color:white;
+      border:none;padding:10px;border-radius:10px;
+      font-weight:700;font-size:13px;cursor:pointer;transition:.2s;
+    }
+    #sendInviteBtn:hover{ filter:brightness(1.1); }
+
+    /* JOIN CODE INPUT */
+    .join-code-wrap {
+      display:flex;gap:8px;margin-top:12px;
+    }
+    .join-code-wrap input {
+      flex:1;padding:10px 14px;border-radius:10px;
+      border:1.5px solid var(--border);background:var(--input,rgba(255,255,255,.07));
+      color:var(--text);font-size:13px;font-family:monospace;letter-spacing:2px;
+      text-transform:uppercase;
+    }
+    .join-code-wrap input:focus{ outline:none;border-color:var(--green); }
+    .btn-invite-followers {
+      background:rgba(99,102,241,.15);color:#818cf8;
+      border:1px solid rgba(99,102,241,.3);
+      padding:6px 12px;border-radius:8px;
+      font-size:12px;font-weight:600;cursor:pointer;transition:.2s;
+    }
+    .btn-invite-followers:hover{ background:rgba(99,102,241,.25); }
+  `;
+  document.head.appendChild(style);
 }
 
 // ══════════════════════════════════════════
 //   AUTO-INIT
 // ══════════════════════════════════════════
 async function autoInit() {
+  injectExtraStyles();
   if (!token) return;
-  const d = await api('/api/profile');
-  if (d.error || !d.id) {
-    token = null;
+  const d=await api('/api/profile');
+  if (d.error||!d.id) {
     localStorage.removeItem('ecotoken');
+    token=null;
     return;
   }
   bootApp(d);
 }
+
 autoInit();
 
-// ══════════════════════════════════════════
-//   GLOBAL EVENTS
-// ══════════════════════════════════════════
-document.addEventListener('click', e => {
-  if (!e.target.closest('.map-search-wrap'))
-    document.querySelectorAll('.addr-sugg').forEach(s => s.innerHTML = '');
-});
-
-window.addEventListener('resize', () => {
-  if (map && mapInited) setTimeout(() => map.invalidateSize(), 100);
-  const mobNav = document.getElementById('mobNav');
-  if (mobNav) mobNav.style.display = window.innerWidth <= 768 ? 'flex' : 'none';
-});
-
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape') return;
-  ['confirmOverlay','userActsModal','tutOverlay'].forEach(id => {
-    const m = document.getElementById(id);
-    if (m && m.style.display !== 'none') m.style.display = 'none';
-  });
-  const exp = document.getElementById('co2Explosion');
-  if (exp && exp.style.display !== 'none') exp.style.display = 'none';
-});
-
-}); // fine DOMContentLoaded
+}); // end DOMContentLoaded
