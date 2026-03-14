@@ -89,7 +89,6 @@ function showSection(id) {
     n.classList.toggle('active', n.dataset.section === id);
   });
 
-  // Carica dati sezione
   if      (id === 'dashboard')   loadDashboard();
   else if (id === 'activities')  loadActivities();
   else if (id === 'challenges')  loadChallenges();
@@ -100,7 +99,6 @@ function showSection(id) {
   else if (id === 'notifiche')   loadNotifiche();
   else if (id === 'admin')       loadAdmin();
 
-  // chiudi sidebar mobile
   if (window.innerWidth <= 768)
     document.getElementById('sidebar')?.classList.remove('open');
 }
@@ -122,8 +120,8 @@ window.logout = logout;
 //   AUTH TABS
 // ══════════════════════════════════════════
 function switchTab(tab) {
-  document.getElementById('loginForm').style.display    = tab==='login'    ? 'flex' : 'none';
-  document.getElementById('registerForm').style.display = tab==='register' ? 'flex' : 'none';
+  document.getElementById('loginForm').style.display    = tab === 'login'    ? 'flex' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? 'flex' : 'none';
   document.querySelectorAll('.auth-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
@@ -136,11 +134,10 @@ window.switchTab = switchTab;
 async function doLogin(e) {
   e.preventDefault();
   const errEl = document.getElementById('lErr');
-  errEl.textContent  = '';
-  errEl.style.color  = '#ef4444';
+  errEl.textContent = '';
+  errEl.style.color = '#ef4444';
 
-  const identifierEl = document.getElementById('lIdentifier')
-                    || document.getElementById('lEmail');
+  const identifierEl = document.getElementById('lIdentifier') || document.getElementById('lEmail');
   const identifier   = identifierEl?.value?.trim();
   const password     = document.getElementById('lPwd')?.value?.trim();
 
@@ -150,29 +147,25 @@ async function doLogin(e) {
   }
 
   const btn = document.querySelector('#loginForm button[type=submit]');
-  if (btn) {
-    btn.disabled  = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-  }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
 
   const d = await api('/api/login', 'POST', { identifier, password });
 
-  if (btn) {
-    btn.disabled  = false;
-    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Accedi</span>';
-  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> <span>Accedi</span>'; }
 
   if (d.error) {
     errEl.textContent = d.error;
     if (d.needsVerify) {
-      errEl.innerHTML += `<br><button class="link-btn"
-        onclick="resendVerify('${identifier}')">
-        📧 Reinvia email verifica
-      </button>`;
+      errEl.innerHTML += `<br><button class="link-btn" onclick="resendVerify('${identifier}')">📧 Reinvia email verifica</button>`;
     }
     return;
   }
 
+  await doLoginSuccess(d);
+}
+window.doLogin = doLogin;
+
+async function doLoginSuccess(d) {
   token = d.token;
   localStorage.setItem('ecotoken', token);
   myProfile = d.user;
@@ -187,16 +180,15 @@ async function doLogin(e) {
   if (window.innerWidth <= 768)
     document.getElementById('mobNav').style.display = 'flex';
 }
-window.doLogin = doLogin;
 
 // ══════════════════════════════════════════
 //   REGISTER
 // ══════════════════════════════════════════
 function checkPwdStrength(pwd) {
-  const has8    = pwd.length >= 8;
-  const hasUp   = /[A-Z]/.test(pwd);
-  const hasNum  = /[0-9]/.test(pwd);
-  const hasSym  = /[^a-zA-Z0-9]/.test(pwd);
+  const has8   = pwd.length >= 8;
+  const hasUp  = /[A-Z]/.test(pwd);
+  const hasNum = /[0-9]/.test(pwd);
+  const hasSym = /[^a-zA-Z0-9]/.test(pwd);
   const set = (id, ok) => {
     const el = document.getElementById(id);
     if (el) el.style.color = ok ? '#16a34a' : '#94a3b8';
@@ -230,35 +222,28 @@ async function doRegister(e) {
   }
 
   const btn = document.querySelector('#registerForm button[type=submit]');
-  if (btn) {
-    btn.disabled  = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrazione...';
-  }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrazione...'; }
 
   const d = await api('/api/register', 'POST', { name, username, email, password });
 
-  if (btn) {
-    btn.disabled  = false;
-    btn.innerHTML = '<i class="fas fa-user-plus"></i> Registrati';
-  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Registrati'; }
 
   if (d.error) {
     errEl.textContent = d.error;
     return;
   }
 
-  // ✅ Successo — mostra messaggio e blocca
+  // ✅ FIX: auto-login dopo registrazione
   errEl.style.color = '#16a34a';
-  errEl.innerHTML   = `
-    ✅ Registrazione completata!<br>
-    📧 Controlla <b>${email}</b> per verificare l'account.
-  `;
+  errEl.textContent = '✅ Registrazione completata! Accesso in corso...';
 
-  // svuota form
-  document.getElementById('rName').value     = '';
-  document.getElementById('rUsername').value = '';
-  document.getElementById('rEmail').value    = '';
-  document.getElementById('rPwd').value      = '';
+  const loginData = await api('/api/login', 'POST', { identifier: email, password });
+  if (loginData.token) {
+    await doLoginSuccess(loginData);
+  } else {
+    errEl.textContent = '✅ Registrato! Ora accedi manualmente.';
+    switchTab('login');
+  }
 }
 window.doRegister = doRegister;
 
@@ -308,13 +293,11 @@ function drawMii(state, canvasId, size = 120) {
 
   ctx.clearRect(0, 0, size, size);
 
-  // sfondo cerchio colore avatar
   ctx.beginPath();
   ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
   ctx.fillStyle = state.color || '#16a34a';
   ctx.fill();
 
-  // testa
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fillStyle = state.skin || '#fde68a';
@@ -325,19 +308,16 @@ function drawMii(state, canvasId, size = 120) {
 
   const unit = size / 120;
 
-  // ── CAPELLI ──────────────────────────────
+  // ── CAPELLI ──
   ctx.save();
   switch (state.hair) {
     case 'short':
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       ctx.fillStyle = '#92400e'; ctx.fill(); break;
     case 'long':
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r*1.05, r*1.3, 0, Math.PI*1.1, Math.PI*1.9);
+      ctx.beginPath(); ctx.ellipse(cx, cy, r*1.05, r*1.3, 0, Math.PI*1.1, Math.PI*1.9);
       ctx.fillStyle = '#78350f'; ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       ctx.fillStyle = '#92400e'; ctx.fill(); break;
     case 'curly':
       for (let i = 0; i < 6; i++) {
@@ -345,14 +325,11 @@ function drawMii(state, canvasId, size = 120) {
         ctx.beginPath();
         ctx.arc(cx + Math.cos(a)*r*0.7, cy - Math.sin(a)*r*0.7 - r*0.2, r*0.25, 0, Math.PI*2);
         ctx.fillStyle = '#d97706'; ctx.fill();
-      }
-      break;
+      } break;
     case 'bun':
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*1.15, r*0.35, 0, Math.PI*2);
+      ctx.beginPath(); ctx.arc(cx, cy - r*1.15, r*0.35, 0, Math.PI*2);
       ctx.fillStyle = '#92400e'; ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       ctx.fillStyle = '#92400e'; ctx.fill(); break;
     case 'mohawk':
       ctx.beginPath();
@@ -361,21 +338,17 @@ function drawMii(state, canvasId, size = 120) {
       ctx.lineTo(cx + r*0.2, cy - r*0.7);
       ctx.fillStyle = '#dc2626'; ctx.fill(); break;
     case 'wavy':
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       ctx.fillStyle = '#b45309'; ctx.fill();
       for (let i = 0; i < 4; i++) {
         ctx.beginPath();
         ctx.arc(cx - r*0.8 + i*r*0.5, cy + r*0.6, r*0.2, 0, Math.PI*2);
         ctx.fillStyle = '#b45309'; ctx.fill();
-      }
-      break;
+      } break;
     case 'cap':
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - r*0.55, r*1.1, r*0.25, 0, 0, Math.PI*2);
+      ctx.beginPath(); ctx.ellipse(cx, cy - r*0.55, r*1.1, r*0.25, 0, 0, Math.PI*2);
       ctx.fillStyle = '#1d4ed8'; ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.6, r*0.9, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.6, r*0.9, Math.PI, 0);
       ctx.fillStyle = '#1d4ed8'; ctx.fill(); break;
     case 'rainbow':
       ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7'].forEach((c,i) => {
@@ -384,46 +357,32 @@ function drawMii(state, canvasId, size = 120) {
         ctx.strokeStyle = c; ctx.lineWidth = size*0.045; ctx.stroke();
       }); break;
     case 'gold':
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       ctx.fillStyle = '#f59e0b'; ctx.fill();
       ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = size*0.12;
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r*0.95, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r*0.95, Math.PI, 0);
       ctx.fillStyle = '#fcd34d'; ctx.fill();
       ctx.shadowBlur = 0; break;
     case 'galaxy':
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       const gGrad = ctx.createLinearGradient(cx-r, cy-r, cx+r, cy);
-      gGrad.addColorStop(0,'#4c1d95');
-      gGrad.addColorStop(0.5,'#7c3aed');
-      gGrad.addColorStop(1,'#ec4899');
+      gGrad.addColorStop(0,'#4c1d95'); gGrad.addColorStop(0.5,'#7c3aed'); gGrad.addColorStop(1,'#ec4899');
       ctx.fillStyle = gGrad; ctx.fill();
       for (let i = 0; i < 8; i++) {
         ctx.beginPath();
-        ctx.arc(
-          cx - r*0.7 + Math.random()*r*1.4,
-          cy - r*0.8 + Math.random()*r*0.6,
-          size*0.018, 0, Math.PI*2
-        );
+        ctx.arc(cx - r*0.7 + Math.random()*r*1.4, cy - r*0.8 + Math.random()*r*0.6, size*0.018, 0, Math.PI*2);
         ctx.fillStyle = 'white'; ctx.fill();
-      }
-      break;
+      } break;
     case 'flame':
-      ctx.beginPath();
-      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
       const fGrad = ctx.createLinearGradient(cx, cy-r*1.2, cx, cy-r*0.1);
-      fGrad.addColorStop(0,'#fbbf24');
-      fGrad.addColorStop(0.5,'#f97316');
-      fGrad.addColorStop(1,'#dc2626');
-      ctx.fillStyle = fGrad; ctx.fill();
-      break;
+      fGrad.addColorStop(0,'#fbbf24'); fGrad.addColorStop(0.5,'#f97316'); fGrad.addColorStop(1,'#dc2626');
+      ctx.fillStyle = fGrad; ctx.fill(); break;
     default: break;
   }
   ctx.restore();
 
-  // ── OCCHI ────────────────────────────────
+  // ── OCCHI ──
   const eyeY  = cy - r * 0.12;
   const eyeXL = cx - r * 0.32;
   const eyeXR = cx + r * 0.32;
@@ -433,133 +392,99 @@ function drawMii(state, canvasId, size = 120) {
   switch (state.eyes) {
     case 'happy':
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.beginPath();
-        ctx.arc(ex, eyeY + eyeR*0.5, eyeR*1.1, Math.PI, 0, true);
+        ctx.beginPath(); ctx.arc(ex, eyeY + eyeR*0.5, eyeR*1.1, Math.PI, 0, true);
         ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
       }); break;
     case 'sleepy':
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.beginPath();
-        ctx.arc(ex, eyeY, eyeR, 0, Math.PI);
+        ctx.beginPath(); ctx.arc(ex, eyeY, eyeR, 0, Math.PI);
         ctx.fillStyle = '#1e293b'; ctx.fill();
       }); break;
     case 'surprised':
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.beginPath();
-        ctx.arc(ex, eyeY, eyeR*1.4, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(ex, eyeY, eyeR*1.4, 0, Math.PI*2);
         ctx.fillStyle = 'white'; ctx.fill();
         ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2; ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(ex, eyeY, eyeR*0.7, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(ex, eyeY, eyeR*0.7, 0, Math.PI*2);
         ctx.fillStyle = '#1e293b'; ctx.fill();
       }); break;
     case 'wink':
-      ctx.beginPath();
-      ctx.arc(eyeXL, eyeY, eyeR, 0, Math.PI*2);
+      ctx.beginPath(); ctx.arc(eyeXL, eyeY, eyeR, 0, Math.PI*2);
       ctx.fillStyle = '#1e293b'; ctx.fill();
-      ctx.beginPath();
-      ctx.arc(eyeXR, eyeY + eyeR*0.5, eyeR*1.1, Math.PI, 0, true);
-      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
-      break;
+      ctx.beginPath(); ctx.arc(eyeXR, eyeY + eyeR*0.5, eyeR*1.1, Math.PI, 0, true);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke(); break;
     case 'cool':
       ctx.fillStyle = '#1e293b';
-      ctx.beginPath();
-      ctx.roundRect(eyeXL - eyeR*1.5, eyeY - eyeR*0.7, eyeR*3, eyeR*1.4, eyeR*0.4);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.roundRect(eyeXR - eyeR*1.5, eyeY - eyeR*0.7, eyeR*3, eyeR*1.4, eyeR*0.4);
-      ctx.fill();
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(eyeXL - eyeR*0.1, eyeY - eyeR*0.7, unit*2, eyeR*1.4);
-      break;
+      ctx.beginPath(); ctx.roundRect(eyeXL - eyeR*1.5, eyeY - eyeR*0.7, eyeR*3, eyeR*1.4, eyeR*0.4); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(eyeXR - eyeR*1.5, eyeY - eyeR*0.7, eyeR*3, eyeR*1.4, eyeR*0.4); ctx.fill();
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(eyeXL - eyeR*0.1, eyeY - eyeR*0.7, unit*2, eyeR*1.4); break;
     case 'star':
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = `${eyeR*2.2}px serif`;
+        ctx.fillStyle = '#fbbf24'; ctx.font = `${eyeR*2.2}px serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('⭐', ex, eyeY);
       }); break;
     case 'heart':
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = `${eyeR*2.2}px serif`;
+        ctx.fillStyle = '#ef4444'; ctx.font = `${eyeR*2.2}px serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('❤️', ex, eyeY);
       }); break;
     case 'laser':
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.beginPath();
-        ctx.arc(ex, eyeY, eyeR, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(ex, eyeY, eyeR, 0, Math.PI*2);
         ctx.fillStyle = '#ef4444'; ctx.fill();
         ctx.shadowColor = '#ef4444'; ctx.shadowBlur = size*0.1;
-        ctx.beginPath();
-        ctx.arc(ex, eyeY, eyeR*0.4, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(ex, eyeY, eyeR*0.4, 0, Math.PI*2);
         ctx.fillStyle = '#fff'; ctx.fill();
         ctx.shadowBlur = 0;
       }); break;
     default:
       [eyeXL, eyeXR].forEach(ex => {
-        ctx.beginPath();
-        ctx.arc(ex, eyeY, eyeR, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(ex, eyeY, eyeR, 0, Math.PI*2);
         ctx.fillStyle = '#1e293b'; ctx.fill();
-        ctx.beginPath();
-        ctx.arc(ex + eyeR*0.3, eyeY - eyeR*0.3, eyeR*0.3, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(ex + eyeR*0.3, eyeY - eyeR*0.3, eyeR*0.3, 0, Math.PI*2);
         ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
       });
   }
   ctx.restore();
 
-  // ── BOCCA ────────────────────────────────
+  // ── BOCCA ──
   const mouthY = cy + r * 0.32;
   ctx.save();
   switch (state.mouth) {
     case 'grin':
-      ctx.beginPath();
-      ctx.arc(cx, mouthY - r*0.08, r*0.38, 0.15, Math.PI - 0.15);
+      ctx.beginPath(); ctx.arc(cx, mouthY - r*0.08, r*0.38, 0.15, Math.PI - 0.15);
       ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx, mouthY - r*0.08, r*0.38, 0.15, Math.PI - 0.15);
+      ctx.beginPath(); ctx.arc(cx, mouthY - r*0.08, r*0.38, 0.15, Math.PI - 0.15);
       ctx.lineTo(cx - r*0.37, mouthY - r*0.08);
-      ctx.fillStyle = '#fca5a5'; ctx.fill();
-      break;
+      ctx.fillStyle = '#fca5a5'; ctx.fill(); break;
     case 'open':
-      ctx.beginPath();
-      ctx.ellipse(cx, mouthY, r*0.22, r*0.15, 0, 0, Math.PI*2);
-      ctx.fillStyle = '#1e293b'; ctx.fill();
-      break;
+      ctx.beginPath(); ctx.ellipse(cx, mouthY, r*0.22, r*0.15, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#1e293b'; ctx.fill(); break;
     case 'smirk':
       ctx.beginPath();
       ctx.moveTo(cx - r*0.2, mouthY);
       ctx.quadraticCurveTo(cx + r*0.1, mouthY - r*0.1, cx + r*0.3, mouthY - r*0.05);
-      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
-      break;
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke(); break;
     case 'tongue':
-      ctx.beginPath();
-      ctx.arc(cx, mouthY - r*0.05, r*0.3, 0, Math.PI);
+      ctx.beginPath(); ctx.arc(cx, mouthY - r*0.05, r*0.3, 0, Math.PI);
       ctx.fillStyle = '#1e293b'; ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(cx, mouthY + r*0.12, r*0.16, r*0.13, 0, 0, Math.PI*2);
-      ctx.fillStyle = '#f87171'; ctx.fill();
-      break;
+      ctx.beginPath(); ctx.ellipse(cx, mouthY + r*0.12, r*0.16, r*0.13, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#f87171'; ctx.fill(); break;
     case 'sad':
-      ctx.beginPath();
-      ctx.arc(cx, mouthY + r*0.25, r*0.32, Math.PI + 0.3, -0.3);
-      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
-      break;
+      ctx.beginPath(); ctx.arc(cx, mouthY + r*0.25, r*0.32, Math.PI + 0.3, -0.3);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke(); break;
     case 'rainbow':
       ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6'].forEach((c,i) => {
-        ctx.beginPath();
-        ctx.arc(cx, mouthY - r*0.05, r*(0.28 + i*0.04), 0.2, Math.PI - 0.2);
+        ctx.beginPath(); ctx.arc(cx, mouthY - r*0.05, r*(0.28 + i*0.04), 0.2, Math.PI - 0.2);
         ctx.strokeStyle = c; ctx.lineWidth = unit*2; ctx.stroke();
       }); break;
     case 'fire':
-      ctx.font = `${r*0.55}px serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('🔥', cx, mouthY + r*0.05);
-      break;
+      ctx.font = `${r*0.55}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🔥', cx, mouthY + r*0.05); break;
     default:
-      ctx.beginPath();
-      ctx.arc(cx, mouthY - r*0.05, r*0.32, 0.2, Math.PI - 0.2);
+      ctx.beginPath(); ctx.arc(cx, mouthY - r*0.05, r*0.32, 0.2, Math.PI - 0.2);
       ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
   }
   ctx.restore();
@@ -570,8 +495,7 @@ function drawMii(state, canvasId, size = 120) {
 // ══════════════════════════════════════════
 function pickMii(cat, val, el) {
   miiState[cat] = val;
-  el.closest('.mii-opts')?.querySelectorAll('.mii-opt')
-    .forEach(o => o.classList.remove('sel'));
+  el.closest('.mii-opts')?.querySelectorAll('.mii-opt').forEach(o => o.classList.remove('sel'));
   el.classList.add('sel');
   drawMii(miiState, 'miiCanvas', 120);
   drawMii(miiState, 'sbAvatarCanvas', 36);
@@ -580,8 +504,7 @@ window.pickMii = pickMii;
 
 function pickColor(val, el) {
   miiState.color = val;
-  el.closest('.mii-opts')?.querySelectorAll('.mii-opt')
-    .forEach(o => o.classList.remove('sel'));
+  el.closest('.mii-opts')?.querySelectorAll('.mii-opt').forEach(o => o.classList.remove('sel'));
   el.classList.add('sel');
   drawMii(miiState, 'miiCanvas', 120);
   drawMii(miiState, 'sbAvatarCanvas', 36);
@@ -590,13 +513,13 @@ window.pickColor = pickColor;
 
 function pickSkin(val, el) {
   miiState.skin = val;
-  el.closest('.mii-opts')?.querySelectorAll('.mii-opt')
-    .forEach(o => o.classList.remove('sel'));
+  el.closest('.mii-opts')?.querySelectorAll('.mii-opt').forEach(o => o.classList.remove('sel'));
   el.classList.add('sel');
   drawMii(miiState, 'miiCanvas', 120);
   drawMii(miiState, 'sbAvatarCanvas', 36);
 }
 window.pickSkin = pickSkin;
+
 // ══════════════════════════════════════════
 //   DASHBOARD
 // ══════════════════════════════════════════
@@ -605,11 +528,11 @@ async function loadDashboard() {
   if (stats.error) return;
 
   const els = {
-    co2Total:  document.getElementById('co2Total'),
-    co2Week:   document.getElementById('co2Week'),
-    co2Month:  document.getElementById('co2Month'),
-    totalActs: document.getElementById('totalActs'),
-    userPoints:document.getElementById('userPoints'),
+    co2Total:   document.getElementById('co2Total'),
+    co2Week:    document.getElementById('co2Week'),
+    co2Month:   document.getElementById('co2Month'),
+    totalActs:  document.getElementById('totalActs'),
+    userPoints: document.getElementById('userPoints'),
   };
 
   if (els.co2Total)  els.co2Total.textContent  = parseFloat(stats.co2_saved        || 0).toFixed(1);
@@ -618,11 +541,9 @@ async function loadDashboard() {
   if (els.totalActs) els.totalActs.textContent = stats.total_activities             || 0;
   if (els.userPoints)els.userPoints.textContent= stats.points                       || 0;
 
-  // grafico annuale
   const yearly = await api('/api/yearly');
   if (!yearly.error) renderYearlyChart(yearly);
 
-  // attività recenti
   const acts = await api('/api/activities');
   const el   = document.getElementById('recentActs');
   if (el && !acts.error) {
@@ -646,7 +567,6 @@ async function loadDashboard() {
     }
   }
 
-  // badges preview
   const badges = await api('/api/badges');
   const bEl = document.getElementById('dashBadges');
   if (bEl && !badges.error) {
@@ -670,66 +590,49 @@ function renderYearlyChart(data) {
   canvas.width  = canvas.offsetWidth  || 600;
   canvas.height = canvas.offsetHeight || 200;
 
-  const w = canvas.width;
-  const h = canvas.height;
+  const w = canvas.width, h = canvas.height;
   const pad = { t:20, r:20, b:40, l:50 };
 
   ctx.clearRect(0, 0, w, h);
 
   if (!data.length) {
     ctx.fillStyle = '#94a3b8';
-    ctx.font      = '14px Inter, sans-serif';
+    ctx.font = '14px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Nessun dato disponibile', w/2, h/2);
     return;
   }
 
-  const maxCo2  = Math.max(...data.map(d => parseFloat(d.co2)), 1);
-  const chartW  = w - pad.l - pad.r;
-  const chartH  = h - pad.t - pad.b;
-  const barW    = (chartW / data.length) * 0.6;
-  const barGap  = chartW / data.length;
+  const maxCo2 = Math.max(...data.map(d => parseFloat(d.co2)), 1);
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  const barW   = (chartW / data.length) * 0.6;
+  const barGap = chartW / data.length;
 
-  // griglia
   ctx.strokeStyle = 'rgba(148,163,184,0.2)';
-  ctx.lineWidth   = 1;
+  ctx.lineWidth = 1;
   [0, 0.25, 0.5, 0.75, 1].forEach(p => {
     const y = pad.t + chartH * (1 - p);
-    ctx.beginPath();
-    ctx.moveTo(pad.l, y);
-    ctx.lineTo(w - pad.r, y);
-    ctx.stroke();
-    ctx.fillStyle  = '#94a3b8';
-    ctx.font       = '10px Inter, sans-serif';
-    ctx.textAlign  = 'right';
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    ctx.fillStyle = '#94a3b8'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'right';
     ctx.fillText((maxCo2 * p).toFixed(1), pad.l - 5, y + 4);
   });
 
-  // barre
   data.forEach((d, i) => {
-    const x      = pad.l + i * barGap + (barGap - barW) / 2;
-    const barH   = (parseFloat(d.co2) / maxCo2) * chartH;
-    const y      = pad.t + chartH - barH;
+    const x    = pad.l + i * barGap + (barGap - barW) / 2;
+    const barH = (parseFloat(d.co2) / maxCo2) * chartH;
+    const y    = pad.t + chartH - barH;
 
     const grad = ctx.createLinearGradient(0, y, 0, y + barH);
-    grad.addColorStop(0, '#22c55e');
-    grad.addColorStop(1, '#16a34a');
-
+    grad.addColorStop(0, '#22c55e'); grad.addColorStop(1, '#16a34a');
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.roundRect(x, y, barW, barH, 4);
-    ctx.fill();
+    ctx.beginPath(); ctx.roundRect(x, y, barW, barH, 4); ctx.fill();
 
-    // label mese
-    ctx.fillStyle  = '#94a3b8';
-    ctx.font       = '10px Inter, sans-serif';
-    ctx.textAlign  = 'center';
+    ctx.fillStyle = '#94a3b8'; ctx.font = '10px Inter, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(d.month, x + barW/2, h - pad.b + 16);
 
-    // valore
     if (parseFloat(d.co2) > 0) {
-      ctx.fillStyle = '#22c55e';
-      ctx.font      = '9px Inter, sans-serif';
+      ctx.fillStyle = '#22c55e'; ctx.font = '9px Inter, sans-serif';
       ctx.fillText(parseFloat(d.co2).toFixed(1), x + barW/2, y - 4);
     }
   });
@@ -790,7 +693,6 @@ async function logActivity(e) {
 
   showN(`✅ +${d.co2_saved} kg CO₂ salvata! +${d.points} punti 🎉`, 'success');
 
-  // reset form
   document.getElementById('actForm')?.reset();
   document.getElementById('fromAddr').value = '';
   document.getElementById('toAddr').value   = '';
@@ -819,13 +721,12 @@ function onTypeChange(val) {
 window.onTypeChange = onTypeChange;
 
 // ══════════════════════════════════════════
-//   MAPPA (OpenStreetMap + Leaflet)
+//   MAPPA
 // ══════════════════════════════════════════
 function initMap() {
   if (mapInitialized) return;
   if (!window.L) return;
   mapInitialized = true;
-
   mapInstance = L.map('map').setView([45.4642, 9.1900], 10);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap'
@@ -838,9 +739,7 @@ async function searchRoute() {
   if (!from || !to) return showN('❌ Inserisci partenza e arrivo', 'error');
 
   const geocode = async q => {
-    const r = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`
-    );
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`);
     const d = await r.json();
     return d[0] ? [parseFloat(d[0].lat), parseFloat(d[0].lon)] : null;
   };
@@ -855,13 +754,10 @@ async function searchRoute() {
   routeLayer = L.polyline([a, b], { color:'#22c55e', weight:4 }).addTo(mapInstance);
   mapInstance.fitBounds(routeLayer.getBounds(), { padding:[30,30] });
 
-  // calcola distanza
   const R    = 6371;
   const dLat = (b[0]-a[0]) * Math.PI/180;
   const dLon = (b[1]-a[1]) * Math.PI/180;
-  const aa   = Math.sin(dLat/2)**2 +
-               Math.cos(a[0]*Math.PI/180) * Math.cos(b[0]*Math.PI/180) *
-               Math.sin(dLon/2)**2;
+  const aa   = Math.sin(dLat/2)**2 + Math.cos(a[0]*Math.PI/180) * Math.cos(b[0]*Math.PI/180) * Math.sin(dLon/2)**2;
   const km   = R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa));
 
   const kmEl = document.getElementById('actKm');
@@ -871,20 +767,14 @@ async function searchRoute() {
 window.searchRoute = searchRoute;
 
 async function getSuggestions(fieldId, query) {
-  if (query.length < 3) {
-    document.getElementById(fieldId + 'Sugg').innerHTML = '';
-    return;
-  }
+  if (query.length < 3) { document.getElementById(fieldId + 'Sugg').innerHTML = ''; return; }
   try {
-    const r = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
-    );
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`);
     const d = await r.json();
     const el = document.getElementById(fieldId + 'Sugg');
     if (!el) return;
     el.innerHTML = d.map(p => `
-      <div class="addr-item"
-        onclick="selectAddr('${fieldId}','${p.display_name.replace(/'/g,"\\'")}')">
+      <div class="addr-item" onclick="selectAddr('${fieldId}','${p.display_name.replace(/'/g,"\\'")}')">
         📍 ${p.display_name}
       </div>`).join('');
   } catch {}
@@ -903,23 +793,17 @@ window.selectAddr = selectAddr;
 //   SHOP
 // ══════════════════════════════════════════
 async function loadShop() {
-  const [items, profile] = await Promise.all([
-    api('/api/shop'),
-    api('/api/profile')
-  ]);
+  const [items, profile] = await Promise.all([api('/api/shop'), api('/api/profile')]);
   if (items.error || profile.error) return;
 
   allShopItems = items;
   ownedItems   = profile.owned_items || [];
 
-  const cats   = [...new Set(items.map(i => i.category))];
-  const el     = document.getElementById('shopGrid');
+  const cats = [...new Set(items.map(i => i.category))];
+  const el   = document.getElementById('shopGrid');
   if (!el) return;
 
-  const catLabels = {
-    hair:'💇 Capelli', eyes:'👀 Occhi',
-    mouth:'👄 Bocca', color:'🎨 Colore', skin:'👤 Pelle'
-  };
+  const catLabels = { hair:'💇 Capelli', eyes:'👀 Occhi', mouth:'👄 Bocca', color:'🎨 Colore', skin:'👤 Pelle' };
 
   el.innerHTML = cats.map(cat => {
     const catItems = items.filter(i => i.category === cat);
@@ -930,15 +814,11 @@ async function loadShop() {
           ${catItems.map(item => {
             const owned = ownedItems.includes(item.id);
             return `
-              <div class="shop-item ${owned?'owned':''} ${item.is_rare?'rare':''}"
-                onclick="openShopPreview(${item.id})">
+              <div class="shop-item ${owned?'owned':''} ${item.is_rare?'rare':''}" onclick="openShopPreview(${item.id})">
                 <div class="shop-item-emoji">${item.emoji}</div>
                 <div class="shop-item-name">${item.name}</div>
                 <div class="shop-item-cost">
-                  ${owned
-                    ? '<span class="owned-badge">✅ Posseduto</span>'
-                    : `<span class="pts-badge">⭐ ${item.cost}</span>`
-                  }
+                  ${owned ? '<span class="owned-badge">✅ Posseduto</span>' : `<span class="pts-badge">⭐ ${item.cost}</span>`}
                 </div>
                 ${item.is_rare ? '<div class="rare-badge">✨ Raro</div>' : ''}
               </div>`;
@@ -949,13 +829,11 @@ async function loadShop() {
 }
 
 function openShopPreview(itemId) {
-  const item = allShopItems.find(i => i.id === itemId);
+  const item  = allShopItems.find(i => i.id === itemId);
   if (!item) return;
-
   const owned = ownedItems.includes(item.id);
   const el    = document.getElementById('shopPreview');
   if (!el) return;
-
   el.style.display = 'flex';
   el.innerHTML = `
     <div class="shop-preview-box">
@@ -968,10 +846,7 @@ function openShopPreview(itemId) {
       <div class="preview-cost">⭐ ${item.cost} punti</div>
       ${owned
         ? '<div class="preview-owned">✅ Già posseduto</div>'
-        : `<button class="btn-buy" onclick="buyItem(${item.id})">
-             🛒 Acquista
-           </button>`
-      }
+        : `<button class="btn-buy" onclick="buyItem(${item.id})">🛒 Acquista</button>`}
     </div>`;
 }
 window.openShopPreview = openShopPreview;
@@ -985,19 +860,13 @@ window.closeShopPreview = closeShopPreview;
 async function buyItem(itemId) {
   const item = allShopItems.find(i => i.id === itemId);
   if (!item) return;
-
-  showConfirm(
-    'Acquisto',
-    `Acquistare "${item.name}" per ${item.cost} punti?`,
-    async () => {
-      const d = await api('/api/shop/buy', 'POST', { item_id: itemId });
-      if (d.error) return showN('❌ ' + d.error, 'error');
-      showN('🛍️ Acquistato! ' + item.name, 'success');
-      closeShopPreview();
-      await loadShop();
-    },
-    '🛒'
-  );
+  showConfirm('Acquisto', `Acquistare "${item.name}" per ${item.cost} punti?`, async () => {
+    const d = await api('/api/shop/buy', 'POST', { item_id: itemId });
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🛍️ Acquistato! ' + item.name, 'success');
+    closeShopPreview();
+    await loadShop();
+  }, '🛒');
 }
 window.buyItem = buyItem;
 
@@ -1021,15 +890,13 @@ async function loadChallenges() {
       <div class="challenge-item ${expired?'expired':''}">
         <div class="ch-header">
           <div class="ch-title">${c.title}</div>
-          ${c.is_public ? '<span class="pill pill-green">🌍 Pubblica</span>'
-                        : '<span class="pill pill-gray">🔒 Privata</span>'}
+          ${c.is_public ? '<span class="pill pill-green">🌍 Pubblica</span>' : '<span class="pill pill-gray">🔒 Privata</span>'}
         </div>
         ${c.description ? `<div class="ch-desc">${c.description}</div>` : ''}
         <div class="ch-meta">
           ${c.co2_target>0 ? `🎯 Target: <b>${c.co2_target} kg CO₂</b> · ` : ''}
           ${c.points_reward>0 ? `⭐ Premio: <b>${c.points_reward} pts</b> · ` : ''}
-          📅 Scadenza: <b>${end}</b> · 
-          👤 ${c.creator_name||'Anonimo'}
+          📅 Scadenza: <b>${end}</b> · 👤 ${c.creator_name||'Anonimo'}
         </div>
       </div>`;
   }).join('');
@@ -1046,11 +913,8 @@ async function createChallenge(e) {
 
   if (!title) return showN('❌ Titolo obbligatorio', 'error');
 
-  const d = await api('/api/challenges', 'POST', {
-    title, description, co2_target, points_reward, end_date, is_public
-  });
+  const d = await api('/api/challenges', 'POST', { title, description, co2_target, points_reward, end_date, is_public });
   if (d.error) return showN('❌ ' + d.error, 'error');
-
   showN('🏆 Sfida creata!', 'success');
   document.getElementById('challengeForm')?.reset();
   await loadChallenges();
@@ -1074,8 +938,7 @@ async function loadLeaderboard() {
   el.innerHTML  = data.map((u, i) => `
     <div class="lb-item ${i < 3 ? 'top' : ''}">
       <div class="lb-rank">${medals[i] || (i+1)}</div>
-      <canvas id="lbav_${u.id}" width="40" height="40"
-        style="border-radius:10px;flex-shrink:0"></canvas>
+      <canvas id="lbav_${u.id}" width="40" height="40" style="border-radius:10px;flex-shrink:0"></canvas>
       <div class="lb-info">
         <div class="lb-name">${u.name}</div>
         <div class="lb-user">@${u.username||''}</div>
@@ -1088,21 +951,17 @@ async function loadLeaderboard() {
 
   data.forEach(u => drawMii(
     { color: u.avatar_color||'#16a34a', skin: u.avatar_skin||'#fde68a',
-      eyes:  u.avatar_eyes||'normal',   mouth: u.avatar_mouth||'smile',
-      hair:  u.avatar_hair||'none' },
+      eyes:  u.avatar_eyes||'normal',   mouth: u.avatar_mouth||'smile', hair: u.avatar_hair||'none' },
     `lbav_${u.id}`, 40
   ));
 }
+
 // ══════════════════════════════════════════
 //   SOCIAL
 // ══════════════════════════════════════════
 async function loadSocial() {
-  const [posts, users] = await Promise.all([
-    api('/api/social/posts'),
-    api('/api/social/users')
-  ]);
+  const [posts, users] = await Promise.all([api('/api/social/posts'), api('/api/social/users')]);
 
-  // ── Feed ──────────────────────────────
   const feed = document.getElementById('socialFeed');
   if (feed && !posts.error) {
     if (!posts.length) {
@@ -1111,49 +970,36 @@ async function loadSocial() {
       feed.innerHTML = posts.map(p => `
         <div class="post-card" id="post_${p.id}">
           <div class="post-header">
-            <canvas id="pav_${p.id}" width="40" height="40"
-              style="border-radius:10px;flex-shrink:0"></canvas>
+            <canvas id="pav_${p.id}" width="40" height="40" style="border-radius:10px;flex-shrink:0"></canvas>
             <div class="post-meta">
               <div class="post-author">${p.author_name}</div>
-              <div class="post-time">@${p.author_username||''} · 
-                ${timeAgo(new Date(p.created_at))}
-              </div>
+              <div class="post-time">@${p.author_username||''} · ${timeAgo(new Date(p.created_at))}</div>
             </div>
             ${p.author_id === myProfile?.id
-              ? `<button class="btn-icon danger-btn ml-auto"
-                   onclick="deletePost(${p.id})">🗑️</button>`
-              : ''
-            }
+              ? `<button class="btn-icon danger-btn ml-auto" onclick="deletePost(${p.id})">🗑️</button>`
+              : ''}
           </div>
           <div class="post-content">${escHtml(p.content)}</div>
-          ${p.image_url
-            ? `<img src="${p.image_url}" class="post-img" alt="post"
-                 onerror="this.style.display='none'">`
-            : ''
-          }
+          ${p.image_url ? `<img src="${p.image_url}" class="post-img" alt="post" onerror="this.style.display='none'">` : ''}
           <div class="post-actions">
-            <button class="btn-like ${p.liked_by_me?'liked':''}"
-              onclick="toggleLike(${p.id})">
+            <button class="btn-like ${p.liked_by_me?'liked':''}" onclick="toggleLike(${p.id})">
               ${p.liked_by_me ? '❤️' : '🤍'} ${p.likes_count||0}
             </button>
-            <button class="btn-comment"
-              onclick="toggleComments(${p.id})">
+            <button class="btn-comment" onclick="toggleComments(${p.id})">
               💬 ${p.comments_count||0}
             </button>
           </div>
-          <div class="comments-section" id="comm_${p.id}" style="display:none"></div>
+          <div class="comments-section" id="comm${p.id}" style="display:none"></div>
         </div>`).join('');
 
       posts.forEach(p => drawMii(
         { color: p.avatar_color||'#16a34a', skin: p.avatar_skin||'#fde68a',
-          eyes:  p.avatar_eyes||'normal',   mouth: p.avatar_mouth||'smile',
-          hair:  p.avatar_hair||'none' },
+          eyes:  p.avatar_eyes||'normal',   mouth: p.avatar_mouth||'smile', hair: p.avatar_hair||'none' },
         `pav_${p.id}`, 40
       ));
     }
   }
 
-  // ── Utenti da seguire ─────────────────
   const uList = document.getElementById('userList');
   if (uList && !users.error) {
     if (!users.length) {
@@ -1161,22 +1007,19 @@ async function loadSocial() {
     } else {
       uList.innerHTML = users.map(u => `
         <div class="user-item">
-          <canvas id="uav_${u.id}" width="32" height="32"
-            style="border-radius:8px;flex-shrink:0"></canvas>
+          <canvas id="uav_${u.id}" width="32" height="32" style="border-radius:8px;flex-shrink:0"></canvas>
           <div class="user-info">
             <div class="user-name">${u.name}</div>
-            <div class="user-un">@${u.username||''}</div>
+            <div class="user-un">@${u.username}</div>
           </div>
-          <button class="btn-follow ${u.following?'following':''}"
-            onclick="toggleFollow(${u.id},this)">
+          <button class="btn-follow ${u.following?'following':''}" onclick="toggleFollow(${u.id},this)">
             ${u.following ? '✅' : '➕'}
           </button>
         </div>`).join('');
 
       users.forEach(u => drawMii(
         { color: u.avatar_color||'#16a34a', skin: u.avatar_skin||'#fde68a',
-          eyes:  u.avatar_eyes||'normal',   mouth: u.avatar_mouth||'smile',
-          hair:  u.avatar_hair||'none' },
+          eyes:  u.avatar_eyes||'normal',   mouth: u.avatar_mouth||'smile', hair: u.avatar_hair||'none' },
         `uav_${u.id}`, 32
       ));
     }
@@ -1184,24 +1027,21 @@ async function loadSocial() {
 }
 
 function escHtml(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function timeAgo(date) {
   const diff = Math.floor((Date.now() - date) / 1000);
-  if (diff < 60)   return diff + 's fa';
-  if (diff < 3600) return Math.floor(diff/60) + 'min fa';
-  if (diff < 86400)return Math.floor(diff/3600) + 'h fa';
-  return Math.floor(diff/86400) + 'gg fa';
+  if (diff < 60)    return diff + 's fa';
+  if (diff < 3600)  return Math.floor(diff/60) + ' min fa';
+  if (diff < 86400) return Math.floor(diff/3600) + ' h fa';
+  return Math.floor(diff/86400) + ' gg fa';
 }
 
 async function createPost(e) {
   e.preventDefault();
   const content  = document.getElementById('postContent')?.value?.trim();
-  const imageUrl = document.getElementById('postImage')?.value?.trim() || '';
-
+  const imageUrl = document.getElementById('postImage')?.value?.trim();
   if (!content) return showN('❌ Scrivi qualcosa!', 'error');
 
   const btn = document.querySelector('#postForm button[type=submit]');
@@ -1210,10 +1050,9 @@ async function createPost(e) {
   const d = await api('/api/social/posts', 'POST', { content, image_url: imageUrl });
 
   if (btn) { btn.disabled = false; btn.innerHTML = '📤 Pubblica'; }
-
   if (d.error) return showN('❌ ' + d.error, 'error');
 
-  showN('📤 Post pubblicato!', 'success');
+  showN('✅ Post pubblicato!', 'success');
   document.getElementById('postContent').value = '';
   document.getElementById('postImage').value   = '';
   await loadSocial();
@@ -1226,14 +1065,13 @@ async function deletePost(postId) {
     if (d.error) return showN('❌ ' + d.error, 'error');
     showN('🗑️ Post eliminato', 'success');
     await loadSocial();
-  }, '🗑️');
+  });
 }
 window.deletePost = deletePost;
 
 async function toggleLike(postId) {
   const d = await api(`/api/social/posts/${postId}/like`, 'POST');
   if (d.error) return showN('❌ ' + d.error, 'error');
-
   const btn = document.querySelector(`#post_${postId} .btn-like`);
   if (btn) {
     btn.classList.toggle('liked', d.liked);
@@ -1247,36 +1085,30 @@ async function toggleFollow(userId, btn) {
   if (d.error) return showN('❌ ' + d.error, 'error');
   btn.classList.toggle('following', d.following);
   btn.textContent = d.following ? '✅' : '➕';
-  showN(d.following ? '✅ Seguito!' : '➖ Smesso di seguire', 'success');
+  showN(d.following ? '👥 Seguito!' : '👋 Smesso di seguire', 'success');
 }
 window.toggleFollow = toggleFollow;
 
 async function toggleComments(postId) {
-  const el = document.getElementById(`comm_${postId}`);
+  const el = document.getElementById('comm' + postId);
   if (!el) return;
-
   if (el.style.display === 'none') {
     el.style.display = 'block';
     const d = await api(`/api/social/posts/${postId}/comments`);
     if (d.error) return;
-
-    el.innerHTML = `
-      ${d.map(c => `
-        <div class="comment-item">
-          <span class="comment-author">${c.author_name}:</span>
-          <span class="comment-text">${escHtml(c.content)}</span>
-          <span class="comment-time">${timeAgo(new Date(c.created_at))}</span>
-          ${c.author_id === myProfile?.id
-            ? `<button class="btn-icon danger-btn"
-                 onclick="deleteComment(${postId},${c.id})">✕</button>`
-            : ''
-          }
-        </div>`).join('')}
+    el.innerHTML = d.map(c => `
+      <div class="comment-item">
+        <span class="comment-author">${c.author_name}</span>
+        <span class="comment-text">${escHtml(c.content)}</span>
+        <span class="comment-time">${timeAgo(new Date(c.created_at))}</span>
+        ${c.author_id === myProfile?.id
+          ? `<button class="btn-icon danger-btn" onclick="deleteComment(${postId},${c.id})">🗑️</button>`
+          : ''}
+      </div>`).join('') + `
       <div class="comment-form">
-        <input id="ci_${postId}" class="input-sm"
-          placeholder="Aggiungi un commento..."
-          onkeydown="if(event.key==='Enter'){addComment(${postId});event.preventDefault();}">
-        <button class="btn-sm" onclick="addComment(${postId})">💬</button>
+        <input id="ci${postId}" class="input-sm" placeholder="Aggiungi un commento..."
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addComment(${postId})}">
+        <button class="btn-sm" onclick="addComment(${postId})">📤</button>
       </div>`;
   } else {
     el.style.display = 'none';
@@ -1285,20 +1117,16 @@ async function toggleComments(postId) {
 window.toggleComments = toggleComments;
 
 async function addComment(postId) {
-  const el      = document.getElementById(`ci_${postId}`);
+  const el      = document.getElementById('ci' + postId);
   const content = el?.value?.trim();
   if (!content) return;
-
   const d = await api(`/api/social/posts/${postId}/comments`, 'POST', { content });
   if (d.error) return showN('❌ ' + d.error, 'error');
-
   el.value = '';
-  await toggleComments(postId); // chiude
-  await toggleComments(postId); // riapre aggiornato
-
-  // aggiorna contatore
+  await toggleComments(postId);
+  await toggleComments(postId);
   const cb = document.querySelector(`#post_${postId} .btn-comment`);
-  if (cb) cb.textContent = '💬 ' + (d.comments_count || '');
+  if (cb) cb.textContent = '💬 ' + d.comments_count;
 }
 window.addComment = addComment;
 
@@ -1315,52 +1143,53 @@ window.deleteComment = deleteComment;
 //   PROFILE
 // ══════════════════════════════════════════
 async function loadProfile() {
-  const [profile, badges] = await Promise.all([
-    api('/api/profile'),
-    api('/api/badges')
-  ]);
+  const [profile, badges] = await Promise.all([api('/api/profile'), api('/api/badges')]);
   if (profile.error) return;
 
   myProfile = profile;
   syncMiiState(profile);
 
-  // stats
   const setEl = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-  setEl('profName',   profile.name     || '');
-  setEl('profUser',   '@' + (profile.username || ''));
-  setEl('profEmail',  profile.email    || '');
-  setEl('profPoints', profile.points   || 0);
+  setEl('profName',   profile.name);
+  setEl('profUser',   profile.username);
+  setEl('profEmail',  profile.email);
+  setEl('profPoints', profile.points || 0);
   setEl('profCo2',    parseFloat(profile.co2_saved || 0).toFixed(1));
   setEl('profActs',   profile.total_activities || 0);
   setEl('profLevel',  getLevel(profile.points || 0));
 
   // XP bar
-  const pts   = profile.points || 0;
-  const thres = [0,100,300,700,1500,3000,6000,10000];
-  const lvIdx = thres.findIndex(t => pts < t) - 1;
-  const curr  = thres[Math.max(lvIdx, 0)];
-  const next  = thres[Math.min(lvIdx + 1, thres.length - 1)];
-  const pct   = next > curr ? Math.round(((pts - curr) / (next - curr)) * 100) : 100;
-  const xpBar = document.getElementById('xpBar');
-  const xpTxt = document.getElementById('xpText');
+  const pts    = profile.points || 0;
+  const thres  = [0,100,300,700,1500,3000,6000,10000];
+  const lvIdx  = thres.findIndex(t => pts < t) - 1;
+  const curr   = thres[Math.max(lvIdx, 0)];
+  const next   = thres[Math.min(lvIdx + 1, thres.length - 1)];
+  const pct    = next !== curr ? Math.round((pts - curr) / (next - curr) * 100) : 100;
+  const xpBar  = document.getElementById('xpBar');
+  const xpTxt  = document.getElementById('xpText');
   if (xpBar) xpBar.style.width = pct + '%';
   if (xpTxt) xpTxt.textContent = `${pts} / ${next} XP`;
+
+  // prefill edit form
+  const editName = document.getElementById('editName');
+  const editUser = document.getElementById('editUsername');
+  const editBio  = document.getElementById('editBio');
+  if (editName) editName.value = profile.name     || '';
+  if (editUser) editUser.value = profile.username || '';
+  if (editBio)  editBio.value  = profile.bio      || '';
 
   // avatar builder
   drawMii(miiState, 'miiCanvas', 120);
   drawMii(miiState, 'sbAvatarCanvas', 36);
 
-  // mark owned
+  // mark owned / selected
   const owned = profile.owned_items || [];
   document.querySelectorAll('.mii-opt').forEach(o => {
     o.classList.remove('sel', 'locked');
-    const cat = o.dataset.cat;
-    const val = o.dataset.val;
-    const iid = parseInt(o.dataset.itemId);
-
-    if (iid && !owned.includes(iid)) {
-      o.classList.add('locked');
-    }
+    const cat  = o.dataset.cat;
+    const val  = o.dataset.val;
+    const iid  = parseInt(o.dataset.itemId);
+    if (iid && !owned.includes(iid)) o.classList.add('locked');
     if (miiState[cat] === val) o.classList.add('sel');
   });
 
@@ -1368,8 +1197,7 @@ async function loadProfile() {
   const bEl = document.getElementById('badgeList');
   if (bEl && !badges.error) {
     bEl.innerHTML = badges.map(b => `
-      <div class="badge-item ${b.unlocked ? 'unlocked' : 'locked'}"
-        title="${b.name}: ${b.desc}">
+      <div class="badge-item ${b.unlocked ? 'unlocked' : 'locked'}" title="${b.name}: ${b.desc}">
         <div class="badge-icon">${b.icon}</div>
         <div class="badge-name">${b.name}</div>
         ${!b.unlocked ? '<div class="badge-lock">🔒</div>' : ''}
@@ -1378,13 +1206,13 @@ async function loadProfile() {
 }
 
 function getLevel(pts) {
-  if (pts < 100)  return '🌱 Seme';
-  if (pts < 300)  return '🌿 Germoglio';
-  if (pts < 700)  return '🌳 Albero';
-  if (pts < 1500) return '🌲 Foresta';
-  if (pts < 3000) return '⚡ Fulmine Verde';
-  if (pts < 6000) return '🔥 Fiamma Eco';
-  if (pts < 10000)return '💎 Diamante Verde';
+  if (pts < 100)   return '🌱 Seme';
+  if (pts < 300)   return '🌿 Germoglio';
+  if (pts < 700)   return '🌳 Albero';
+  if (pts < 1500)  return '🌲 Foresta';
+  if (pts < 3000)  return '⚡ Fulmine Verde';
+  if (pts < 6000)  return '🔥 Fiamma Eco';
+  if (pts < 10000) return '💎 Diamante Verde';
   return '👑 Eco Leggenda';
 }
 window.getLevel = getLevel;
@@ -1394,15 +1222,11 @@ async function saveAvatar() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
 
   const d = await api('/api/profile/avatar', 'PUT', {
-    color: miiState.color,
-    skin:  miiState.skin,
-    eyes:  miiState.eyes,
-    mouth: miiState.mouth,
-    hair:  miiState.hair
+    color: miiState.color, skin:  miiState.skin,
+    eyes:  miiState.eyes,  mouth: miiState.mouth, hair: miiState.hair
   });
 
   if (btn) { btn.disabled = false; btn.innerHTML = '💾 Salva Avatar'; }
-
   if (d.error) return showN('❌ ' + d.error, 'error');
   showN('✅ Avatar salvato!', 'success');
   updateSidebar({ ...myProfile, ...miiState });
@@ -1413,13 +1237,12 @@ async function saveProfile(e) {
   e.preventDefault();
   const name     = document.getElementById('editName')?.value?.trim();
   const username = document.getElementById('editUsername')?.value?.trim();
-  const bio      = document.getElementById('editBio')?.value?.trim() || '';
+  const bio      = document.getElementById('editBio')?.value?.trim();
 
   if (!name || !username) return showN('❌ Nome e username obbligatori', 'error');
 
   const d = await api('/api/profile', 'PUT', { name, username, bio });
   if (d.error) return showN('❌ ' + d.error, 'error');
-
   showN('✅ Profilo aggiornato!', 'success');
   myProfile = { ...myProfile, name, username, bio };
   updateSidebar(myProfile);
@@ -1429,19 +1252,16 @@ window.saveProfile = saveProfile;
 
 async function changePassword(e) {
   e.preventDefault();
-  const current  = document.getElementById('pwdCurrent')?.value;
-  const newPwd   = document.getElementById('pwdNew')?.value;
-  const confirm  = document.getElementById('pwdConfirm')?.value;
+  const current = document.getElementById('pwdCurrent')?.value;
+  const newPwd  = document.getElementById('pwdNew')?.value;
+  const confirm = document.getElementById('pwdConfirm')?.value;
 
   if (newPwd !== confirm) return showN('❌ Le password non coincidono', 'error');
   if (!checkPwdStrength(newPwd)) return showN('❌ Password troppo debole', 'error');
 
-  const d = await api('/api/profile/password', 'PUT', {
-    current_password: current,
-    new_password:     newPwd
-  });
+  const d = await api('/api/profile/password', 'PUT', { current_password: current, new_password: newPwd });
   if (d.error) return showN('❌ ' + d.error, 'error');
-  showN('🔐 Password aggiornata!', 'success');
+  showN('✅ Password aggiornata!', 'success');
   document.getElementById('pwdForm')?.reset();
 }
 window.changePassword = changePassword;
@@ -1450,11 +1270,11 @@ window.changePassword = changePassword;
 //   NOTIFICHE
 // ══════════════════════════════════════════
 async function loadNotifCount() {
-  const d = await api('/api/notifications/count');
+  const d  = await api('/api/notifications/count');
   const el = document.getElementById('notifBadge');
   if (!el || d.error) return;
-  el.textContent = d.count || '';
-  el.style.display = d.count > 0 ? 'flex' : 'none';
+  el.textContent    = d.count;
+  el.style.display  = d.count > 0 ? 'flex' : 'none';
 }
 
 async function loadNotifiche() {
@@ -1468,8 +1288,8 @@ async function loadNotifiche() {
   }
 
   el.innerHTML = data.map(n => `
-    <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id},this)">
-      <div class="notif-icon">${n.icon || '🔔'}</div>
+    <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id}, this)">
+      <div class="notif-icon">${n.icon}</div>
       <div class="notif-body">
         <div class="notif-msg">${n.message}</div>
         <div class="notif-time">${timeAgo(new Date(n.created_at))}</div>
@@ -1489,120 +1309,68 @@ async function markRead(id, el) {
   loadNotifCount();
 }
 window.markRead = markRead;
+
 // ══════════════════════════════════════════
 //   ADMIN
 // ══════════════════════════════════════════
 async function loadAdmin() {
   if (!myProfile?.is_admin) {
-    document.getElementById('admin').innerHTML =
-      '<div class="empty"><div class="ei">🚫</div><p>Accesso negato.</p></div>';
+    document.getElementById('admin').innerHTML = '<div class="empty"><div class="ei">🚫</div><p>Accesso negato.</p></div>';
     return;
   }
 
   const [users, stats, activities] = await Promise.all([
-    api('/api/admin/users'),
-    api('/api/admin/stats'),
-    api('/api/admin/activities')
+    api('/api/admin/users'), api('/api/admin/stats'), api('/api/admin/activities')
   ]);
 
-  // ── Statistiche globali ───────────────
   const sEl = document.getElementById('adminStats');
   if (sEl && !stats.error) {
     sEl.innerHTML = `
-      <div class="admin-stat-card">
-        <div class="asc-val">${stats.total_users || 0}</div>
-        <div class="asc-label">👤 Utenti</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="asc-val">${stats.total_activities || 0}</div>
-        <div class="asc-label">🌱 Attività</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="asc-val">${parseFloat(stats.total_co2 || 0).toFixed(1)}</div>
-        <div class="asc-label">☁️ kg CO₂ totale</div>
-      </div>
-      <div class="admin-stat-card">
-        <div class="asc-val">${stats.total_posts || 0}</div>
-        <div class="asc-label">💬 Post</div>
-      </div>`;
+      <div class="admin-stat-card"><div class="asc-val">${stats.total_users||0}</div><div class="asc-label">Utenti</div></div>
+      <div class="admin-stat-card"><div class="asc-val">${stats.total_activities||0}</div><div class="asc-label">Attività</div></div>
+      <div class="admin-stat-card"><div class="asc-val">${parseFloat(stats.total_co2||0).toFixed(1)}</div><div class="asc-label">kg CO₂ totale</div></div>
+      <div class="admin-stat-card"><div class="asc-val">${stats.total_posts||0}</div><div class="asc-label">Post</div></div>`;
   }
 
-  // ── Lista utenti ──────────────────────
   const uEl = document.getElementById('adminUsers');
   if (uEl && !users.error) {
     uEl.innerHTML = `
       <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Utente</th><th>Email</th><th>Punti</th>
-            <th>CO₂</th><th>Ruolo</th><th>Verif.</th><th>Azioni</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Utente</th><th>Email</th><th>Punti</th><th>CO₂</th><th>Ruolo</th><th>Verif.</th><th>Azioni</th></tr></thead>
         <tbody>
           ${users.map(u => `
             <tr>
-              <td><b>${u.name}</b><br>@${u.username||''}</td>
+              <td><b>${u.name}</b><br>${u.username}</td>
               <td>${u.email}</td>
-              <td>⭐ ${u.points||0}</td>
-              <td>🌱 ${parseFloat(u.co2_saved||0).toFixed(1)} kg</td>
-              <td>
-                ${u.is_admin
-                  ? '<span class="pill pill-gold">👑 Admin</span>'
-                  : '<span class="pill pill-gray">👤 User</span>'}
-              </td>
-              <td>
-                ${u.verified
-                  ? '<span class="pill pill-green">✅</span>'
-                  : '<span class="pill pill-red">❌</span>'}
-              </td>
+              <td>${u.points||0}</td>
+              <td>${parseFloat(u.co2_saved||0).toFixed(1)} kg</td>
+              <td>${u.is_admin ? '<span class="pill pill-gold">Admin</span>' : '<span class="pill pill-gray">User</span>'}</td>
+              <td>${u.verified ? '<span class="pill pill-green">✅</span>' : '<span class="pill pill-red">❌</span>'}</td>
               <td class="admin-actions">
-                <button class="btn-sm"
-                  onclick="adminEditUser(${u.id},'${u.name}','${u.username||''}',${u.points||0},${u.is_admin?1:0})">
-                  ✏️
-                </button>
-                <button class="btn-sm btn-danger"
-                  onclick="adminDeleteUser(${u.id},'${u.name}')">
-                  🗑️
-                </button>
-                ${!u.verified
-                  ? `<button class="btn-sm btn-green"
-                       onclick="adminVerifyUser(${u.id})">
-                       📧
-                     </button>`
-                  : ''
-                }
+                <button class="btn-sm" onclick="adminEditUser(${u.id},'${u.name}','${u.username}',${u.points||0},${u.is_admin?1:0})">✏️</button>
+                <button class="btn-sm btn-danger" onclick="adminDeleteUser(${u.id},'${u.name}')">🗑️</button>
+                ${!u.verified ? `<button class="btn-sm btn-green" onclick="adminVerifyUser(${u.id})">✅</button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
       </table>`;
   }
 
-  // ── Attività recenti ──────────────────
   const aEl = document.getElementById('adminActivities');
   if (aEl && !activities.error) {
     aEl.innerHTML = `
       <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Utente</th><th>Tipo</th><th>Km/Ore</th>
-            <th>CO₂</th><th>Punti</th><th>Data</th><th>Azioni</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Utente</th><th>Tipo</th><th>Km/Ore</th><th>CO₂</th><th>Punti</th><th>Data</th><th>Azione</th></tr></thead>
         <tbody>
           ${activities.map(a => `
             <tr>
-              <td>${a.user_name||'?'}</td>
+              <td>${a.user_name||''}</td>
               <td>${a.type}</td>
-              <td>${a.km>0?a.km+' km':''}${a.hours>0?a.hours+'h':''}</td>
+              <td>${a.km>0?a.km+' km':a.hours>0?a.hours+'h':'-'}</td>
               <td>-${a.co2_saved} kg</td>
-              <td>+${a.points}</td>
+              <td>${a.points}</td>
               <td>${new Date(a.date).toLocaleDateString('it-IT')}</td>
-              <td>
-                <button class="btn-sm btn-danger"
-                  onclick="adminDeleteActivity(${a.id})">
-                  🗑️
-                </button>
-              </td>
+              <td><button class="btn-sm btn-danger" onclick="adminDeleteActivity(${a.id})">🗑️</button></td>
             </tr>`).join('')}
         </tbody>
       </table>`;
@@ -1610,43 +1378,28 @@ async function loadAdmin() {
 }
 
 function adminEditUser(id, name, username, points, isAdmin) {
-  showConfirm(
-    'Modifica Utente',
-    `Modificare ${name}?`,
-    () => {
-      const newName  = prompt('Nome:', name)       || name;
-      const newUser  = prompt('Username:', username)|| username;
-      const newPts   = parseInt(prompt('Punti:', points) || points, 10);
-      const newAdmin = confirm('Ruolo Admin?');
-
-      api(`/api/admin/users/${id}`, 'PUT', {
-        name:     newName,
-        username: newUser,
-        points:   newPts,
-        is_admin: newAdmin
-      }).then(d => {
+  showConfirm('Modifica Utente', `Modificare ${name}?`, () => {
+    const newName  = prompt('Nome', name) || name;
+    const newUser  = prompt('Username', username) || username;
+    const newPts   = parseInt(prompt('Punti', points) || points, 10);
+    const newAdmin = confirm('Ruolo Admin?');
+    api(`/api/admin/users/${id}`, 'PUT', { name: newName, username: newUser, points: newPts, is_admin: newAdmin })
+      .then(d => {
         if (d.error) return showN('❌ ' + d.error, 'error');
         showN('✅ Utente aggiornato!', 'success');
         loadAdmin();
       });
-    },
-    '✏️'
-  );
+  });
 }
 window.adminEditUser = adminEditUser;
 
 function adminDeleteUser(id, name) {
-  showConfirm(
-    'Elimina Utente',
-    `Eliminare definitivamente "${name}"?`,
-    async () => {
-      const d = await api(`/api/admin/users/${id}`, 'DELETE');
-      if (d.error) return showN('❌ ' + d.error, 'error');
-      showN('🗑️ Utente eliminato', 'success');
-      loadAdmin();
-    },
-    '🗑️'
-  );
+  showConfirm('Elimina Utente', `Eliminare definitivamente ${name}?`, async () => {
+    const d = await api(`/api/admin/users/${id}`, 'DELETE');
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🗑️ Utente eliminato', 'success');
+    loadAdmin();
+  });
 }
 window.adminDeleteUser = adminDeleteUser;
 
@@ -1659,22 +1412,17 @@ async function adminVerifyUser(id) {
 window.adminVerifyUser = adminVerifyUser;
 
 function adminDeleteActivity(id) {
-  showConfirm(
-    'Elimina Attività',
-    'Eliminare questa attività?',
-    async () => {
-      const d = await api(`/api/admin/activities/${id}`, 'DELETE');
-      if (d.error) return showN('❌ ' + d.error, 'error');
-      showN('🗑️ Attività eliminata', 'success');
-      loadAdmin();
-    },
-    '🗑️'
-  );
+  showConfirm('Elimina Attività', 'Eliminare questa attività?', async () => {
+    const d = await api(`/api/admin/activities/${id}`, 'DELETE');
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🗑️ Attività eliminata', 'success');
+    loadAdmin();
+  });
 }
 window.adminDeleteActivity = adminDeleteActivity;
 
 // ══════════════════════════════════════════
-//   FORGOT PASSWORD
+//   FORGOT / RESET PASSWORD
 // ══════════════════════════════════════════
 async function doForgotPassword(e) {
   e.preventDefault();
@@ -1688,7 +1436,6 @@ async function doForgotPassword(e) {
   const d = await api('/api/forgot-password', 'POST', { email });
 
   if (btn) { btn.disabled = false; btn.innerHTML = '📧 Invia Link'; }
-
   if (d.error) { errEl.textContent = d.error; return; }
 
   errEl.style.color = '#16a34a';
@@ -1706,16 +1453,9 @@ async function doResetPassword(e) {
 
   if (!resetTok) { errEl.textContent = 'Token mancante'; return; }
   if (!newPwd)   { errEl.textContent = 'Inserisci la nuova password'; return; }
-  if (!checkPwdStrength(newPwd)) {
-    errEl.textContent = 'Password troppo debole';
-    return;
-  }
+  if (!checkPwdStrength(newPwd)) { errEl.textContent = 'Password troppo debole'; return; }
 
-  const d = await api('/api/reset-password', 'POST', {
-    token:        resetTok,
-    new_password: newPwd
-  });
-
+  const d = await api('/api/reset-password', 'POST', { token: resetTok, new_password: newPwd });
   if (d.error) { errEl.textContent = d.error; return; }
 
   errEl.style.color = '#16a34a';
@@ -1742,31 +1482,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => showSection(item.dataset.section));
   });
 
-  // form submit bindings
-  document.getElementById('loginForm')
-    ?.addEventListener('submit', doLogin);
-  document.getElementById('registerForm')
-    ?.addEventListener('submit', doRegister);
-  document.getElementById('actForm')
-    ?.addEventListener('submit', logActivity);
-  document.getElementById('postForm')
-    ?.addEventListener('submit', createPost);
-  document.getElementById('challengeForm')
-    ?.addEventListener('submit', createChallenge);
-  document.getElementById('profileForm')
-    ?.addEventListener('submit', saveProfile);
-  document.getElementById('pwdForm')
-    ?.addEventListener('submit', changePassword);
-  document.getElementById('forgotForm')
-    ?.addEventListener('submit', doForgotPassword);
-  document.getElementById('resetForm')
-    ?.addEventListener('submit', doResetPassword);
+  // form bindings
+  document.getElementById('loginForm')      ?.addEventListener('submit', doLogin);
+  document.getElementById('registerForm')   ?.addEventListener('submit', doRegister);
+  document.getElementById('actForm')        ?.addEventListener('submit', logActivity);
+  document.getElementById('postForm')       ?.addEventListener('submit', createPost);
+  document.getElementById('challengeForm')  ?.addEventListener('submit', createChallenge);
+  document.getElementById('profileForm')    ?.addEventListener('submit', saveProfile);
+  document.getElementById('pwdForm')        ?.addEventListener('submit', changePassword);
+  document.getElementById('forgotForm')     ?.addEventListener('submit', doForgotPassword);
+  document.getElementById('resetForm')      ?.addEventListener('submit', doResetPassword);
 
-  // mobile nav close on overlay click
-  document.getElementById('sidebarOverlay')
-    ?.addEventListener('click', toggleMobNav);
+  // mobile overlay
+  document.getElementById('sidebarOverlay')?.addEventListener('click', toggleMobNav);
 
-  // check token
+  // check token esistente
   if (token) {
     const d = await api('/api/profile');
     if (!d.error) {
@@ -1789,12 +1519,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // reset password page
   const params = new URLSearchParams(window.location.search);
   if (params.get('token') && params.get('action') === 'reset') {
-    document.getElementById('authWrap').style.display  = 'flex';
-    document.getElementById('resetSection').style.display = 'flex';
-    document.getElementById('loginForm').style.display    = 'none';
-    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('authWrap').style.display      = 'flex';
+    document.getElementById('resetSection').style.display  = 'flex';
+    document.getElementById('loginForm').style.display     = 'none';
+    document.getElementById('registerForm').style.display  = 'none';
   }
 
-  // auth tab default
+  // default tab
   switchTab('login');
 });
