@@ -96,23 +96,23 @@ function showCo2Explosion(co2, pts) {
 //   AUTH
 // ══════════════════════════════════════════
 function switchTab(tab, btn) {
-  document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.auth-tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('loginForm').style.display    = tab==='login'    ? 'flex':'none';
   document.getElementById('registerForm').style.display = tab==='register' ? 'flex':'none';
-  document.getElementById('lErr').textContent = '';
-  document.getElementById('rErr').textContent = '';
+  document.getElementById('lErr').textContent='';
+  document.getElementById('rErr').textContent='';
 }
-window.switchTab = switchTab;
+window.switchTab=switchTab;
 
-function togglePwd(id, btn) {
-  const el = document.getElementById(id);
+function togglePwd(id,btn) {
+  const el=document.getElementById(id);
   if (!el) return;
-  const show = el.type==='password';
-  el.type    = show ? 'text':'password';
-  btn.innerHTML = `<i class="fas fa-eye${show?'-slash':''}"></i>`;
+  const show=el.type==='password';
+  el.type=show?'text':'password';
+  btn.innerHTML=`<i class="fas fa-eye${show?'-slash':''}"></i>`;
 }
-window.togglePwd = togglePwd;
+window.togglePwd=togglePwd;
 
 function checkPwd(val) {
   [
@@ -120,24 +120,27 @@ function checkPwd(val) {
     { id:'ph2', ok:/[A-Z]/.test(val) },
     { id:'ph3', ok:/[0-9]/.test(val) },
     { id:'ph4', ok:/[^A-Za-z0-9]/.test(val) }
-  ].forEach(r => document.getElementById(r.id)?.classList.toggle('ok',r.ok));
+  ].forEach(r=>document.getElementById(r.id)?.classList.toggle('ok',r.ok));
 }
-window.checkPwd = checkPwd;
+window.checkPwd=checkPwd;
 
+// ✅ LOGIN con username O email
 async function doLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('lEmail').value.trim();
-  const pwd   = document.getElementById('lPwd').value;
-  const err   = document.getElementById('lErr');
-  const btn   = e.target.querySelector('.btn-auth');
-  if (!email||!pwd) { err.textContent='Compila tutti i campi'; return; }
+  const identifier = document.getElementById('lIdentifier').value.trim();
+  const pwd        = document.getElementById('lPwd').value;
+  const err        = document.getElementById('lErr');
+  const btn        = e.target.querySelector('.btn-auth');
+  if (!identifier||!pwd) { err.textContent='Compila tutti i campi'; return; }
   btn.innerHTML='<i class="fas fa-spinner fa-spin"></i><span>Accesso...</span>';
   btn.disabled=true;
-  const d = await api('/api/login','POST',{ email, password:pwd });
+  const d=await api('/api/login','POST',{ identifier, password:pwd });
   btn.innerHTML='<i class="fas fa-sign-in-alt"></i><span>Accedi</span>';
   btn.disabled=false;
   if (d.error) {
-    err.textContent=d.error;
+    err.innerHTML=d.needsVerify
+      ? `${d.error} <button class="resend-btn" onclick="resendVerify()">Reinvia email</button>`
+      : d.error;
     document.getElementById('lPwd').classList.add('shake');
     setTimeout(()=>document.getElementById('lPwd').classList.remove('shake'),600);
     return;
@@ -146,30 +149,86 @@ async function doLogin(e) {
   localStorage.setItem('ecotoken',token);
   bootApp(d.user);
 }
-window.doLogin = doLogin;
+window.doLogin=doLogin;
 
+// ✅ REGISTRAZIONE con feedback email
 async function doRegister(e) {
   e.preventDefault();
-  const name=document.getElementById('rName').value.trim();
-  const username=document.getElementById('rUsername').value.trim();
-  const email=document.getElementById('rEmail').value.trim();
-  const pwd=document.getElementById('rPwd').value;
-  const err=document.getElementById('rErr');
-  const btn=e.target.querySelector('.btn-auth');
-  if (!name||!username||!email||!pwd){err.textContent='Compila tutti i campi';return;}
-  if (pwd.length<8){err.textContent='Password troppo corta';return;}
+  const name     = document.getElementById('rName').value.trim();
+  const username = document.getElementById('rUsername').value.trim();
+  const email    = document.getElementById('rEmail').value.trim();
+  const pwd      = document.getElementById('rPwd').value;
+  const err      = document.getElementById('rErr');
+  const btn      = e.target.querySelector('.btn-auth');
+  if (!name||!username||!email||!pwd) { err.textContent='Compila tutti i campi'; return; }
+  if (pwd.length<8) { err.textContent='Password troppo corta'; return; }
   btn.innerHTML='<i class="fas fa-spinner fa-spin"></i><span>Registrazione...</span>';
   btn.disabled=true;
-  const d=await api('/api/register','POST',{name,username,email,password:pwd});
+  const d=await api('/api/register','POST',{ name,username,email,password:pwd });
   btn.innerHTML='<i class="fas fa-user-plus"></i><span>Registrati</span>';
   btn.disabled=false;
-  if (d.error){err.textContent=d.error;return;}
+  if (d.error) { err.textContent=d.error; return; }
+
+  // ✅ Se serve verifica email
+  if (d.needsVerify) {
+    showVerifyScreen(email);
+    return;
+  }
+
   token=d.token;
   localStorage.setItem('ecotoken',token);
   bootApp(d.user);
   setTimeout(()=>showTutorial(),500);
 }
-window.doRegister = doRegister;
+window.doRegister=doRegister;
+
+// ✅ Schermata "controlla email"
+function showVerifyScreen(email) {
+  const authWrap=document.getElementById('authWrap');
+  if (!authWrap) return;
+  authWrap.innerHTML=`
+    <div class="auth-card verify-card">
+      <div class="verify-icon">📧</div>
+      <h2 class="verify-title">Controlla la tua email!</h2>
+      <p class="verify-sub">
+        Abbiamo inviato un link di conferma a<br>
+        <strong>${email}</strong>
+      </p>
+      <p class="verify-hint">
+        Clicca il link nell'email per attivare il tuo account.<br>
+        Poi torna qui e accedi normalmente.
+      </p>
+      <div class="verify-actions">
+        <button class="btn-auth" onclick="resendVerifyTo('${email}')">
+          <i class="fas fa-redo"></i><span>Reinvia email</span>
+        </button>
+        <button class="btn-auth btn-secondary" onclick="location.reload()">
+          <i class="fas fa-sign-in-alt"></i><span>Vai al login</span>
+        </button>
+      </div>
+      <p class="verify-spam">
+        Non trovi l'email? Controlla la cartella spam 📂
+      </p>
+    </div>`;
+}
+window.showVerifyScreen=showVerifyScreen;
+
+// ✅ Reinvia email verifica
+async function resendVerify() {
+  const identifier=document.getElementById('lIdentifier')?.value?.trim();
+  if (!identifier) return showN('❌ Inserisci la tua email','error');
+  const emailGuess=identifier.includes('@')?identifier:'';
+  if (!emailGuess) return showN('❌ Inserisci la tua email per il reinvio','error');
+  await resendVerifyTo(emailGuess);
+}
+window.resendVerify=resendVerify;
+
+async function resendVerifyTo(email) {
+  const d=await api('/api/resend-verify','POST',{ email });
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('📧 Email inviata! Controlla la casella.','success');
+}
+window.resendVerifyTo=resendVerifyTo;
 
 function doLogout(e) {
   e?.stopPropagation();
@@ -180,7 +239,7 @@ function doLogout(e) {
   document.getElementById('app').style.display='none';
   showN('👋 Arrivederci!','info');
 }
-window.doLogout = doLogout;
+window.doLogout=doLogout;
 
 // ══════════════════════════════════════════
 //   BOOT
@@ -315,18 +374,47 @@ function updateSidebarCo2(co2) {
 }
 
 async function saveProfile() {
-  const d=await api('/api/profile','PATCH',{
-    name:document.getElementById('pName').value.trim(),
-    username:document.getElementById('pUsername').value.trim(),
-    bio:document.getElementById('pBio').value.trim(),
-    avatar_color:miiState.color, avatar_eyes:miiState.eyes,
-    avatar_mouth:miiState.mouth, avatar_hair:miiState.hair, avatar_skin:miiState.skin
-  });
+  // ✅ Leggi stato avatar aggiornato
+  const payload = {
+    name:         document.getElementById('pName').value.trim(),
+    username:     document.getElementById('pUsername').value.trim(),
+    bio:          document.getElementById('pBio').value.trim(),
+    avatar_color: miiState.color  || '#16a34a',
+    avatar_eyes:  miiState.eyes   || 'normal',
+    avatar_mouth: miiState.mouth  || 'smile',
+    avatar_hair:  miiState.hair   || 'none',
+    avatar_skin:  miiState.skin   || '#fde68a'
+  };
+
+  if (!payload.name)     return showN('❌ Il nome è obbligatorio','error');
+  if (!payload.username) return showN('❌ Lo username è obbligatorio','error');
+
+  const btn=document.getElementById('saveProfileBtn');
+  if (btn){ btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Salvataggio...'; }
+
+  const d=await api('/api/profile','PATCH',payload);
+
+  if (btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-save"></i> Salva Profilo'; }
+
   if (d.error) return showN('❌ '+d.error,'error');
-  showN('✅ Profilo salvato!');
-  loadProfile();
+
+  // ✅ Aggiorna miiState con i dati salvati
+  miiState.color = d.avatar_color || miiState.color;
+  miiState.eyes  = d.avatar_eyes  || miiState.eyes;
+  miiState.mouth = d.avatar_mouth || miiState.mouth;
+  miiState.hair  = d.avatar_hair  || miiState.hair;
+  miiState.skin  = d.avatar_skin  || miiState.skin;
+
+  // ✅ Ridisegna avatar ovunque
+  drawMii(miiState,'miiCanvas',120);
+  drawMii(miiState,'sbAvatarCanvas',36);
+  renderMiiBuilder();
+
+  showN('✅ Profilo e avatar salvati!');
+  await loadProfile();
 }
 window.saveProfile=saveProfile;
+
 
 // ══════════════════════════════════════════
 //   STATS
