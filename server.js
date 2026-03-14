@@ -1,1365 +1,1425 @@
 'use strict';
+
 const express    = require('express');
+const path       = require('path');
 const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const { Pool }   = require('pg');
-const path       = require('path');
 const crypto     = require('crypto');
+const nodemailer = require('nodemailer');
+const Database   = require('better-sqlite3');
 
-const app = express();
-
-// ══════════════════════════════════════════
-//   CONFIG
-// ══════════════════════════════════════════
-const PORT       = process.env.PORT       || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'ecotrack_super_secret_2026';
-const BASE_URL   = process.env.BASE_URL   || `http://localhost:${PORT}`;
-const MAIL_FROM  = process.env.MAIL_FROM  || 'EcoTrack <ecotrackofficial@gmail.com>';
-const MAIL_HOST  = process.env.MAIL_HOST  || 'smtp.gmail.com';
-const MAIL_PORT  = parseInt(process.env.MAIL_PORT || '587');
-const MAIL_USER  = process.env.MAIL_USER  || '';
-const MAIL_PASS  = process.env.MAIL_PASS  || '';
-
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const app  = express();
+const PORT = process.env.PORT || 3000;
 
 // ══════════════════════════════════════════
 //   DATABASE
 // ══════════════════════════════════════════
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false
-});
+const db = new Database(
+  process.env.DB_PATH || path.join(__dirname, 'ecotrack.db')
+);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // ══════════════════════════════════════════
-//   MAILER
+//   MIDDLEWARE
 // ══════════════════════════════════════════
-const transporter = nodemailer.createTransport({
-  host: MAIL_HOST,
-  port: MAIL_PORT,
-  secure: false,
-  auth: { user: MAIL_USER, pass: MAIL_PASS }
-});
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-async function sendVerifyEmail(email, name, token) {
-  const link = `${BASE_URL}/api/verify-email?token=${token}`;
-  await transporter.sendMail({
-    from: MAIL_FROM,
-    to:   email,
+// fallback — serve index.html per route non-API
+// (se hai tutto nella root usa __dirname direttamente)
+app.use(express.static(path.join(__dirname)));
+
+// ══════════════════════════════════════════
+//   DB INIT
+// ══════════════════════════════════════════
+function initDB() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      name         TEXT    NOT NULL,
+      username     TEXT    UNIQUE,
+      email        TEXT    UNIQUE NOT NULL,
+      password     TEXT    NOT NULL,
+      bio          TEXT    DEFAULT '',
+      points       INTEGER DEFAULT 0,
+      co2_saved    REAL    DEFAULT 0,
+      total_activities INTEGER DEFAULT 0,
+      is_admin     INTEGER DEFAULT 0,
+      verified     INTEGER DEFAULT 0,
+      verify_token TEXT,
+      reset_token  TEXT,
+      reset_expiry INTEGER,
+      avatar_color TEXT    DEFAULT '#16a34a',
+      avatar_skin  TEXT    DEFAULT '#fde68a',
+      avatar_eyes  TEXT    DEFAULT 'normal',
+      avatar_mouth TEXT    DEFAULT 'smile',
+      avatar_hair  TEXT    DEFAULT 'none',
+      owned_items  TEXT    DEFAULT '[]',
+      created_at   TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS activities (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type      TEXT    NOT NULL,
+      km        REAL    DEFAULT 0,
+      hours     REAL    DEFAULT 0,
+      co2_saved REAL    DEFAULT 0,
+      points    INTEGER DEFAULT 0,
+      note      TEXT    DEFAULT '',
+      from_addr TEXT    DEFAULT '',
+      to_addr   TEXT    DEFAULT '',
+      date      TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS challenges (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      creator_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      title         TEXT    NOT NULL,
+      description   TEXT    DEFAULT '',
+      co2_target    REAL    DEFAULT 0,
+      points_reward INTEGER DEFAULT 0,
+      end_date      TEXT,
+      is_public     INTEGER DEFAULT 1,
+      created_at    TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS social_posts (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content    TEXT    NOT NULL,
+      image_url  TEXT    DEFAULT '',
+      likes      TEXT    DEFAULT '[]',
+      created_at TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id    INTEGER NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content    TEXT    NOT NULL,
+      created_at TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (follower_id, following_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message    TEXT    NOT NULL,
+      icon       TEXT    DEFAULT '🔔',
+      read       INTEGER DEFAULT 0,
+      created_at TEXT    DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS shop_items (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      description TEXT    DEFAULT '',
+      category    TEXT    NOT NULL,
+      emoji       TEXT    DEFAULT '🎁',
+      cost        INTEGER DEFAULT 100,
+      is_rare     INTEGER DEFAULT 0
+    );
+  `);
+
+  // seed shop items se vuoti
+  const count = db.prepare('SELECT COUNT(*) as c FROM shop_items').get();
+  if (count.c === 0) seedShop();
+}
+
+function seedShop() {
+  const items = [
+    // capelli
+    { name:'Rainbow Hair',  description:'Capelli arcobaleno magici',  category:'hair',  emoji:'🌈', cost:300,  is_rare:1 },
+    { name:'Gold Hair',     description:'Capelli dorati brillanti',   category:'hair',  emoji:'✨', cost:500,  is_rare:1 },
+    { name:'Galaxy Hair',   description:'Capelli galassia cosmica',   category:'hair',  emoji:'🌌', cost:800,  is_rare:1 },
+    { name:'Flame Hair',    description:'Capelli di fuoco ardente',   category:'hair',  emoji:'🔥', cost:600,  is_rare:1 },
+    // occhi
+    { name:'Star Eyes',     description:'Occhi a forma di stella',    category:'eyes',  emoji:'⭐', cost:200,  is_rare:0 },
+    { name:'Heart Eyes',    description:'Occhi a forma di cuore',     category:'eyes',  emoji:'❤️', cost:200,  is_rare:0 },
+    { name:'Laser Eyes',    description:'Occhi laser rossi',          category:'eyes',  emoji:'🔴', cost:400,  is_rare:1 },
+    // bocca
+    { name:'Rainbow Mouth', description:'Sorriso arcobaleno',         category:'mouth', emoji:'🌈', cost:250,  is_rare:0 },
+    { name:'Fire Mouth',    description:'Bocca di fuoco',             category:'mouth', emoji:'🔥', cost:350,  is_rare:1 },
+    // colori speciali
+    { name:'Viola Reale',   description:'Colore viola elegante',      category:'color', emoji:'💜', cost:150,  is_rare:0 },
+    { name:'Rosso Fuoco',   description:'Colore rosso intenso',       category:'color', emoji:'❤️', cost:150,  is_rare:0 },
+    { name:'Oro Puro',      description:'Colore oro lussuoso',        category:'color', emoji:'⭐', cost:400,  is_rare:1 },
+  ];
+
+  const ins = db.prepare(`
+    INSERT INTO shop_items (name,description,category,emoji,cost,is_rare)
+    VALUES (@name,@description,@category,@emoji,@cost,@is_rare)
+  `);
+  const insertMany = db.transaction(arr => arr.forEach(i => ins.run(i)));
+  insertMany(items);
+  console.log('✅ Shop items seeded');
+}
+
+initDB();
+
+// ══════════════════════════════════════════
+//   EMAIL
+// ══════════════════════════════════════════
+function getMailer() {
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) return null;
+  return nodemailer.createTransport({
+    service: process.env.MAIL_SERVICE || 'gmail',
+    auth: {
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS
+    }
+  });
+}
+
+async function sendVerifyEmail(email, token) {
+  const mailer = getMailer();
+  if (!mailer) {
+    console.log(`[DEV] Verify token for ${email}: ${token}`);
+    return;
+  }
+  const url = `${process.env.BASE_URL || 'http://localhost:3000'}/verify?token=${token}`;
+  await mailer.sendMail({
+    from:    `"EcoTrack 🌱" <${process.env.MAIL_USER}>`,
+    to:      email,
     subject: '✅ Verifica il tuo account EcoTrack',
     html: `
-      <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;
-                  background:#f8fafc;padding:32px;border-radius:16px">
-        <div style="text-align:center;margin-bottom:24px">
-          <div style="background:linear-gradient(135deg,#16a34a,#22c55e);
-                      width:56px;height:56px;border-radius:14px;
-                      display:inline-flex;align-items:center;
-                      justify-content:center;font-size:28px">🌱</div>
-          <h1 style="color:#0f172a;font-size:22px;margin:12px 0 4px">
-            Benvenuto su EcoTrack!
-          </h1>
-          <p style="color:#64748b;font-size:14px">
-            Ciao ${name}, verifica la tua email per iniziare
-          </p>
-        </div>
-        <div style="background:white;border-radius:12px;padding:24px;
-                    text-align:center;border:1px solid #e2e8f0">
-          <p style="color:#334155;font-size:15px;margin-bottom:20px">
-            Clicca il pulsante qui sotto per attivare il tuo account:
-          </p>
-          <a href="${link}"
-            style="background:linear-gradient(135deg,#16a34a,#22c55e);
-                   color:white;padding:14px 32px;border-radius:10px;
-                   text-decoration:none;font-weight:700;font-size:15px;
-                   display:inline-block">
-            ✅ Verifica Account
-          </a>
-          <p style="color:#94a3b8;font-size:12px;margin-top:20px">
-            Link valido per 24 ore.<br>
-            Se non hai creato un account ignora questa email.
-          </p>
-        </div>
-        <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:20px">
-          EcoTrack — Traccia le tue azioni per il pianeta 🌍
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;
+        padding:40px;background:#f0fdf4;border-radius:16px">
+        <h1 style="color:#16a34a">🌱 EcoTrack</h1>
+        <h2>Verifica il tuo account</h2>
+        <p>Clicca il bottone per verificare la tua email:</p>
+        <a href="${url}"
+          style="display:inline-block;padding:14px 28px;
+          background:#16a34a;color:white;border-radius:10px;
+          text-decoration:none;font-weight:700;margin:16px 0">
+          ✅ Verifica Email
+        </a>
+        <p style="color:#64748b;font-size:13px">
+          Se non hai creato un account ignora questa email.
+        </p>
+      </div>`
+  });
+}
+
+async function sendResetEmail(email, token) {
+  const mailer = getMailer();
+  if (!mailer) {
+    console.log(`[DEV] Reset token for ${email}: ${token}`);
+    return;
+  }
+  const url = `${process.env.BASE_URL || 'http://localhost:3000'}/?action=reset&token=${token}`;
+  await mailer.sendMail({
+    from:    `"EcoTrack 🌱" <${process.env.MAIL_USER}>`,
+    to:      email,
+    subject: '🔑 Reset password EcoTrack',
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;
+        padding:40px;background:#f0fdf4;border-radius:16px">
+        <h1 style="color:#16a34a">🌱 EcoTrack</h1>
+        <h2>Reset della password</h2>
+        <p>Clicca il bottone per reimpostare la password:</p>
+        <a href="${url}"
+          style="display:inline-block;padding:14px 28px;
+          background:#ef4444;color:white;border-radius:10px;
+          text-decoration:none;font-weight:700;margin:16px 0">
+          🔑 Reimposta Password
+        </a>
+        <p style="color:#64748b;font-size:13px">
+          Il link scade tra 1 ora.
         </p>
       </div>`
   });
 }
 
 // ══════════════════════════════════════════
-//   MIDDLEWARE
+//   AUTH MIDDLEWARE
 // ══════════════════════════════════════════
-app.use(express.json());
-app.use(express.static(PUBLIC_DIR));
-
 function auth(req, res, next) {
-  const h = req.headers['authorization'];
-  if (!h?.startsWith('Bearer '))
+  const h = req.headers.authorization;
+  if (!h || !h.startsWith('Bearer '))
     return res.status(401).json({ error: 'Non autorizzato' });
   try {
-    req.user = jwt.verify(h.slice(7), JWT_SECRET);
+    req.user = jwt.verify(
+      h.slice(7),
+      process.env.JWT_SECRET || 'ecotrack_secret_2024'
+    );
     next();
   } catch {
-    res.status(401).json({ error: 'Token non valido' });
+    return res.status(401).json({ error: 'Token non valido' });
   }
 }
 
-function adminOnly(req, res, next) {
-  if (!req.user?.is_admin)
-    return res.status(403).json({ error: 'Solo per admin' });
-  next();
+function adminAuth(req, res, next) {
+  auth(req, res, () => {
+    const u = db.prepare('SELECT is_admin FROM users WHERE id=?')
+               .get(req.user.id);
+    if (!u?.is_admin)
+      return res.status(403).json({ error: 'Accesso negato' });
+    next();
+  });
 }
 
 // ══════════════════════════════════════════
-//   CO2 RATES
+//   CO2 CALCULATOR
 // ══════════════════════════════════════════
-const CO2_RATES = {
-  Remoto:     { type:'h', co2:0.5,  pts:10  },
-  Treno:      { type:'k', co2:0.04, pts:2   },
-  Bici:       { type:'k', co2:0,    pts:5   },
-  Bus:        { type:'k', co2:0.08, pts:1.5 },
-  Carpooling: { type:'k', co2:0.06, pts:3   },
-  Videocall:  { type:'h', co2:0.1,  pts:8   }
-};
-
-// ══════════════════════════════════════════
-//   DB INIT — ricrea tutto da zero
-// ══════════════════════════════════════════
-async function initDB() {
-  console.log('🗄️ Initializing database...');
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id               SERIAL PRIMARY KEY,
-      name             VARCHAR(100)  NOT NULL,
-      username         VARCHAR(50)   UNIQUE,
-      email            VARCHAR(150)  UNIQUE NOT NULL,
-      password_hash    VARCHAR(255)  NOT NULL,
-      bio              TEXT          DEFAULT '',
-      co2_saved        DECIMAL(10,2) DEFAULT 0,
-      points           INT           DEFAULT 0,
-      is_admin         BOOLEAN       DEFAULT false,
-      is_banned        BOOLEAN       DEFAULT false,
-      is_verified      BOOLEAN       DEFAULT false,
-      verify_token     VARCHAR(64),
-      verify_expires   TIMESTAMP,
-      avatar_color     VARCHAR(20)   DEFAULT '#16a34a',
-      avatar_skin      VARCHAR(20)   DEFAULT '#fde68a',
-      avatar_eyes      VARCHAR(20)   DEFAULT 'normal',
-      avatar_mouth     VARCHAR(20)   DEFAULT 'smile',
-      avatar_hair      VARCHAR(20)   DEFAULT 'none',
-      created_at       TIMESTAMP     DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS activities (
-      id         SERIAL PRIMARY KEY,
-      user_id    INT           REFERENCES users(id) ON DELETE CASCADE,
-      type       VARCHAR(50)   NOT NULL,
-      km         DECIMAL(10,2) DEFAULT 0,
-      hours      DECIMAL(10,2) DEFAULT 0,
-      co2_saved  DECIMAL(10,2) DEFAULT 0,
-      points     INT           DEFAULT 0,
-      note       TEXT          DEFAULT '',
-      from_addr  TEXT          DEFAULT '',
-      to_addr    TEXT          DEFAULT '',
-      date       TIMESTAMP     DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS challenges (
-      id             SERIAL PRIMARY KEY,
-      creator_id     INT           REFERENCES users(id) ON DELETE CASCADE,
-      title          VARCHAR(200)  NOT NULL,
-      description    TEXT          DEFAULT '',
-      co2_target     DECIMAL(10,2) DEFAULT 0,
-      points_reward  INT           DEFAULT 0,
-      end_date       TIMESTAMP,
-      is_public      BOOLEAN       DEFAULT true,
-      created_at     TIMESTAMP     DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS follows (
-      follower_id INT REFERENCES users(id) ON DELETE CASCADE,
-      followed_id INT REFERENCES users(id) ON DELETE CASCADE,
-      created_at  TIMESTAMP DEFAULT NOW(),
-      PRIMARY KEY (follower_id, followed_id)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS groups (
-      id          SERIAL PRIMARY KEY,
-      name        VARCHAR(100) NOT NULL,
-      description TEXT         DEFAULT '',
-      creator_id  INT          REFERENCES users(id) ON DELETE CASCADE,
-      invite_code VARCHAR(10)  UNIQUE,
-      is_public   BOOLEAN      DEFAULT true,
-      created_at  TIMESTAMP    DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS group_members (
-      group_id  INT REFERENCES groups(id) ON DELETE CASCADE,
-      user_id   INT REFERENCES users(id)  ON DELETE CASCADE,
-      joined_at TIMESTAMP DEFAULT NOW(),
-      PRIMARY KEY (group_id, user_id)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS notifications (
-      id         SERIAL PRIMARY KEY,
-      user_id    INT      REFERENCES users(id) ON DELETE CASCADE,
-      type       VARCHAR(50)  DEFAULT 'info',
-      message    TEXT         NOT NULL,
-      is_read    BOOLEAN      DEFAULT false,
-      created_at TIMESTAMP    DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS shop_items (
-      id          SERIAL PRIMARY KEY,
-      name        VARCHAR(100) NOT NULL,
-      description TEXT         DEFAULT '',
-      category    VARCHAR(50)  NOT NULL,
-      value       VARCHAR(100) NOT NULL,
-      emoji       TEXT         DEFAULT '🎨',
-      cost        INT          DEFAULT 100,
-      is_rare     BOOLEAN      DEFAULT false
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS user_items (
-      user_id   INT REFERENCES users(id)      ON DELETE CASCADE,
-      item_id   INT REFERENCES shop_items(id) ON DELETE CASCADE,
-      bought_at TIMESTAMP DEFAULT NOW(),
-      PRIMARY KEY (user_id, item_id)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS user_badges (
-      user_id   INT REFERENCES users(id) ON DELETE CASCADE,
-      badge_id  VARCHAR(50) NOT NULL,
-      earned_at TIMESTAMP DEFAULT NOW(),
-      PRIMARY KEY (user_id, badge_id)
-    )
-  `);
-
-  // ✅ Safe migrations per DB esistenti
-  const migrations = [
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS username       VARCHAR(50)`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified    BOOLEAN DEFAULT false`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token   VARCHAR(64)`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_expires TIMESTAMP`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned      BOOLEAN DEFAULT false`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin       BOOLEAN DEFAULT false`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS bio            TEXT DEFAULT ''`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color   VARCHAR(20) DEFAULT '#16a34a'`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_skin    VARCHAR(20) DEFAULT '#fde68a'`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_eyes    VARCHAR(20) DEFAULT 'normal'`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mouth   VARCHAR(20) DEFAULT 'smile'`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_hair    VARCHAR(20) DEFAULT 'none'`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS from_addr TEXT DEFAULT ''`,
-    `ALTER TABLE activities ADD COLUMN IF NOT EXISTS to_addr   TEXT DEFAULT ''`,
-  ];
-  for (const m of migrations) {
-    await pool.query(m).catch(e => console.warn('Migration skip:', e.message));
-  }
-
-  // ✅ Rinomina colonna "password" → "password_hash" se esiste ancora
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name='users' AND column_name='password'
-      ) THEN
-        ALTER TABLE users RENAME COLUMN password TO password_hash;
-      END IF;
-    END $$;
-  `).catch(e => console.warn('Rename skip:', e.message));
-
-  // ✅ Fix utenti esistenti senza username
-  await pool.query(`
-    UPDATE users
-    SET username = LOWER(REPLACE(name,' ','_')) || id::text
-    WHERE username IS NULL OR username = ''
-  `).catch(() => {});
-
-  // ✅ Verifica utenti esistenti che non hanno ancora fatto verify
-  await pool.query(`
-    UPDATE users SET is_verified = true
-    WHERE is_verified IS NULL
-       OR (is_verified = false AND verify_token IS NULL)
-  `).catch(() => {});
-
-  // Seed shop se vuoto
-  const { rows: sc } = await pool.query('SELECT COUNT(*) FROM shop_items');
-  if (parseInt(sc[0].count) === 0) await seedShop();
-
-  console.log('✅ Database ready');
+function calcCo2(type, km, hours) {
+  // kg CO2 risparmiati vs auto
+  const factors = {
+    Bici:       0.21,   // vs auto 0.21 kg/km
+    Treno:      0.14,
+    Bus:        0.10,
+    Carpooling: 0.08,
+    Remoto:     2.5,    // per ora (vs spostamento medio)
+    Videocall:  1.8
+  };
+  const f = factors[type] || 0;
+  if (['Remoto','Videocall'].includes(type)) return +(f * (hours || 0)).toFixed(2);
+  return +(f * (km || 0)).toFixed(2);
 }
 
-// ══════════════════════════════════════════
-//   SHOP SEED
-// ══════════════════════════════════════════
-async function seedShop() {
-  const items = [
-    { name:'Capelli Corti',    desc:'Stile classico',           cat:'hair',  val:'short',    emoji:'💇', cost:50,  rare:false },
-    { name:'Capelli Lunghi',   desc:'Fluenti e naturali',       cat:'hair',  val:'long',     emoji:'💆', cost:80,  rare:false },
-    { name:'Boccoli',          desc:'Ricci e vivaci',           cat:'hair',  val:'curly',    emoji:'🌀', cost:100, rare:false },
-    { name:'Chignon',          desc:'Elegante',                 cat:'hair',  val:'bun',      emoji:'🎀', cost:120, rare:false },
-    { name:'Cresta',           desc:'Rock e ribelle',           cat:'hair',  val:'mohawk',   emoji:'⚡', cost:150, rare:false },
-    { name:'Mosso',            desc:'Onde naturali',            cat:'hair',  val:'wavy',     emoji:'〰️', cost:130, rare:false },
-    { name:'Cappellino',       desc:'Casual e sportivo',        cat:'hair',  val:'cap',      emoji:'🧢', cost:200, rare:false },
-    { name:'Rainbow Hair',     desc:'Tutti i colori',           cat:'hair',  val:'rainbow',  emoji:'🌈', cost:500, rare:true  },
-    { name:'Capelli d\'Oro',   desc:'Prezioso come l\'oro',     cat:'hair',  val:'gold',     emoji:'✨', cost:400, rare:true  },
-    { name:'Galassia',         desc:'Come lo spazio',           cat:'hair',  val:'galaxy',   emoji:'🌌', cost:600, rare:true  },
-    { name:'Fiamme',           desc:'Brucia di passione',       cat:'hair',  val:'flame',    emoji:'🔥', cost:700, rare:true  },
-    { name:'Occhi Felici',     desc:'Sempre sorridente',        cat:'eyes',  val:'happy',    emoji:'😊', cost:80,  rare:false },
-    { name:'Occhi Assonnati',  desc:'Rilassato',                cat:'eyes',  val:'sleepy',   emoji:'😴', cost:80,  rare:false },
-    { name:'Occhi Sorpresi',   desc:'Sempre stupito',           cat:'eyes',  val:'surprised',emoji:'😲', cost:100, rare:false },
-    { name:'Occhiolino',       desc:'Malizioso',                cat:'eyes',  val:'wink',     emoji:'😉', cost:120, rare:false },
-    { name:'Occhiali Cool',    desc:'Stile anni 80',            cat:'eyes',  val:'cool',     emoji:'😎', cost:200, rare:false },
-    { name:'Occhi Stella',     desc:'Brilli di felicità',       cat:'eyes',  val:'star',     emoji:'⭐', cost:400, rare:true  },
-    { name:'Occhi Cuore',      desc:'Innamorato del pianeta',   cat:'eyes',  val:'heart',    emoji:'❤️', cost:450, rare:true  },
-    { name:'Occhi Laser',      desc:'Potere cosmico',           cat:'eyes',  val:'laser',    emoji:'🔴', cost:600, rare:true  },
-    { name:'Sorriso Grande',   desc:'Sempre felice',            cat:'mouth', val:'grin',     emoji:'😁', cost:60,  rare:false },
-    { name:'Bocca Aperta',     desc:'Stupito',                  cat:'mouth', val:'open',     emoji:'😮', cost:80,  rare:false },
-    { name:'Mezzo Sorriso',    desc:'Misterioso',               cat:'mouth', val:'smirk',    emoji:'😏', cost:100, rare:false },
-    { name:'Linguaccia',       desc:'Allegro',                  cat:'mouth', val:'tongue',   emoji:'😛', cost:120, rare:false },
-    { name:'Triste',           desc:'Per i giorni no',          cat:'mouth', val:'sad',      emoji:'🙁', cost:80,  rare:false },
-    { name:'Bocca Arcobaleno', desc:'Magico',                   cat:'mouth', val:'rainbow',  emoji:'🌈', cost:400, rare:true  },
-    { name:'Bocca di Fuoco',   desc:'Passione eco',             cat:'mouth', val:'fire',     emoji:'🔥', cost:450, rare:true  },
-    { name:'Verde Foresta',    desc:'Il colore della natura',   cat:'color', val:'#15803d',  emoji:'🟢', cost:50,  rare:false },
-    { name:'Blu Oceano',       desc:'Come il mare',             cat:'color', val:'#2563eb',  emoji:'🔵', cost:50,  rare:false },
-    { name:'Viola Cielo',      desc:'Tramonto misterioso',      cat:'color', val:'#7c3aed',  emoji:'🟣', cost:80,  rare:false },
-    { name:'Rosso Terra',      desc:'Calore della terra',       cat:'color', val:'#dc2626',  emoji:'🔴', cost:80,  rare:false },
-    { name:'Arancio Sole',     desc:'Energia solare',           cat:'color', val:'#ea580c',  emoji:'🟠', cost:100, rare:false },
-    { name:'Rosa Fiore',       desc:'Delicato come un petalo',  cat:'color', val:'#db2777',  emoji:'🌸', cost:100, rare:false },
-    { name:'Oro Puro',         desc:'Prezioso eco-warrior',     cat:'color', val:'#d97706',  emoji:'🌟', cost:300, rare:true  },
-    { name:'Neon Verde',       desc:'Fluorescente',             cat:'color', val:'#4ade80',  emoji:'💚', cost:250, rare:true  },
-    { name:'Pelle Chiara',     desc:'Naturale e luminosa',      cat:'skin',  val:'#fde68a',  emoji:'👤', cost:0,   rare:false },
-    { name:'Pelle Media',      desc:'Tono caldo',               cat:'skin',  val:'#fbbf24',  emoji:'👤', cost:30,  rare:false },
-    { name:'Pelle Scura',      desc:'Ricco e profondo',         cat:'skin',  val:'#92400e',  emoji:'👤', cost:30,  rare:false },
-    { name:'Pelle Rosa',       desc:'Roseo e solare',           cat:'skin',  val:'#fca5a5',  emoji:'👤', cost:50,  rare:false },
-    { name:'Pelle Azzurra',    desc:'Alieno eco-friendly',      cat:'skin',  val:'#bae6fd',  emoji:'👽', cost:200, rare:true  },
-    { name:'Pelle Verde',      desc:'Elfo della foresta',       cat:'skin',  val:'#86efac',  emoji:'🧝', cost:200, rare:true  },
-  ];
-  for (const i of items) {
-    await pool.query(
-      `INSERT INTO shop_items (name,description,category,value,emoji,cost,is_rare)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [i.name, i.desc, i.cat, i.val, i.emoji, i.cost, i.rare]
-    );
-  }
-  console.log('🛍️ Shop seeded with', items.length, 'items');
+function calcPoints(co2) {
+  return Math.max(1, Math.round(co2 * 10));
 }
 // ══════════════════════════════════════════
 //   AUTH ROUTES
 // ══════════════════════════════════════════
-app.post('/api/register', async (req, res) => {
-  const { name, username, email, password } = req.body;
-  console.log('📝 Register:', email, username);
 
-  if (!name || !username || !email || !password)
-    return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
-  if (/\s/.test(username))
-    return res.status(400).json({ error: 'Username senza spazi' });
-  if (!/^[a-zA-Z0-9_\.]+$/.test(username))
-    return res.status(400).json({ error: 'Username non valido' });
-  if (username.length < 3)
-    return res.status(400).json({ error: 'Username min 3 caratteri' });
-  if (password.length < 8)
-    return res.status(400).json({ error: 'Password min 8 caratteri' });
-
+// REGISTER
+app.post('/api/register', (req, res) => {
   try {
-    const { rows: existing } = await pool.query(
-      'SELECT id FROM users WHERE LOWER(email)=LOWER($1) OR LOWER(username)=LOWER($2)',
-      [email.trim(), username.trim()]
+    const { name, username, email, password } = req.body;
+
+    if (!name || !username || !email || !password)
+      return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
+
+    const existing = db.prepare(
+      'SELECT id FROM users WHERE email=? OR username=?'
+    ).get(email.toLowerCase(), username.toLowerCase());
+
+    if (existing)
+      return res.status(400).json({ error: 'Email o username già in uso' });
+
+    const hash  = bcrypt.hashSync(password, 10);
+    const vTok  = crypto.randomBytes(32).toString('hex');
+
+    db.prepare(`
+      INSERT INTO users
+        (name, username, email, password, verify_token, verified)
+      VALUES (?,?,?,?,?,0)
+    `).run(
+      name,
+      username.toLowerCase(),
+      email.toLowerCase(),
+      hash,
+      vTok
     );
-    if (existing.length)
-      return res.status(409).json({ error: 'Email o username già in uso' });
 
-    const hash    = await bcrypt.hash(password, 12);
-    const token   = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // manda email in background — non blocca risposta
+    sendVerifyEmail(email.toLowerCase(), vTok).catch(console.error);
 
-    const { rows: [user] } = await pool.query(
-      `INSERT INTO users
-        (name, username, email, password_hash, is_verified, verify_token, verify_expires)
-       VALUES ($1,$2,$3,$4,false,$5,$6)
-       RETURNING id, name, username, email`,
-      [name.trim(), username.toLowerCase().trim(),
-       email.toLowerCase().trim(), hash, token, expires]
-    );
+    return res.json({
+      ok: true,
+      message: 'Registrazione completata! Controlla la tua email.'
+    });
 
-    try {
-      await sendVerifyEmail(user.email, user.name, token);
-      console.log('📧 Verify email sent:', user.email);
-    } catch (mailErr) {
-      console.error('❌ Mail error:', mailErr.message);
-    }
-
-    res.json({ needsVerify: true, message: 'Controlla la tua email!' });
-
-  } catch (e) {
-    console.error('❌ REGISTER ERROR:', e.message, e.stack);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+  } catch (err) {
+    console.error('Register error:', err);
+    return res.status(500).json({ error: 'Errore interno del server' });
   }
 });
 
-// ── VERIFY EMAIL ──────────────────────────
-app.get('/api/verify-email', async (req, res) => {
-  const { token } = req.query;
-  if (!token) return res.redirect('/?error=token_mancante');
+// LOGIN
+app.post('/api/login', (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM users
-       WHERE verify_token=$1 AND verify_expires > NOW()`,
-      [token]
-    );
-    if (!rows.length) return res.redirect('/?error=token_scaduto');
+    const { identifier, password } = req.body;
 
-    await pool.query(
-      `UPDATE users
-       SET is_verified=true, verify_token=NULL, verify_expires=NULL
-       WHERE id=$1`,
-      [rows[0].id]
-    );
-    console.log('✅ Email verified:', rows[0].email);
-    res.redirect('/?verified=1');
-  } catch (e) {
-    console.error('❌ VERIFY ERROR:', e.message);
-    res.redirect('/?error=errore_server');
-  }
-});
+    if (!identifier || !password)
+      return res.status(400).json({ error: 'Campi mancanti' });
 
-// ── RESEND VERIFY ─────────────────────────
-app.post('/api/resend-verify', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email obbligatoria' });
-  try {
-    const { rows } = await pool.query(
-      'SELECT * FROM users WHERE LOWER(email)=LOWER($1)',
-      [email.trim()]
-    );
-    if (!rows.length)
-      return res.status(404).json({ error: 'Email non trovata' });
-    if (rows[0].is_verified)
-      return res.status(400).json({ error: 'Account già verificato' });
+    const user = db.prepare(
+      'SELECT * FROM users WHERE email=? OR username=?'
+    ).get(identifier.toLowerCase(), identifier.toLowerCase());
 
-    const token   = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    if (!user)
+      return res.status(400).json({ error: 'Credenziali non valide' });
 
-    await pool.query(
-      'UPDATE users SET verify_token=$1, verify_expires=$2 WHERE id=$3',
-      [token, expires, rows[0].id]
-    );
-    await sendVerifyEmail(email, rows[0].name, token);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ RESEND ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
-
-// ── LOGIN ─────────────────────────────────
-app.post('/api/login', async (req, res) => {
-  const { identifier, password } = req.body;
-  console.log('🔑 Login:', identifier);
-
-  if (!identifier || !password)
-    return res.status(400).json({ error: 'Campi mancanti' });
-
-  try {
-    const { rows } = await pool.query(
-      `SELECT * FROM users
-       WHERE LOWER(email)=LOWER($1) OR LOWER(username)=LOWER($1)
-       LIMIT 1`,
-      [identifier.trim()]
-    );
-    if (!rows.length)
-      return res.status(401).json({ error: 'Credenziali non valide' });
-
-    const user = rows[0];
-
-    if (user.is_banned)
-      return res.status(403).json({ error: 'Account bannato.' });
-
-    if (!user.is_verified)
-      return res.status(403).json({
-        error: 'Email non verificata. Controlla la casella.',
+    if (!user.verified)
+      return res.status(400).json({
+        error: 'Email non verificata. Controlla la tua casella.',
         needsVerify: true
       });
 
-    const ok = await bcrypt.compare(password, user.password_hash);
-    console.log('🔐 Password ok:', ok);
+    const ok = bcrypt.compareSync(password, user.password);
     if (!ok)
-      return res.status(401).json({ error: 'Credenziali non valide' });
+      return res.status(400).json({ error: 'Credenziali non valide' });
 
     const token = jwt.sign(
-      { id: user.id, is_admin: user.is_admin },
-      JWT_SECRET,
+      { id: user.id },
+      process.env.JWT_SECRET || 'ecotrack_secret_2024',
       { expiresIn: '30d' }
     );
 
-    res.json({
+    let owned = [];
+    try { owned = JSON.parse(user.owned_items || '[]'); } catch {}
+
+    return res.json({
       token,
       user: {
-        id:           user.id,
-        name:         user.name,
-        username:     user.username,
-        email:        user.email,
-        co2_saved:    user.co2_saved,
-        points:       user.points,
-        is_admin:     user.is_admin,
-        avatar_color: user.avatar_color,
-        avatar_skin:  user.avatar_skin,
-        avatar_eyes:  user.avatar_eyes,
-        avatar_mouth: user.avatar_mouth,
-        avatar_hair:  user.avatar_hair
+        id:               user.id,
+        name:             user.name,
+        username:         user.username,
+        email:            user.email,
+        bio:              user.bio              || '',
+        points:           user.points           || 0,
+        co2_saved:        user.co2_saved        || 0,
+        total_activities: user.total_activities || 0,
+        is_admin:         user.is_admin         || 0,
+        avatar_color:     user.avatar_color     || '#16a34a',
+        avatar_skin:      user.avatar_skin      || '#fde68a',
+        avatar_eyes:      user.avatar_eyes      || 'normal',
+        avatar_mouth:     user.avatar_mouth     || 'smile',
+        avatar_hair:      user.avatar_hair      || 'none',
+        owned_items:      owned
       }
     });
-  } catch (e) {
-    console.error('❌ LOGIN ERROR:', e.message, e.stack);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+
+  } catch (err) {
+    console.error('Login error:', err);
+    return res.status(500).json({ error: 'Errore interno del server' });
+  }
+});
+
+// VERIFY EMAIL
+app.get('/api/verify', (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).send('Token mancante');
+
+    const user = db.prepare(
+      'SELECT id FROM users WHERE verify_token=?'
+    ).get(token);
+
+    if (!user) return res.status(400).send('Token non valido o già usato');
+
+    db.prepare(
+      'UPDATE users SET verified=1, verify_token=NULL WHERE id=?'
+    ).run(user.id);
+
+    // redirect alla home con messaggio
+    return res.redirect('/?verified=1');
+  } catch (err) {
+    console.error('Verify error:', err);
+    return res.status(500).send('Errore server');
+  }
+});
+
+// RESEND VERIFY
+app.post('/api/resend-verify', (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email mancante' });
+
+    const user = db.prepare(
+      'SELECT id, verified FROM users WHERE email=?'
+    ).get(email.toLowerCase());
+
+    if (!user)
+      return res.status(400).json({ error: 'Email non trovata' });
+    if (user.verified)
+      return res.status(400).json({ error: 'Account già verificato' });
+
+    const vTok = crypto.randomBytes(32).toString('hex');
+    db.prepare(
+      'UPDATE users SET verify_token=? WHERE id=?'
+    ).run(vTok, user.id);
+
+    sendVerifyEmail(email.toLowerCase(), vTok).catch(console.error);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Resend verify error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// FORGOT PASSWORD
+app.post('/api/forgot-password', (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email mancante' });
+
+    const user = db.prepare(
+      'SELECT id FROM users WHERE email=?'
+    ).get(email.toLowerCase());
+
+    // risponde sempre ok per sicurezza
+    if (!user) return res.json({ ok: true });
+
+    const rTok   = crypto.randomBytes(32).toString('hex');
+    const expiry = Date.now() + 3600000; // 1 ora
+
+    db.prepare(
+      'UPDATE users SET reset_token=?, reset_expiry=? WHERE id=?'
+    ).run(rTok, expiry, user.id);
+
+    sendResetEmail(email.toLowerCase(), rTok).catch(console.error);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// RESET PASSWORD
+app.post('/api/reset-password', (req, res) => {
+  try {
+    const { token, new_password } = req.body;
+    if (!token || !new_password)
+      return res.status(400).json({ error: 'Dati mancanti' });
+
+    const user = db.prepare(
+      'SELECT id, reset_expiry FROM users WHERE reset_token=?'
+    ).get(token);
+
+    if (!user)
+      return res.status(400).json({ error: 'Token non valido' });
+    if (Date.now() > user.reset_expiry)
+      return res.status(400).json({ error: 'Token scaduto' });
+
+    const hash = bcrypt.hashSync(new_password, 10);
+    db.prepare(
+      'UPDATE users SET password=?, reset_token=NULL, reset_expiry=NULL WHERE id=?'
+    ).run(hash, user.id);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
-//   PROFILE
+//   PROFILE ROUTES
 // ══════════════════════════════════════════
-app.get('/api/profile', auth, async (req, res) => {
+
+// GET profile
+app.get('/api/profile', auth, (req, res) => {
   try {
-    const { rows: [u] } = await pool.query(
-      `SELECT u.*,
-        (SELECT COUNT(*) FROM follows WHERE followed_id=u.id) AS followers,
-        (SELECT COUNT(*) FROM follows WHERE follower_id=u.id) AS following,
-        COALESCE(
-          (SELECT json_agg(item_id) FROM user_items WHERE user_id=u.id),
-          '[]'
-        ) AS owned_items
-       FROM users u WHERE u.id=$1`,
-      [req.user.id]
-    );
-    if (!u) return res.status(404).json({ error: 'Utente non trovato' });
-    delete u.password_hash;
-    delete u.verify_token;
-    res.json(u);
-  } catch (e) {
-    console.error('❌ PROFILE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+    if (!user) return res.status(404).json({ error: 'Utente non trovato' });
+
+    let owned = [];
+    try { owned = JSON.parse(user.owned_items || '[]'); } catch {}
+
+    return res.json({
+      id:               user.id,
+      name:             user.name,
+      username:         user.username,
+      email:            user.email,
+      bio:              user.bio              || '',
+      points:           user.points           || 0,
+      co2_saved:        user.co2_saved        || 0,
+      total_activities: user.total_activities || 0,
+      is_admin:         user.is_admin         || 0,
+      avatar_color:     user.avatar_color     || '#16a34a',
+      avatar_skin:      user.avatar_skin      || '#fde68a',
+      avatar_eyes:      user.avatar_eyes      || 'normal',
+      avatar_mouth:     user.avatar_mouth     || 'smile',
+      avatar_hair:      user.avatar_hair      || 'none',
+      owned_items:      owned
+    });
+  } catch (err) {
+    console.error('Profile error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.patch('/api/profile', auth, async (req, res) => {
-  const { name, username, bio,
-          avatar_color, avatar_skin,
-          avatar_eyes, avatar_mouth, avatar_hair } = req.body;
-
-  if (!name)     return res.status(400).json({ error: 'Nome obbligatorio' });
-  if (!username) return res.status(400).json({ error: 'Username obbligatorio' });
-  if (/\s/.test(username))
-    return res.status(400).json({ error: 'Username senza spazi' });
-  if (!/^[a-zA-Z0-9_\.]+$/.test(username))
-    return res.status(400).json({ error: 'Username non valido' });
-
+// UPDATE profile
+app.put('/api/profile', auth, (req, res) => {
   try {
-    const { rows: dup } = await pool.query(
-      'SELECT id FROM users WHERE LOWER(username)=LOWER($1) AND id!=$2',
-      [username.trim(), req.user.id]
-    );
-    if (dup.length)
-      return res.status(409).json({ error: 'Username già in uso' });
+    const { name, username, bio } = req.body;
+    if (!name || !username)
+      return res.status(400).json({ error: 'Nome e username obbligatori' });
 
-    const { rows: [u] } = await pool.query(
-      `UPDATE users SET
-        name=$1, username=$2, bio=$3,
-        avatar_color=$4, avatar_skin=$5,
-        avatar_eyes=$6, avatar_mouth=$7, avatar_hair=$8
-       WHERE id=$9
-       RETURNING id,name,username,email,bio,co2_saved,points,is_admin,
-                 avatar_color,avatar_skin,avatar_eyes,avatar_mouth,avatar_hair`,
-      [name.trim(), username.toLowerCase().trim(), bio || '',
-       avatar_color || '#16a34a', avatar_skin || '#fde68a',
-       avatar_eyes  || 'normal',  avatar_mouth || 'smile',
-       avatar_hair  || 'none',    req.user.id]
+    const existing = db.prepare(
+      'SELECT id FROM users WHERE username=? AND id!=?'
+    ).get(username.toLowerCase(), req.user.id);
+
+    if (existing)
+      return res.status(400).json({ error: 'Username già in uso' });
+
+    db.prepare(
+      'UPDATE users SET name=?, username=?, bio=? WHERE id=?'
+    ).run(name, username.toLowerCase(), bio || '', req.user.id);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// UPDATE avatar
+app.put('/api/profile/avatar', auth, (req, res) => {
+  try {
+    const { color, skin, eyes, mouth, hair } = req.body;
+    db.prepare(`
+      UPDATE users SET
+        avatar_color=?, avatar_skin=?,
+        avatar_eyes=?, avatar_mouth=?, avatar_hair=?
+      WHERE id=?
+    `).run(
+      color || '#16a34a', skin  || '#fde68a',
+      eyes  || 'normal',  mouth || 'smile',
+      hair  || 'none',    req.user.id
     );
-    res.json(u);
-  } catch (e) {
-    console.error('❌ PATCH PROFILE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Avatar error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// CHANGE password
+app.put('/api/profile/password', auth, (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password)
+      return res.status(400).json({ error: 'Dati mancanti' });
+
+    const user = db.prepare('SELECT password FROM users WHERE id=?')
+                   .get(req.user.id);
+
+    const ok = bcrypt.compareSync(current_password, user.password);
+    if (!ok)
+      return res.status(400).json({ error: 'Password attuale non corretta' });
+
+    const hash = bcrypt.hashSync(new_password, 10);
+    db.prepare('UPDATE users SET password=? WHERE id=?')
+      .run(hash, req.user.id);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
-//   STATS + ACTIVITIES
+//   STATS + YEARLY
 // ══════════════════════════════════════════
-app.get('/api/stats', auth, async (req, res) => {
+app.get('/api/stats', auth, (req, res) => {
   try {
-    const { rows: [s] } = await pool.query(
-      `SELECT u.co2_saved, u.points,
-        COALESCE(SUM(CASE WHEN a.date >= NOW()-INTERVAL '7 days'
-          THEN a.co2_saved ELSE 0 END),0) AS co2_week,
-        COALESCE(SUM(CASE WHEN a.date >= NOW()-INTERVAL '30 days'
-          THEN a.co2_saved ELSE 0 END),0) AS co2_month,
-        COUNT(a.id) AS total_activities
-       FROM users u
-       LEFT JOIN activities a ON a.user_id=u.id
-       WHERE u.id=$1
-       GROUP BY u.co2_saved, u.points`,
-      [req.user.id]
-    );
-    res.json(s || {});
-  } catch (e) {
-    console.error('❌ STATS ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+
+    const week = db.prepare(`
+      SELECT COALESCE(SUM(co2_saved),0) as total
+      FROM activities
+      WHERE user_id=?
+        AND date >= datetime('now','-7 days')
+    `).get(req.user.id);
+
+    const month = db.prepare(`
+      SELECT COALESCE(SUM(co2_saved),0) as total
+      FROM activities
+      WHERE user_id=?
+        AND date >= datetime('now','start of month')
+    `).get(req.user.id);
+
+    return res.json({
+      co2_saved:        user.co2_saved        || 0,
+      co2_week:         week.total            || 0,
+      co2_month:        month.total           || 0,
+      total_activities: user.total_activities || 0,
+      points:           user.points           || 0
+    });
+  } catch (err) {
+    console.error('Stats error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.get('/api/yearly', auth, async (req, res) => {
+app.get('/api/yearly', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT
-        TO_CHAR(date,'Mon') AS month,
-        EXTRACT(MONTH FROM date) AS mon_num,
-        SUM(co2_saved) AS co2,
-        SUM(points)    AS points
-       FROM activities
-       WHERE user_id=$1 AND date >= DATE_TRUNC('year', NOW())
-       GROUP BY month, mon_num
-       ORDER BY mon_num`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ YEARLY ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const rows = db.prepare(`
+      SELECT
+        strftime('%m', date) as month,
+        COALESCE(SUM(co2_saved),0) as co2,
+        COALESCE(SUM(points),0)    as pts
+      FROM activities
+      WHERE user_id=?
+        AND date >= datetime('now','-12 months')
+      GROUP BY strftime('%m', date)
+      ORDER BY month
+    `).all(req.user.id);
+
+    const months = ['Gen','Feb','Mar','Apr','Mag','Giu',
+                    'Lug','Ago','Set','Ott','Nov','Dic'];
+    const result = months.map((m, i) => {
+      const mm  = String(i+1).padStart(2,'0');
+      const row = rows.find(r => r.month === mm);
+      return {
+        month: m,
+        co2:   row ? parseFloat(row.co2).toFixed(1) : '0.0',
+        pts:   row ? row.pts : 0
+      };
+    });
+
+    return res.json(result);
+  } catch (err) {
+    console.error('Yearly error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.get('/api/activities', auth, async (req, res) => {
+// ══════════════════════════════════════════
+//   ACTIVITIES
+// ══════════════════════════════════════════
+app.get('/api/activities', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM activities WHERE user_id=$1 ORDER BY date DESC LIMIT 50',
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ ACTIVITIES ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const acts = db.prepare(
+      'SELECT * FROM activities WHERE user_id=? ORDER BY date DESC LIMIT 50'
+    ).all(req.user.id);
+    return res.json(acts);
+  } catch (err) {
+    console.error('Activities error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/activities', auth, async (req, res) => {
-  const { type, km, hours, note, from_addr, to_addr } = req.body;
-  if (!type) return res.status(400).json({ error: 'Tipo obbligatorio' });
-  const rate = CO2_RATES[type];
-  if (!rate)  return res.status(400).json({ error: 'Tipo non valido' });
-
-  const val    = rate.type === 'k'
-    ? parseFloat(km    || 0)
-    : parseFloat(hours || 0);
-  const co2    = parseFloat((val * rate.co2).toFixed(2));
-  const points = Math.round(val * rate.pts);
-
+app.post('/api/activities', auth, (req, res) => {
   try {
-    const { rows: [act] } = await pool.query(
-      `INSERT INTO activities
-        (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       RETURNING *`,
-      [req.user.id, type,
-       parseFloat(km    || 0),
-       parseFloat(hours || 0),
-       co2, points,
-       note      || '',
-       from_addr || '',
-       to_addr   || '']
+    const { type, km, hours, note, from_addr, to_addr } = req.body;
+    if (!type) return res.status(400).json({ error: 'Tipo mancante' });
+
+    const co2    = calcCo2(type, parseFloat(km)||0, parseFloat(hours)||0);
+    const points = calcPoints(co2);
+
+    db.prepare(`
+      INSERT INTO activities
+        (user_id, type, km, hours, co2_saved, points, note, from_addr, to_addr)
+      VALUES (?,?,?,?,?,?,?,?,?)
+    `).run(
+      req.user.id, type,
+      parseFloat(km)||0, parseFloat(hours)||0,
+      co2, points,
+      note||'', from_addr||'', to_addr||''
     );
-    await pool.query(
-      'UPDATE users SET co2_saved=co2_saved+$1, points=points+$2 WHERE id=$3',
-      [co2, points, req.user.id]
-    );
-    await checkAndAwardBadges(req.user.id);
-    res.json({ ...act, co2_saved: co2, points });
-  } catch (e) {
-    console.error('❌ ACTIVITY POST ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+
+    db.prepare(`
+      UPDATE users SET
+        co2_saved        = co2_saved + ?,
+        points           = points + ?,
+        total_activities = total_activities + 1
+      WHERE id=?
+    `).run(co2, points, req.user.id);
+
+    // controlla badge
+    checkBadges(req.user.id);
+
+    return res.json({ ok: true, co2_saved: co2, points });
+  } catch (err) {
+    console.error('Log activity error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
-
 // ══════════════════════════════════════════
 //   BADGES
 // ══════════════════════════════════════════
 const BADGES = [
-  { id:'first',    name:'Prima Azione',    icon:'🌱', desc:'Completa la prima attività',   check: s => s.total   >= 1  },
-  { id:'co2_10',   name:'10 kg CO₂',       icon:'🌿', desc:'Salva 10 kg di CO₂',           check: s => s.co2     >= 10 },
-  { id:'co2_50',   name:'50 kg CO₂',       icon:'🌳', desc:'Salva 50 kg di CO₂',           check: s => s.co2     >= 50 },
-  { id:'co2_100',  name:'100 kg CO₂',      icon:'🌍', desc:'Salva 100 kg di CO₂',          check: s => s.co2     >= 100},
-  { id:'co2_500',  name:'500 kg CO₂',      icon:'🏆', desc:'Salva 500 kg di CO₂',          check: s => s.co2     >= 500},
-  { id:'pts_100',  name:'100 Punti',        icon:'⭐', desc:'Raggiungi 100 punti',           check: s => s.pts     >= 100},
-  { id:'pts_500',  name:'500 Punti',        icon:'💫', desc:'Raggiungi 500 punti',           check: s => s.pts     >= 500},
-  { id:'streak_7', name:'7 giorni di fila', icon:'🔥', desc:'7 giorni consecutivi',         check: s => s.streak  >= 7  },
-  { id:'bici_10',  name:'Ciclista',         icon:'🚴', desc:'10 attività in Bici',          check: s => s.bici    >= 10 },
-  { id:'social',   name:'Social Butterfly', icon:'👥', desc:'Segui 5 utenti',               check: s => s.follows >= 5  },
+  { id:'first',    name:'Prima Volta',    icon:'🌱', desc:'Prima attività registrata',    check: (u,a) => a >= 1           },
+  { id:'eco5',     name:'Eco x5',         icon:'🚴', desc:'5 attività registrate',         check: (u,a) => a >= 5           },
+  { id:'eco10',    name:'Eco x10',        icon:'🌿', desc:'10 attività registrate',        check: (u,a) => a >= 10          },
+  { id:'eco50',    name:'Eco x50',        icon:'🌳', desc:'50 attività registrate',        check: (u,a) => a >= 50          },
+  { id:'co2_10',   name:'10kg CO₂',       icon:'☁️', desc:'10 kg di CO₂ risparmiati',     check: (u,a) => u.co2_saved >= 10  },
+  { id:'co2_50',   name:'50kg CO₂',       icon:'🌍', desc:'50 kg di CO₂ risparmiati',     check: (u,a) => u.co2_saved >= 50  },
+  { id:'co2_100',  name:'100kg CO₂',      icon:'🏆', desc:'100 kg di CO₂ risparmiati',    check: (u,a) => u.co2_saved >= 100 },
+  { id:'co2_500',  name:'500kg CO₂',      icon:'💎', desc:'500 kg di CO₂ risparmiati',    check: (u,a) => u.co2_saved >= 500 },
+  { id:'pts_100',  name:'100 Punti',      icon:'⭐', desc:'100 punti accumulati',          check: (u,a) => u.points >= 100  },
+  { id:'pts_500',  name:'500 Punti',      icon:'🌟', desc:'500 punti accumulati',          check: (u,a) => u.points >= 500  },
+  { id:'pts_1000', name:'1000 Punti',     icon:'💫', desc:'1000 punti accumulati',         check: (u,a) => u.points >= 1000 },
+  { id:'pts_5000', name:'5000 Punti',     icon:'👑', desc:'5000 punti accumulati',         check: (u,a) => u.points >= 5000 },
+  { id:'social1',  name:'Social Starter', icon:'💬', desc:'Primo post pubblicato',         check: (u,a,p) => p >= 1         },
+  { id:'shopper',  name:'Shopper',        icon:'🛍️', desc:'Primo acquisto nello shop',     check: (u,a,p,s) => s >= 1       },
 ];
 
-async function checkAndAwardBadges(userId) {
+function checkBadges(userId) {
   try {
-    const { rows: [u] } = await pool.query(
-      'SELECT co2_saved,points FROM users WHERE id=$1', [userId]
-    );
-    const { rows: acts } = await pool.query(
-      'SELECT type,date FROM activities WHERE user_id=$1 ORDER BY date DESC', [userId]
-    );
-    const { rows: [fc] } = await pool.query(
-      'SELECT COUNT(*) AS c FROM follows WHERE follower_id=$1', [userId]
-    );
+    const user  = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+    const acts  = user.total_activities || 0;
+    const posts = db.prepare(
+      'SELECT COUNT(*) as c FROM social_posts WHERE user_id=?'
+    ).get(userId).c;
+    let owned = [];
+    try { owned = JSON.parse(user.owned_items || '[]'); } catch {}
+    const shopCount = owned.length;
 
-    let streak = 0, prev = null;
-    for (const a of acts) {
-      const d = new Date(a.date).toDateString();
-      if (!prev) { streak = 1; prev = d; continue; }
-      const diff = (new Date(prev) - new Date(d)) / (1000*60*60*24);
-      if (diff <= 1 && diff >= 0) { if (d !== prev) { streak++; prev = d; } }
-      else break;
-    }
+    // leggi badge già notificati (usiamo notifications come tracker)
+    const notified = db.prepare(
+      "SELECT message FROM notifications WHERE user_id=? AND icon='🏅'"
+    ).all(userId).map(n => n.message);
 
-    const stats = {
-      co2:     parseFloat(u.co2_saved || 0),
-      pts:     u.points || 0,
-      total:   acts.length,
-      bici:    acts.filter(a => a.type === 'Bici').length,
-      streak,
-      follows: parseInt(fc.c || 0)
-    };
-
-    const { rows: existing } = await pool.query(
-      'SELECT badge_id FROM user_badges WHERE user_id=$1', [userId]
-    ).catch(() => ({ rows: [] }));
-
-    const owned = existing.map(r => r.badge_id);
-
-    for (const b of BADGES) {
-      if (!owned.includes(b.id) && b.check(stats)) {
-        await pool.query(
-          'INSERT INTO user_badges (user_id,badge_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-          [userId, b.id]
-        ).catch(() => {});
-        await pool.query(
-          'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-          [userId, 'badge', `🏅 Badge sbloccato: ${b.icon} ${b.name}!`]
-        ).catch(() => {});
+    BADGES.forEach(b => {
+      const earned = b.check(user, acts, posts, shopCount);
+      const alreadyNotified = notified.some(n => n.includes(b.name));
+      if (earned && !alreadyNotified) {
+        db.prepare(`
+          INSERT INTO notifications (user_id, message, icon)
+          VALUES (?,?,?)
+        `).run(userId, `🏅 Badge sbloccato: ${b.name} — ${b.desc}`, '🏅');
       }
-    }
-  } catch (e) {
-    console.error('Badge check error:', e.message);
+    });
+  } catch (err) {
+    console.error('Badge check error:', err);
   }
 }
 
-app.get('/api/badges', auth, async (req, res) => {
+app.get('/api/badges', auth, (req, res) => {
   try {
-    const { rows: [u] } = await pool.query(
-      'SELECT co2_saved,points FROM users WHERE id=$1', [req.user.id]
-    );
-    const { rows: acts } = await pool.query(
-      'SELECT type,date FROM activities WHERE user_id=$1 ORDER BY date DESC', [req.user.id]
-    );
-    const { rows: [fc] } = await pool.query(
-      'SELECT COUNT(*) AS c FROM follows WHERE follower_id=$1', [req.user.id]
-    );
-    let streak = 0, prev = null;
-    for (const a of acts) {
-      const d = new Date(a.date).toDateString();
-      if (!prev) { streak = 1; prev = d; continue; }
-      const diff = (new Date(prev) - new Date(d)) / (1000*60*60*24);
-      if (diff <= 1 && diff >= 0) { if (d !== prev) { streak++; prev = d; } }
-      else break;
-    }
-    const stats = {
-      co2:     parseFloat(u?.co2_saved || 0),
-      pts:     u?.points || 0,
-      total:   acts.length,
-      bici:    acts.filter(a => a.type === 'Bici').length,
-      streak,
-      follows: parseInt(fc?.c || 0)
-    };
-    const { rows: owned } = await pool.query(
-      'SELECT badge_id FROM user_badges WHERE user_id=$1', [req.user.id]
-    ).catch(() => ({ rows: [] }));
-    const ownedIds = owned.map(r => r.badge_id);
-    res.json(BADGES.map(b => ({ ...b, unlocked: ownedIds.includes(b.id) })));
-  } catch (e) {
-    console.error('❌ BADGES ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    const user  = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+    const acts  = user.total_activities || 0;
+    const posts = db.prepare(
+      'SELECT COUNT(*) as c FROM social_posts WHERE user_id=?'
+    ).get(req.user.id).c;
+    let owned = [];
+    try { owned = JSON.parse(user.owned_items || '[]'); } catch {}
 
-// ══════════════════════════════════════════
-//   LEADERBOARD
-// ══════════════════════════════════════════
-app.get('/api/leaderboard', auth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id,name,username,co2_saved,points,
-        avatar_color,avatar_skin,avatar_eyes,avatar_mouth,avatar_hair
-       FROM users
-       WHERE is_banned=false
-       ORDER BY co2_saved DESC
-       LIMIT 50`
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ LEADERBOARD ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const result = BADGES.map(b => ({
+      id:       b.id,
+      name:     b.name,
+      icon:     b.icon,
+      desc:     b.desc,
+      unlocked: b.check(user, acts, posts, owned.length)
+    }));
+
+    return res.json(result);
+  } catch (err) {
+    console.error('Badges error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
 //   CHALLENGES
 // ══════════════════════════════════════════
-app.get('/api/challenges', auth, async (req, res) => {
+app.get('/api/challenges', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT c.*, u.name AS creator_name
-       FROM challenges c
-       LEFT JOIN users u ON u.id=c.creator_id
-       WHERE c.is_public=true OR c.creator_id=$1
-       ORDER BY c.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ CHALLENGES ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const rows = db.prepare(`
+      SELECT c.*, u.name as creator_name
+      FROM challenges c
+      LEFT JOIN users u ON u.id = c.creator_id
+      WHERE c.is_public=1 OR c.creator_id=?
+      ORDER BY c.created_at DESC
+    `).all(req.user.id);
+    return res.json(rows);
+  } catch (err) {
+    console.error('Challenges error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/challenges', auth, async (req, res) => {
-  const { title, description, co2_target, points_reward, end_date, is_public } = req.body;
-  if (!title) return res.status(400).json({ error: 'Titolo obbligatorio' });
+app.post('/api/challenges', auth, (req, res) => {
   try {
-    const { rows: [ch] } = await pool.query(
-      `INSERT INTO challenges
-        (creator_id,title,description,co2_target,points_reward,end_date,is_public)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [req.user.id, title, description || '',
-       co2_target || 0, points_reward || 0,
-       end_date   || null, is_public !== false]
+    const { title, description, co2_target,
+            points_reward, end_date, is_public } = req.body;
+
+    if (!title)
+      return res.status(400).json({ error: 'Titolo obbligatorio' });
+
+    db.prepare(`
+      INSERT INTO challenges
+        (creator_id, title, description, co2_target,
+         points_reward, end_date, is_public)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(
+      req.user.id, title, description||'',
+      parseFloat(co2_target)||0,
+      parseInt(points_reward)||0,
+      end_date||null,
+      is_public ? 1 : 0
     );
-    res.json(ch);
-  } catch (e) {
-    console.error('❌ CHALLENGE POST ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Create challenge error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
-//   SOCIAL — FOLLOW
+//   LEADERBOARD
 // ══════════════════════════════════════════
-app.get('/api/users/search', auth, async (req, res) => {
-  const q = req.query.q?.trim();
-  if (!q || q.length < 2) return res.json([]);
+app.get('/api/leaderboard', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT u.id,u.name,u.username,u.co2_saved,u.points,
-        u.avatar_color,u.avatar_skin,u.avatar_eyes,u.avatar_mouth,u.avatar_hair,
-        EXISTS(
-          SELECT 1 FROM follows
-          WHERE follower_id=$1 AND followed_id=u.id
-        ) AS is_following
-       FROM users u
-       WHERE (LOWER(u.name) LIKE LOWER($2) OR LOWER(u.username) LIKE LOWER($2))
-         AND u.id!=$1 AND u.is_banned=false
-       LIMIT 20`,
-      [req.user.id, `%${q}%`]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ SEARCH ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const rows = db.prepare(`
+      SELECT id, name, username, co2_saved, points,
+             avatar_color, avatar_skin,
+             avatar_eyes,  avatar_mouth, avatar_hair
+      FROM users
+      WHERE verified=1
+      ORDER BY co2_saved DESC
+      LIMIT 50
+    `).all();
+    return res.json(rows);
+  } catch (err) {
+    console.error('Leaderboard error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.get('/api/following', auth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT u.id,u.name,u.username,u.co2_saved,u.points,
-        u.avatar_color,u.avatar_skin,u.avatar_eyes,u.avatar_mouth,u.avatar_hair,
-        true AS is_following
-       FROM follows f JOIN users u ON u.id=f.followed_id
-       WHERE f.follower_id=$1 AND u.is_banned=false
-       ORDER BY f.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ FOLLOWING ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
-
-app.get('/api/followers', auth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT u.id,u.name,u.username,u.co2_saved,u.points,
-        u.avatar_color,u.avatar_skin,u.avatar_eyes,u.avatar_mouth,u.avatar_hair,
-        EXISTS(
-          SELECT 1 FROM follows
-          WHERE follower_id=$1 AND followed_id=u.id
-        ) AS is_following
-       FROM follows f JOIN users u ON u.id=f.follower_id
-       WHERE f.followed_id=$1 AND u.is_banned=false
-       ORDER BY f.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ FOLLOWERS ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
-
-app.post('/api/follow/:id', auth, async (req, res) => {
-  const targetId = parseInt(req.params.id);
-  if (targetId === req.user.id)
-    return res.status(400).json({ error: 'Non puoi seguire te stesso' });
-  try {
-    await pool.query(
-      'INSERT INTO follows (follower_id,followed_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [req.user.id, targetId]
-    );
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [targetId, 'follow', `👥 Qualcuno ha iniziato a seguirti!`]
-    ).catch(() => {});
-    await checkAndAwardBadges(req.user.id);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ FOLLOW ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
-
-app.delete('/api/follow/:id', auth, async (req, res) => {
-  try {
-    await pool.query(
-      'DELETE FROM follows WHERE follower_id=$1 AND followed_id=$2',
-      [req.user.id, req.params.id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ UNFOLLOW ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
 // ══════════════════════════════════════════
-//   GROUPS
+//   SOCIAL — POSTS
 // ══════════════════════════════════════════
-app.get('/api/groups', auth, async (req, res) => {
+app.get('/api/social/posts', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT g.*,
-        COUNT(DISTINCT gm.user_id) AS member_count,
-        EXISTS(
-          SELECT 1 FROM group_members
-          WHERE group_id=g.id AND user_id=$1
-        ) AS is_member
-       FROM groups g
-       LEFT JOIN group_members gm ON gm.group_id=g.id
-       WHERE g.is_public=true
-          OR g.creator_id=$1
-          OR EXISTS(
-            SELECT 1 FROM group_members
-            WHERE group_id=g.id AND user_id=$1
-          )
-       GROUP BY g.id
-       ORDER BY g.created_at DESC`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ GROUPS ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const posts = db.prepare(`
+      SELECT
+        p.*,
+        u.name    as author_name,
+        u.username as author_username,
+        u.avatar_color, u.avatar_skin,
+        u.avatar_eyes,  u.avatar_mouth, u.avatar_hair,
+        (SELECT COUNT(*) FROM comments WHERE post_id=p.id) as comments_count
+      FROM social_posts p
+      JOIN users u ON u.id = p.user_id
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `).all();
+
+    const result = posts.map(p => {
+      let likes = [];
+      try { likes = JSON.parse(p.likes || '[]'); } catch {}
+      return {
+        ...p,
+        likes_count:   likes.length,
+        liked_by_me:   likes.includes(req.user.id),
+        author_id:     p.user_id
+      };
+    });
+
+    return res.json(result);
+  } catch (err) {
+    console.error('Posts error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/groups', auth, async (req, res) => {
-  const { name, description, is_public } = req.body;
-  if (!name) return res.status(400).json({ error: 'Nome obbligatorio' });
+app.post('/api/social/posts', auth, (req, res) => {
   try {
-    const invite_code = crypto.randomBytes(3).toString('hex').toUpperCase();
-    const { rows: [g] } = await pool.query(
-      `INSERT INTO groups (name,description,creator_id,invite_code,is_public)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name.trim(), description || '', req.user.id, invite_code, is_public !== false]
-    );
-    await pool.query(
-      'INSERT INTO group_members (group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [g.id, req.user.id]
-    );
-    res.json(g);
-  } catch (e) {
-    console.error('❌ GROUP CREATE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const { content, image_url } = req.body;
+    if (!content?.trim())
+      return res.status(400).json({ error: 'Contenuto mancante' });
+
+    db.prepare(`
+      INSERT INTO social_posts (user_id, content, image_url)
+      VALUES (?,?,?)
+    `).run(req.user.id, content.trim(), image_url||'');
+
+    checkBadges(req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Create post error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/groups/:id/join', auth, async (req, res) => {
+app.delete('/api/social/posts/:id', auth, (req, res) => {
   try {
-    const { rows: [g] } = await pool.query(
-      'SELECT * FROM groups WHERE id=$1', [req.params.id]
-    );
-    if (!g) return res.status(404).json({ error: 'Gruppo non trovato' });
-    if (!g.is_public)
-      return res.status(403).json({ error: 'Gruppo privato — usa il codice invito' });
-    await pool.query(
-      'INSERT INTO group_members (group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [req.params.id, req.user.id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ GROUP JOIN ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const post = db.prepare(
+      'SELECT user_id FROM social_posts WHERE id=?'
+    ).get(req.params.id);
+
+    if (!post) return res.status(404).json({ error: 'Post non trovato' });
+
+    const user = db.prepare('SELECT is_admin FROM users WHERE id=?')
+                   .get(req.user.id);
+
+    if (post.user_id !== req.user.id && !user.is_admin)
+      return res.status(403).json({ error: 'Non autorizzato' });
+
+    db.prepare('DELETE FROM social_posts WHERE id=?').run(req.params.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete post error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/groups/join/:code', auth, async (req, res) => {
-  const code = req.params.code?.toUpperCase();
+// LIKE
+app.post('/api/social/posts/:id/like', auth, (req, res) => {
   try {
-    const { rows: [g] } = await pool.query(
-      'SELECT * FROM groups WHERE UPPER(invite_code)=$1', [code]
-    );
-    if (!g) return res.status(404).json({ error: 'Codice non valido' });
-    await pool.query(
-      'INSERT INTO group_members (group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-      [g.id, req.user.id]
-    );
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [g.creator_id, 'info',
-       `👥 Un nuovo membro si è unito al gruppo "${g.name}"!`]
-    ).catch(() => {});
-    res.json({ ok: true, group: g });
-  } catch (e) {
-    console.error('❌ GROUP JOIN CODE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    const post = db.prepare(
+      'SELECT id, likes, user_id FROM social_posts WHERE id=?'
+    ).get(req.params.id);
 
-app.delete('/api/groups/:id/leave', auth, async (req, res) => {
-  try {
-    await pool.query(
-      'DELETE FROM group_members WHERE group_id=$1 AND user_id=$2',
-      [req.params.id, req.user.id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ GROUP LEAVE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    if (!post) return res.status(404).json({ error: 'Post non trovato' });
 
-app.get('/api/groups/:id/leaderboard', auth, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT u.id,u.name,u.username,u.co2_saved,u.points,
-        u.avatar_color,u.avatar_skin,u.avatar_eyes,u.avatar_mouth,u.avatar_hair
-       FROM group_members gm
-       JOIN users u ON u.id=gm.user_id
-       WHERE gm.group_id=$1 AND u.is_banned=false
-       ORDER BY u.co2_saved DESC`,
-      [req.params.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ GROUP LB ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    let likes = [];
+    try { likes = JSON.parse(post.likes || '[]'); } catch {}
 
-app.post('/api/groups/:id/invite', auth, async (req, res) => {
-  const { follower_ids } = req.body;
-  if (!follower_ids?.length)
-    return res.status(400).json({ error: 'Nessun utente selezionato' });
-  try {
-    const { rows: [g] } = await pool.query(
-      'SELECT * FROM groups WHERE id=$1', [req.params.id]
-    );
-    if (!g) return res.status(404).json({ error: 'Gruppo non trovato' });
-    let sent = 0;
-    for (const uid of follower_ids) {
-      await pool.query(
-        'INSERT INTO group_members (group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-        [req.params.id, uid]
-      );
-      await pool.query(
-        'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-        [uid, 'group_invite',
-         `👥 Sei stato invitato nel gruppo "${g.name}"!`]
-      ).catch(() => {});
-      sent++;
+    const idx = likes.indexOf(req.user.id);
+    if (idx === -1) {
+      likes.push(req.user.id);
+      // notifica autore
+      if (post.user_id !== req.user.id) {
+        const liker = db.prepare('SELECT name FROM users WHERE id=?')
+                        .get(req.user.id);
+        db.prepare(`
+          INSERT INTO notifications (user_id, message, icon)
+          VALUES (?,?,?)
+        `).run(post.user_id, `❤️ ${liker.name} ha messo like al tuo post`, '❤️');
+      }
+    } else {
+      likes.splice(idx, 1);
     }
-    res.json({ ok: true, sent });
-  } catch (e) {
-    console.error('❌ GROUP INVITE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+
+    db.prepare('UPDATE social_posts SET likes=? WHERE id=?')
+      .run(JSON.stringify(likes), post.id);
+
+    return res.json({ liked: idx === -1, likes_count: likes.length });
+  } catch (err) {
+    console.error('Like error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
+// COMMENTS
+app.get('/api/social/posts/:id/comments', auth, (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT c.*, u.name as author_name, u.id as author_id
+      FROM comments c
+      JOIN users u ON u.id = c.user_id
+      WHERE c.post_id=?
+      ORDER BY c.created_at ASC
+    `).all(req.params.id);
+    return res.json(rows);
+  } catch (err) {
+    console.error('Comments error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.post('/api/social/posts/:id/comments', auth, (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim())
+      return res.status(400).json({ error: 'Commento vuoto' });
+
+    const post = db.prepare(
+      'SELECT user_id FROM social_posts WHERE id=?'
+    ).get(req.params.id);
+
+    if (!post) return res.status(404).json({ error: 'Post non trovato' });
+
+    db.prepare(`
+      INSERT INTO comments (post_id, user_id, content)
+      VALUES (?,?,?)
+    `).run(req.params.id, req.user.id, content.trim());
+
+    // notifica autore
+    if (post.user_id !== req.user.id) {
+      const commenter = db.prepare('SELECT name FROM users WHERE id=?')
+                          .get(req.user.id);
+      db.prepare(`
+        INSERT INTO notifications (user_id, message, icon)
+        VALUES (?,?,?)
+      `).run(post.user_id,
+        `💬 ${commenter.name} ha commentato il tuo post`, '💬');
+    }
+
+    const count = db.prepare(
+      'SELECT COUNT(*) as c FROM comments WHERE post_id=?'
+    ).get(req.params.id).c;
+
+    return res.json({ ok: true, comments_count: count });
+  } catch (err) {
+    console.error('Add comment error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.delete('/api/social/comments/:id', auth, (req, res) => {
+  try {
+    const comment = db.prepare(
+      'SELECT user_id FROM comments WHERE id=?'
+    ).get(req.params.id);
+
+    if (!comment) return res.status(404).json({ error: 'Commento non trovato' });
+
+    const user = db.prepare('SELECT is_admin FROM users WHERE id=?')
+                   .get(req.user.id);
+
+    if (comment.user_id !== req.user.id && !user.is_admin)
+      return res.status(403).json({ error: 'Non autorizzato' });
+
+    db.prepare('DELETE FROM comments WHERE id=?').run(req.params.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete comment error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// FOLLOW
+app.get('/api/social/users', auth, (req, res) => {
+  try {
+    const users = db.prepare(`
+      SELECT
+        u.id, u.name, u.username, u.points,
+        u.avatar_color, u.avatar_skin,
+        u.avatar_eyes,  u.avatar_mouth, u.avatar_hair,
+        CASE WHEN f.follower_id IS NOT NULL THEN 1 ELSE 0 END as following
+      FROM users u
+      LEFT JOIN follows f
+        ON f.follower_id=? AND f.following_id=u.id
+      WHERE u.id != ? AND u.verified=1
+      ORDER BY u.co2_saved DESC
+      LIMIT 30
+    `).all(req.user.id, req.user.id);
+    return res.json(users);
+  } catch (err) {
+    console.error('Users error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.post('/api/social/follow/:id', auth, (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (targetId === req.user.id)
+      return res.status(400).json({ error: 'Non puoi seguire te stesso' });
+
+    const existing = db.prepare(
+      'SELECT 1 FROM follows WHERE follower_id=? AND following_id=?'
+    ).get(req.user.id, targetId);
+
+    if (existing) {
+      db.prepare(
+        'DELETE FROM follows WHERE follower_id=? AND following_id=?'
+      ).run(req.user.id, targetId);
+      return res.json({ following: false });
+    } else {
+      db.prepare(
+        'INSERT INTO follows (follower_id, following_id) VALUES (?,?)'
+      ).run(req.user.id, targetId);
+
+      const follower = db.prepare('SELECT name FROM users WHERE id=?')
+                         .get(req.user.id);
+      db.prepare(`
+        INSERT INTO notifications (user_id, message, icon)
+        VALUES (?,?,?)
+      `).run(targetId, `👤 ${follower.name} ha iniziato a seguirti`, '👤');
+
+      return res.json({ following: true });
+    }
+  } catch (err) {
+    console.error('Follow error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
 // ══════════════════════════════════════════
 //   SHOP
 // ══════════════════════════════════════════
-app.get('/api/shop', auth, async (req, res) => {
+app.get('/api/shop', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
+    const items = db.prepare(
       'SELECT * FROM shop_items ORDER BY category, cost'
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ SHOP ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    ).all();
+    return res.json(items);
+  } catch (err) {
+    console.error('Shop error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/shop/buy', auth, async (req, res) => {
-  const { item_id } = req.body;
-  if (!item_id) return res.status(400).json({ error: 'item_id mancante' });
+app.post('/api/shop/buy', auth, (req, res) => {
   try {
-    const { rows: [item] } = await pool.query(
-      'SELECT * FROM shop_items WHERE id=$1', [item_id]
-    );
-    if (!item) return res.status(404).json({ error: 'Item non trovato' });
+    const { item_id } = req.body;
+    if (!item_id)
+      return res.status(400).json({ error: 'Item mancante' });
 
-    const { rows: [user] } = await pool.query(
-      'SELECT points FROM users WHERE id=$1', [req.user.id]
-    );
+    const item = db.prepare(
+      'SELECT * FROM shop_items WHERE id=?'
+    ).get(item_id);
+    if (!item)
+      return res.status(404).json({ error: 'Oggetto non trovato' });
+
+    const user = db.prepare(
+      'SELECT points, owned_items FROM users WHERE id=?'
+    ).get(req.user.id);
+
+    let owned = [];
+    try { owned = JSON.parse(user.owned_items || '[]'); } catch {}
+
+    if (owned.includes(item.id))
+      return res.status(400).json({ error: 'Oggetto già posseduto' });
+
     if (user.points < item.cost)
       return res.status(400).json({ error: 'Punti insufficienti' });
 
-    const { rows: exists } = await pool.query(
-      'SELECT 1 FROM user_items WHERE user_id=$1 AND item_id=$2',
-      [req.user.id, item_id]
-    );
-    if (exists.length)
-      return res.status(400).json({ error: 'Hai già questo oggetto' });
+    owned.push(item.id);
 
-    await pool.query(
-      'INSERT INTO user_items (user_id,item_id) VALUES ($1,$2)',
-      [req.user.id, item_id]
-    );
-    await pool.query(
-      'UPDATE users SET points=points-$1 WHERE id=$2',
-      [item.cost, req.user.id]
-    );
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [req.user.id, 'shop', `🛍️ Hai acquistato: ${item.name}!`]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ SHOP BUY ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    db.prepare(`
+      UPDATE users SET
+        points      = points - ?,
+        owned_items = ?
+      WHERE id=?
+    `).run(item.cost, JSON.stringify(owned), req.user.id);
+
+    db.prepare(`
+      INSERT INTO notifications (user_id, message, icon)
+      VALUES (?,?,?)
+    `).run(req.user.id,
+      `🛍️ Hai acquistato "${item.name}"!`, '🛍️');
+
+    checkBadges(req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Buy error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
 //   NOTIFICATIONS
 // ══════════════════════════════════════════
-app.get('/api/notifications', auth, async (req, res) => {
+app.get('/api/notifications', auth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT * FROM notifications
-       WHERE user_id=$1
-       ORDER BY created_at DESC
-       LIMIT 30`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ NOTIF ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const rows = db.prepare(`
+      SELECT * FROM notifications
+      WHERE user_id=?
+      ORDER BY created_at DESC
+      LIMIT 50
+    `).all(req.user.id);
+    return res.json(rows);
+  } catch (err) {
+    console.error('Notifications error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/notifications/read', auth, async (req, res) => {
+app.get('/api/notifications/count', auth, (req, res) => {
   try {
-    await pool.query(
-      'UPDATE notifications SET is_read=true WHERE user_id=$1',
-      [req.user.id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ NOTIF READ ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const row = db.prepare(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id=? AND read=0'
+    ).get(req.user.id);
+    return res.json({ count: row.count });
+  } catch (err) {
+    console.error('Notif count error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.post('/api/notifications/read-all', auth, (req, res) => {
+  try {
+    db.prepare(
+      'UPDATE notifications SET read=1 WHERE user_id=?'
+    ).run(req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Read all error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.post('/api/notifications/:id/read', auth, (req, res) => {
+  try {
+    db.prepare(
+      'UPDATE notifications SET read=1 WHERE id=? AND user_id=?'
+    ).run(req.params.id, req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Read notif error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
 //   ADMIN
 // ══════════════════════════════════════════
-app.get('/api/admin/users', auth, adminOnly, async (req, res) => {
+app.get('/api/admin/stats', adminAuth, (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT id,name,username,email,co2_saved,points,
-        is_admin,is_banned,is_verified,
-        avatar_color,avatar_skin,avatar_eyes,avatar_mouth,avatar_hair,
-        created_at
-       FROM users ORDER BY created_at DESC`
+    const total_users = db.prepare(
+      'SELECT COUNT(*) as c FROM users'
+    ).get().c;
+    const total_activities = db.prepare(
+      'SELECT COUNT(*) as c FROM activities'
+    ).get().c;
+    const total_co2 = db.prepare(
+      'SELECT COALESCE(SUM(co2_saved),0) as t FROM activities'
+    ).get().t;
+    const total_posts = db.prepare(
+      'SELECT COUNT(*) as c FROM social_posts'
+    ).get().c;
+
+    return res.json({
+      total_users, total_activities,
+      total_co2, total_posts
+    });
+  } catch (err) {
+    console.error('Admin stats error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.get('/api/admin/users', adminAuth, (req, res) => {
+  try {
+    const users = db.prepare(`
+      SELECT id, name, username, email,
+             points, co2_saved, is_admin, verified,
+             total_activities, created_at
+      FROM users
+      ORDER BY created_at DESC
+    `).all();
+    return res.json(users);
+  } catch (err) {
+    console.error('Admin users error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+app.put('/api/admin/users/:id', adminAuth, (req, res) => {
+  try {
+    const { name, username, points, is_admin } = req.body;
+    db.prepare(`
+      UPDATE users SET
+        name=?, username=?, points=?, is_admin=?
+      WHERE id=?
+    `).run(
+      name, username?.toLowerCase(),
+      parseInt(points)||0,
+      is_admin ? 1 : 0,
+      req.params.id
     );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ ADMIN USERS ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin edit user error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/admin/ban/:id', auth, adminOnly, async (req, res) => {
+app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
   try {
-    await pool.query('UPDATE users SET is_banned=true WHERE id=$1', [req.params.id]);
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [req.params.id, 'ban', '🚫 Il tuo account è stato bannato.']
-    ).catch(() => {});
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN BAN ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    // non eliminare se stesso
+    if (parseInt(req.params.id) === req.user.id)
+      return res.status(400).json({ error: 'Non puoi eliminare te stesso' });
+
+    db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin delete user error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/admin/unban/:id', auth, adminOnly, async (req, res) => {
+app.post('/api/admin/users/:id/verify', adminAuth, (req, res) => {
   try {
-    await pool.query('UPDATE users SET is_banned=false WHERE id=$1', [req.params.id]);
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [req.params.id, 'unban', '✅ Il tuo account è stato riabilitato.']
-    ).catch(() => {});
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN UNBAN ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    db.prepare(
+      'UPDATE users SET verified=1, verify_token=NULL WHERE id=?'
+    ).run(req.params.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin verify error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/admin/delete/:id', auth, adminOnly, async (req, res) => {
+app.get('/api/admin/activities', adminAuth, (req, res) => {
   try {
-    await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN DELETE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    const rows = db.prepare(`
+      SELECT a.*, u.name as user_name
+      FROM activities a
+      JOIN users u ON u.id = a.user_id
+      ORDER BY a.date DESC
+      LIMIT 100
+    `).all();
+    return res.json(rows);
+  } catch (err) {
+    console.error('Admin activities error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
-app.post('/api/admin/promote/:id', auth, adminOnly, async (req, res) => {
+app.delete('/api/admin/activities/:id', adminAuth, (req, res) => {
   try {
-    await pool.query('UPDATE users SET is_admin=true WHERE id=$1', [req.params.id]);
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [req.params.id, 'info', '👑 Sei stato promosso Admin!']
-    ).catch(() => {});
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN PROMOTE ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    const act = db.prepare(
+      'SELECT user_id, co2_saved, points FROM activities WHERE id=?'
+    ).get(req.params.id);
 
-app.post('/api/admin/warn/:id', auth, adminOnly, async (req, res) => {
-  const { message } = req.body;
-  if (!message) return res.status(400).json({ error: 'Messaggio obbligatorio' });
-  try {
-    await pool.query(
-      'INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [req.params.id, 'warn', '⚠️ Warning: ' + message]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN WARN ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    if (!act)
+      return res.status(404).json({ error: 'Attività non trovata' });
 
-app.post('/api/admin/resetco2/:id', auth, adminOnly, async (req, res) => {
-  try {
-    await pool.query(
-      'UPDATE users SET co2_saved=0, points=0 WHERE id=$1', [req.params.id]
-    );
-    await pool.query(
-      'DELETE FROM activities WHERE user_id=$1', [req.params.id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN RESET ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
+    // sottrai stats utente
+    db.prepare(`
+      UPDATE users SET
+        co2_saved        = MAX(0, co2_saved - ?),
+        points           = MAX(0, points - ?),
+        total_activities = MAX(0, total_activities - 1)
+      WHERE id=?
+    `).run(act.co2_saved, act.points, act.user_id);
 
-app.get('/api/admin/user-activities/:id', auth, adminOnly, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      'SELECT * FROM activities WHERE user_id=$1 ORDER BY date DESC',
-      [req.params.id]
-    );
-    res.json(rows);
-  } catch (e) {
-    console.error('❌ ADMIN USER ACTS ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
-  }
-});
-
-app.delete('/api/admin/delete-activity/:id', auth, adminOnly, async (req, res) => {
-  try {
-    const { rows: [act] } = await pool.query(
-      'SELECT * FROM activities WHERE id=$1', [req.params.id]
-    );
-    if (!act) return res.status(404).json({ error: 'Attività non trovata' });
-    await pool.query('DELETE FROM activities WHERE id=$1', [req.params.id]);
-    await pool.query(
-      `UPDATE users
-       SET co2_saved = GREATEST(0, co2_saved-$1),
-           points    = GREATEST(0, points-$2)
-       WHERE id=$3`,
-      [act.co2_saved || 0, act.points || 0, act.user_id]
-    );
-    res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ ADMIN DEL ACT ERROR:', e.message);
-    res.status(500).json({ error: 'Errore server: ' + e.message });
+    db.prepare('DELETE FROM activities WHERE id=?').run(req.params.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin delete activity error:', err);
+    return res.status(500).json({ error: 'Errore server' });
   }
 });
 
 // ══════════════════════════════════════════
-//   SPA FALLBACK
+//   DEV HELPERS (rimuovi in produzione)
+// ══════════════════════════════════════════
+if (process.env.NODE_ENV !== 'production') {
+  // forza verifica utente per test
+  app.get('/api/dev/verify/:email', (req, res) => {
+    try {
+      db.prepare(
+        'UPDATE users SET verified=1, verify_token=NULL WHERE email=?'
+      ).run(req.params.email.toLowerCase());
+      return res.json({ ok: true, msg: `${req.params.email} verificato!` });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // lista tutti gli utenti (debug)
+  app.get('/api/dev/users', (req, res) => {
+    const users = db.prepare(
+      'SELECT id, name, email, verified, points FROM users'
+    ).all();
+    return res.json(users);
+  });
+}
+
+// ══════════════════════════════════════════
+//   STATIC FALLBACK
 // ══════════════════════════════════════════
 app.get('*', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+  // prova prima public/index.html poi index.html nella root
+  const pub  = path.join(__dirname, 'public', 'index.html');
+  const root = path.join(__dirname, 'index.html');
+  const fs   = require('fs');
+
+  if (fs.existsSync(pub))  return res.sendFile(pub);
+  if (fs.existsSync(root)) return res.sendFile(root);
+  return res.status(404).send('index.html non trovato');
 });
 
 // ══════════════════════════════════════════
 //   START
 // ══════════════════════════════════════════
-initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 EcoTrack running on port ${PORT}`);
-    console.log(`🌍 BASE_URL: ${BASE_URL}`);
-    console.log(`📧 MAIL:     ${MAIL_USER || 'non configurata'}`);
-  });
-}).catch(err => {
-  console.error('❌ DB init failed:', err);
-  process.exit(1);
+app.listen(PORT, () => {
+  console.log(`
+  ╔══════════════════════════════════════╗
+  ║   🌱 EcoTrack Server avviato!        ║
+  ║   http://localhost:${PORT}             ║
+  ╚══════════════════════════════════════╝
+  `);
 });
