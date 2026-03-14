@@ -287,6 +287,7 @@ function calcCo2(type, km, hours) {
 function calcPoints(co2) {
   return Math.max(1, Math.round(co2 * 10));
 }
+
 // ══════════════════════════════════════════
 //   AUTH ROUTES
 // ══════════════════════════════════════════
@@ -309,10 +310,11 @@ app.post('/api/register', (req, res) => {
     const hash  = bcrypt.hashSync(password, 10);
     const vTok  = crypto.randomBytes(32).toString('hex');
 
+    // ✅ FIX 1: verified=1 — nessuna email di verifica richiesta
     db.prepare(`
       INSERT INTO users
         (name, username, email, password, verify_token, verified)
-      VALUES (?,?,?,?,?,0)
+      VALUES (?,?,?,?,?,1)
     `).run(
       name,
       username.toLowerCase(),
@@ -321,12 +323,9 @@ app.post('/api/register', (req, res) => {
       vTok
     );
 
-    // manda email in background — non blocca risposta
-    sendVerifyEmail(email.toLowerCase(), vTok).catch(console.error);
-
     return res.json({
       ok: true,
-      message: 'Registrazione completata! Controlla la tua email.'
+      message: 'Registrazione completata! Ora puoi accedere.'
     });
 
   } catch (err) {
@@ -350,11 +349,12 @@ app.post('/api/login', (req, res) => {
     if (!user)
       return res.status(400).json({ error: 'Credenziali non valide' });
 
-    if (!user.verified)
-      return res.status(400).json({
-        error: 'Email non verificata. Controlla la tua casella.',
-        needsVerify: true
-      });
+    // ✅ FIX 2: blocco verifica email rimosso
+    // if (!user.verified)
+    //   return res.status(400).json({
+    //     error: 'Email non verificata. Controlla la tua casella.',
+    //     needsVerify: true
+    //   });
 
     const ok = bcrypt.compareSync(password, user.password);
     if (!ok)
@@ -729,6 +729,7 @@ app.post('/api/activities', auth, (req, res) => {
     return res.status(500).json({ error: 'Errore server' });
   }
 });
+
 // ══════════════════════════════════════════
 //   BADGES
 // ══════════════════════════════════════════
@@ -857,12 +858,12 @@ app.post('/api/challenges', auth, (req, res) => {
 // ══════════════════════════════════════════
 app.get('/api/leaderboard', auth, (req, res) => {
   try {
+    // ✅ FIX 3: rimosso WHERE verified=1 — tutti gli utenti in classifica
     const rows = db.prepare(`
       SELECT id, name, username, co2_saved, points,
              avatar_color, avatar_skin,
              avatar_eyes,  avatar_mouth, avatar_hair
       FROM users
-      WHERE verified=1
       ORDER BY co2_saved DESC
       LIMIT 50
     `).all();
@@ -1079,7 +1080,7 @@ app.get('/api/social/users', auth, (req, res) => {
       FROM users u
       LEFT JOIN follows f
         ON f.follower_id=? AND f.following_id=u.id
-      WHERE u.id != ? AND u.verified=1
+      WHERE u.id != ?
       ORDER BY u.co2_saved DESC
       LIMIT 30
     `).all(req.user.id, req.user.id);
@@ -1124,6 +1125,7 @@ app.post('/api/social/follow/:id', auth, (req, res) => {
     return res.status(500).json({ error: 'Errore server' });
   }
 });
+
 // ══════════════════════════════════════════
 //   SHOP
 // ══════════════════════════════════════════
