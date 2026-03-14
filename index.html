@@ -1,544 +1,759 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EcoTrack</title>
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EcoTrack</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
-<!-- TUTORIAL -->
-<div id="tut" class="tut-overlay" style="display:none">
+<!-- ══ TOAST ══ -->
+<div id="notif" class="notif"></div>
+
+<!-- ══ TUTORIAL ══ -->
+<div class="tut-overlay" id="tutOverlay" style="display:none">
   <div class="tut-card">
-    <button class="tut-close" onclick="skipTut()">✕</button>
-    <div>
-      <div class="tut-step active" data-s="1"><div class="tut-emoji">🌱</div><h2>Benvenuto su EcoTrack!</h2><p>Traccia le tue attività green e misura il tuo impatto ogni giorno.</p></div>
-      <div class="tut-step" data-s="2"><div class="tut-emoji">📊</div><h2>Calcolo automatico CO₂</h2><p>Ogni attività registrata calcola i kg di CO₂ risparmiata automaticamente.</p></div>
-      <div class="tut-step" data-s="3"><div class="tut-emoji">🏆</div><h2>Punti e Classifica</h2><p>Scala la classifica, sblocca badge e partecipa alle sfide mensili!</p></div>
-      <div class="tut-step" data-s="4"><div class="tut-emoji">👤</div><h2>Profilo & Mii</h2><p>Personalizza il tuo avatar Mii, segui altri utenti e crea gruppi green!</p></div>
+    <button class="tut-close" onclick="closeTut()">✕</button>
+    <div class="tut-step active" id="tut0">
+      <div class="tut-emoji">🌱</div>
+      <h2>Benvenuto in EcoTrack!</h2>
+      <p>Traccia le tue abitudini eco-sostenibili, guadagna punti e salva il pianeta insieme alla community.</p>
+    </div>
+    <div class="tut-step" id="tut1">
+      <div class="tut-emoji">🗺️</div>
+      <h2>Mappa Percorsi</h2>
+      <p>Registra i tuoi spostamenti con la mappa interattiva. Inserisci partenza e arrivo, calcola il percorso reale e guadagna punti automaticamente!</p>
+    </div>
+    <div class="tut-step" id="tut2">
+      <div class="tut-emoji">🏆</div>
+      <h2>Sfide & Badge</h2>
+      <p>Completa sfide ecologiche, sblocca badge esclusivi e scala la classifica globale.</p>
+    </div>
+    <div class="tut-step" id="tut3">
+      <div class="tut-emoji">👥</div>
+      <h2>Community</h2>
+      <p>Segui altri utenti, unisciti ai gruppi e condividi i tuoi progressi con il mondo!</p>
     </div>
     <div class="tut-dots">
-      <div class="tut-dot active" onclick="goS(1)"></div>
-      <div class="tut-dot" onclick="goS(2)"></div>
-      <div class="tut-dot" onclick="goS(3)"></div>
-      <div class="tut-dot" onclick="goS(4)"></div>
+      <div class="tut-dot active" onclick="goTut(0)"></div>
+      <div class="tut-dot" onclick="goTut(1)"></div>
+      <div class="tut-dot" onclick="goTut(2)"></div>
+      <div class="tut-dot" onclick="goTut(3)"></div>
     </div>
     <div class="tut-actions">
-      <button class="tut-prev" id="tPrev" onclick="prevS()" style="opacity:0;pointer-events:none">← Indietro</button>
-      <button class="tut-next" id="tNext" onclick="nextS()">Avanti →</button>
+      <button class="tut-prev" onclick="tutNav(-1)">← Indietro</button>
+      <button class="tut-next" onclick="tutNav(1)">Avanti →</button>
     </div>
   </div>
 </div>
 
-<!-- AUTH -->
+<!-- ══ AUTH ══ -->
 <div id="authWrap" class="auth-wrap">
   <div class="auth-bg-shapes">
-    <div class="shape s1"></div><div class="shape s2"></div><div class="shape s3"></div>
+    <div class="shape s1"></div>
+    <div class="shape s2"></div>
+    <div class="shape s3"></div>
   </div>
   <div class="auth-card">
     <div class="auth-logo">
       <div class="logo-icon"><i class="fas fa-leaf"></i></div>
       <span>EcoTrack</span>
     </div>
-    <p class="auth-sub">Track your sustainability journey</p>
+    <p class="auth-sub">Traccia il tuo impatto ambientale 🌍</p>
     <div class="auth-tabs">
-      <button class="auth-tab active" id="tLogin" onclick="switchAuth('login')">Login</button>
-      <button class="auth-tab" id="tReg" onclick="switchAuth('register')">Register</button>
+      <button class="auth-tab active" onclick="switchTab('login',this)">Accedi</button>
+      <button class="auth-tab" onclick="switchTab('register',this)">Registrati</button>
     </div>
 
     <!-- LOGIN -->
-    <div id="fLogin" class="auth-form">
+    <form id="loginForm" class="auth-form" onsubmit="doLogin(event)">
       <div class="field">
         <label>Email o Username</label>
-        <div class="input-wrap"><i class="ic fas fa-user"></i><input id="lEmail" type="text" placeholder="email o @username"></div>
+        <div class="input-wrap">
+          <i class="ic fas fa-user"></i>
+          <input id="lEmail" type="text" placeholder="email@esempio.it" required/>
+        </div>
       </div>
       <div class="field">
         <label>Password</label>
         <div class="input-wrap">
           <i class="ic fas fa-lock"></i>
-          <input id="lPw" type="password" placeholder="••••••••">
-          <button class="eye" onclick="toggleEye('lPw')"><i class="fas fa-eye"></i></button>
+          <input id="lPwd" type="password" placeholder="••••••••" required/>
+          <button type="button" class="eye" onclick="togglePwd('lPwd',this)"><i class="fas fa-eye"></i></button>
         </div>
       </div>
-      <div id="lErr" class="err-msg"></div>
-      <button class="btn-auth" onclick="doLogin()"><span>Login</span><i class="fas fa-arrow-right"></i></button>
-    </div>
+      <p class="err-msg" id="lErr"></p>
+      <button type="submit" class="btn-auth"><i class="fas fa-sign-in-alt"></i><span>Accedi</span></button>
+    </form>
 
     <!-- REGISTER -->
-    <div id="fReg" class="auth-form" style="display:none">
+    <form id="registerForm" class="auth-form" style="display:none" onsubmit="doRegister(event)">
       <div class="field">
         <label>Nome completo</label>
-        <div class="input-wrap"><i class="ic fas fa-user"></i><input id="rName" type="text" placeholder="Mario Rossi"></div>
+        <div class="input-wrap">
+          <i class="ic fas fa-user"></i>
+          <input id="rName" type="text" placeholder="Mario Rossi" required/>
+        </div>
       </div>
       <div class="field">
         <label>Username</label>
-        <div class="input-wrap"><i class="ic fas fa-at"></i><input id="rUsername" type="text" placeholder="mario_rossi" oninput="this.value=this.value.toLowerCase()"></div>
-        <span style="font-size:11px;color:var(--muted);margin-top:4px;display:block">3-20 caratteri, solo lettere/numeri/_</span>
+        <div class="input-wrap">
+          <i class="ic fas fa-at"></i>
+          <input id="rUsername" type="text" placeholder="mario_rossi" required/>
+        </div>
       </div>
       <div class="field">
         <label>Email</label>
-        <div class="input-wrap"><i class="ic fas fa-envelope"></i><input id="rEmail" type="email" placeholder="your@email.com"></div>
+        <div class="input-wrap">
+          <i class="ic fas fa-envelope"></i>
+          <input id="rEmail" type="email" placeholder="email@esempio.it" required/>
+        </div>
       </div>
       <div class="field">
         <label>Password</label>
         <div class="input-wrap">
           <i class="ic fas fa-lock"></i>
-          <input id="rPw" type="password" placeholder="••••••••" oninput="chkPw()">
-          <button class="eye" onclick="toggleEye('rPw')"><i class="fas fa-eye"></i></button>
+          <input id="rPwd" type="password" placeholder="Min 8 caratteri" required oninput="checkPwd(this.value)"/>
+          <button type="button" class="eye" onclick="togglePwd('rPwd',this)"><i class="fas fa-eye"></i></button>
+        </div>
+        <div class="pw-hints">
+          <div class="pw-hint" id="ph1"><i class="fas fa-circle"></i> 8+ caratteri</div>
+          <div class="pw-hint" id="ph2"><i class="fas fa-circle"></i> Maiuscola</div>
+          <div class="pw-hint" id="ph3"><i class="fas fa-circle"></i> Numero</div>
+          <div class="pw-hint" id="ph4"><i class="fas fa-circle"></i> Simbolo</div>
         </div>
       </div>
-      <div class="pw-hints">
-        <span class="pw-hint" id="h1"><i class="fas fa-circle"></i>8+ caratteri</span>
-        <span class="pw-hint" id="h2"><i class="fas fa-circle"></i>Maiuscola</span>
-        <span class="pw-hint" id="h3"><i class="fas fa-circle"></i>Numero</span>
-        <span class="pw-hint" id="h4"><i class="fas fa-circle"></i>Simbolo</span>
-      </div>
-      <div id="rErr" class="err-msg"></div>
-      <button class="btn-auth" onclick="doReg()"><span>Create Account</span><i class="fas fa-user-plus"></i></button>
-    </div>
+      <p class="err-msg" id="rErr"></p>
+      <button type="submit" class="btn-auth"><i class="fas fa-user-plus"></i><span>Registrati</span></button>
+    </form>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ══ APP ══ -->
 <div id="app" class="app" style="display:none">
+
+  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sb-logo">
       <div class="logo-icon"><i class="fas fa-leaf"></i></div>
       <span>EcoTrack</span>
     </div>
+
     <div class="sb-section">Menu</div>
     <nav class="sb-nav">
-      <button class="sb-btn active" onclick="goTab('dashboard',this)">
-        <div class="sb-icon"><i class="fas fa-home"></i></div><span>Dashboard</span>
+      <button class="sb-btn active" onclick="showTab('dashboard',this)">
+        <div class="sb-icon"><i class="fas fa-home"></i></div> Dashboard
       </button>
-      <button class="sb-btn" onclick="goTab('log',this)">
-        <div class="sb-icon"><i class="fas fa-plus-circle"></i></div><span>Log Attività</span>
+      <button class="sb-btn" onclick="showTab('log',this)">
+        <div class="sb-icon"><i class="fas fa-plus-circle"></i></div> Log Attività
       </button>
-      <button class="sb-btn" onclick="goTab('challenges',this)">
-        <div class="sb-icon"><i class="fas fa-fire"></i></div><span>Sfide</span>
+      <button class="sb-btn" onclick="showTab('challenges',this)">
+        <div class="sb-icon"><i class="fas fa-trophy"></i></div> Sfide
       </button>
-      <button class="sb-btn" onclick="goTab('leaderboard',this)">
-        <div class="sb-icon"><i class="fas fa-trophy"></i></div><span>Classifica</span>
-      </button>
-      <button class="sb-btn" onclick="goTab('social',this)">
-        <div class="sb-icon"><i class="fas fa-users"></i></div><span>Social</span>
-        <span class="sb-notif-dot" id="notifDot" style="display:none"></span>
-      </button>
-      <button class="sb-btn" onclick="goTab('profile',this)">
-        <div class="sb-icon"><i class="fas fa-user-circle"></i></div><span>Profilo</span>
-      </button>
-      <button class="sb-btn" onclick="goTab('yearly',this)">
-        <div class="sb-icon"><i class="fas fa-calendar-alt"></i></div><span>Riepilogo</span>
-      </button>
-      <button class="sb-btn admin-btn" id="adminSbBtn" onclick="goTab('admin',this)" style="display:none">
-        <div class="sb-icon"><i class="fas fa-shield-alt"></i></div><span>Admin Panel</span>
+      <button class="sb-btn" onclick="showTab('leaderboard',this)">
+        <div class="sb-icon"><i class="fas fa-crown"></i></div> Classifica
       </button>
     </nav>
+
+    <div class="sb-section">Sociale</div>
+    <nav class="sb-nav">
+      <button class="sb-btn" onclick="showTab('social',this)">
+        <div class="sb-icon"><i class="fas fa-users"></i></div> Community
+      </button>
+      <button class="sb-btn" onclick="showTab('notifiche',this)">
+        <div class="sb-icon"><i class="fas fa-bell"></i></div> Notifiche
+        <div class="sb-notif-dot" id="sbNotifDot" style="display:none"></div>
+      </button>
+    </nav>
+
+    <div class="sb-section">Account</div>
+    <nav class="sb-nav">
+      <button class="sb-btn" onclick="showTab('profile',this)">
+        <div class="sb-icon"><i class="fas fa-user"></i></div> Profilo
+      </button>
+      <button class="sb-btn" id="adminNavBtn" style="display:none" onclick="showTab('admin',this)">
+        <div class="sb-icon"><i class="fas fa-shield-alt"></i></div> Admin
+        <span class="admin-badge">ADMIN</span>
+      </button>
+    </nav>
+
     <div class="sb-spacer"></div>
-    <div class="sb-user">
-      <canvas class="sb-avatar-canvas" id="sbAvCanvas" width="36" height="36"></canvas>
+
+    <div class="sb-user" onclick="showTab('profile',null)">
+      <canvas id="sbAvatarCanvas" class="sb-avatar-canvas" width="36" height="36"></canvas>
       <div class="sb-uinfo">
-        <div class="sb-uname" id="sbName">—</div>
+        <div class="sb-uname" id="sbName">—
+          <span class="admin-badge" id="sbAdminBadge" style="display:none">ADMIN</span>
+        </div>
         <div class="sb-uemail" id="sbEmail">—</div>
       </div>
-      <button class="sb-logout" onclick="logout()" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+      <button class="sb-logout" onclick="doLogout(event)" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
     </div>
   </aside>
 
-  <div class="main">
-    <header class="topbar">
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
       <div class="topbar-left">
-        <h1 id="pageTitle">Dashboard</h1>
-        <p id="pageSub">Il tuo impatto questa settimana</p>
+        <h1 id="topTitle">Dashboard</h1>
+        <p id="topSub">Benvenuto su EcoTrack 🌱</p>
       </div>
       <div class="topbar-right">
-        <button class="topbar-btn notif-btn" onclick="goTab('social',null)" title="Notifiche">
+        <button class="topbar-btn" onclick="showTab('log',null)" title="Nuova attività">
+          <i class="fas fa-plus"></i>
+        </button>
+        <button class="topbar-btn notif-btn" onclick="showTab('notifiche',null)" title="Notifiche">
           <i class="fas fa-bell"></i>
           <span class="notif-count" id="notifCount" style="display:none">0</span>
         </button>
-        <button class="topbar-btn" onclick="openTut()" title="Tutorial">
-          <i class="fas fa-question-circle"></i>
+        <button class="topbar-btn" onclick="showTab('profile',null)" title="Profilo">
+          <i class="fas fa-user"></i>
         </button>
       </div>
-    </header>
+    </div>
 
+    <!-- PAGE BODY -->
     <div class="page-body">
 
-      <!-- DASHBOARD -->
+      <!-- ══ DASHBOARD ══ -->
       <div id="tab-dashboard" class="tab-panel active">
         <div class="stats-row">
           <div class="stat-card sc-green">
-            <div class="stat-top"><div class="stat-icon"><i class="fas fa-cloud"></i></div><span class="stat-badge">settimana</span></div>
-            <div class="stat-val" id="sCO2">0.0</div><div class="stat-lbl">kg CO₂ salvati</div>
+            <div class="stat-top">
+              <div class="stat-badge">Settimana</div>
+              <div class="stat-icon"><i class="fas fa-leaf"></i></div>
+            </div>
+            <div class="stat-val" id="sWeek">0</div>
+            <div class="stat-lbl">kg CO₂ salvata</div>
             <div class="stat-glow g-green"></div>
           </div>
           <div class="stat-card sc-yellow">
-            <div class="stat-top"><div class="stat-icon"><i class="fas fa-star"></i></div><span class="stat-badge">totale</span></div>
-            <div class="stat-val" id="sPts">0</div><div class="stat-lbl">punti guadagnati</div>
+            <div class="stat-top">
+              <div class="stat-badge">Totale</div>
+              <div class="stat-icon"><i class="fas fa-star"></i></div>
+            </div>
+            <div class="stat-val" id="sPts">0</div>
+            <div class="stat-lbl">Punti guadagnati</div>
             <div class="stat-glow g-yellow"></div>
           </div>
           <div class="stat-card sc-blue">
-            <div class="stat-top"><div class="stat-icon"><i class="fas fa-tasks"></i></div><span class="stat-badge">registrate</span></div>
-            <div class="stat-val" id="sActs">0</div><div class="stat-lbl">attività totali</div>
+            <div class="stat-top">
+              <div class="stat-badge">Totale</div>
+              <div class="stat-icon"><i class="fas fa-globe"></i></div>
+            </div>
+            <div class="stat-val" id="sCo2">0</div>
+            <div class="stat-lbl">kg CO₂ totale</div>
             <div class="stat-glow g-blue"></div>
           </div>
           <div class="stat-card sc-purple">
-            <div class="stat-top"><div class="stat-icon"><i class="fas fa-medal"></i></div><span class="stat-badge">sbloccati</span></div>
-            <div class="stat-val" id="sBadges">0</div><div class="stat-lbl">badge</div>
+            <div class="stat-top">
+              <div class="stat-badge">Totale</div>
+              <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+            </div>
+            <div class="stat-val" id="sActs">0</div>
+            <div class="stat-lbl">Attività registrate</div>
             <div class="stat-glow g-purple"></div>
           </div>
         </div>
+
         <div class="two-col">
           <div class="card">
-            <div class="card-head"><h3><span class="ch-dot dot-blue"></span>Ultime Attività</h3><button class="card-link" onclick="goTab('log',null)">Vedi tutte →</button></div>
-            <div class="card-body"><div id="recentActs" class="act-list"></div></div>
+            <div class="card-head">
+              <h3><span class="ch-dot dot-green"></span>Ultime Attività</h3>
+              <button class="card-link" onclick="showTab('log',null)">Vedi tutto →</button>
+            </div>
+            <div class="card-body">
+              <div id="recentActs" class="act-list"></div>
+            </div>
           </div>
           <div class="card">
-            <div class="card-head"><h3><span class="ch-dot dot-yellow"></span>I tuoi Badge</h3></div>
-            <div class="card-body"><div id="badgeList" class="badge-list"></div></div>
+            <div class="card-head">
+              <h3><span class="ch-dot dot-yellow"></span>I tuoi Badge</h3>
+            </div>
+            <div class="card-body">
+              <div id="badgeList" class="badge-list"></div>
+            </div>
           </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3><span class="ch-dot dot-blue"></span>Andamento Annuale</h3>
+          </div>
+          <div class="card-body" id="yearlyChart"></div>
         </div>
       </div>
 
-      <!-- LOG -->
+      <!-- ══ LOG ATTIVITÀ ══ -->
       <div id="tab-log" class="tab-panel">
         <div class="card">
-          <div class="card-head"><h3><span class="ch-dot dot-green"></span>Registra Attività</h3></div>
+          <div class="card-head">
+            <h3><span class="ch-dot dot-green"></span>Registra Attività</h3>
+          </div>
           <div class="card-body">
+
             <div class="act-types">
-              <button class="at-btn" onclick="selAct('Remoto',this)"><span>🏠</span><span>Remoto</span></button>
-              <button class="at-btn" onclick="selAct('Treno',this)"><span>🚂</span><span>Treno</span></button>
-              <button class="at-btn" onclick="selAct('Bici',this)"><span>🚴</span><span>Bici</span></button>
-              <button class="at-btn" onclick="selAct('Bus',this)"><span>🚌</span><span>Bus</span></button>
-              <button class="at-btn" onclick="selAct('Carpooling',this)"><span>🚗</span><span>Carpooling</span></button>
-              <button class="at-btn" onclick="selAct('Videocall',this)"><span>💻</span><span>Videocall</span></button>
+              <button class="at-btn" onclick="selAct('Remoto',this)">
+                <span>🏠</span><span>Remoto</span>
+              </button>
+              <button class="at-btn" onclick="selAct('Treno',this)">
+                <span>🚂</span><span>Treno</span>
+              </button>
+              <button class="at-btn" onclick="selAct('Bici',this)">
+                <span>🚴</span><span>Bici</span>
+              </button>
+              <button class="at-btn" onclick="selAct('Bus',this)">
+                <span>🚌</span><span>Bus</span>
+              </button>
+              <button class="at-btn" onclick="selAct('Carpooling',this)">
+                <span>🚗</span><span>Carpooling</span>
+              </button>
+              <button class="at-btn" onclick="selAct('Videocall',this)">
+                <span>💻</span><span>Videocall</span>
+              </button>
             </div>
+
             <div id="logForm" class="log-form" style="display:none">
               <div class="form-title" id="logTitle"></div>
-              <div id="kmRow" class="frow" style="display:none">
-                <label>Km percorsi</label>
-                <div class="input-wrap"><i class="ic fas fa-road"></i><input id="iKm" type="number" placeholder="es. 30" min="0" oninput="updPreview()"></div>
-              </div>
+
+              <!-- ORE -->
               <div id="hrRow" class="frow" style="display:none">
-                <label>Ore lavorate</label>
-                <div class="input-wrap"><i class="ic fas fa-clock"></i><input id="iHr" type="number" placeholder="es. 8" min="0" max="24" oninput="updPreview()"></div>
+                <label>Ore lavorate / durata</label>
+                <div class="input-wrap">
+                  <i class="ic fas fa-clock"></i>
+                  <input id="iHr" type="number" placeholder="es. 8" min="0" max="24" oninput="updPreview()"/>
+                </div>
               </div>
+
+              <!-- MAPPA -->
+              <div id="mapBlock" style="display:none">
+                <div class="map-search-row">
+                  <div class="map-search-wrap">
+                    <div class="input-wrap">
+                      <i class="ic fas fa-map-marker-alt" style="color:#16a34a"></i>
+                      <input id="iFrom" type="text" placeholder="Partenza (es. Via Roma, Milano)" oninput="geocodeLive('from')" autocomplete="off"/>
+                    </div>
+                    <div id="fromSugg" class="addr-sugg"></div>
+                  </div>
+                  <div class="map-arrow"><i class="fas fa-arrow-right"></i></div>
+                  <div class="map-search-wrap">
+                    <div class="input-wrap">
+                      <i class="ic fas fa-flag-checkered" style="color:#ef4444"></i>
+                      <input id="iTo" type="text" placeholder="Destinazione (es. Via Dante, Roma)" oninput="geocodeLive('to')" autocomplete="off"/>
+                    </div>
+                    <div id="toSugg" class="addr-sugg"></div>
+                  </div>
+                  <button class="btn-calc-route" onclick="calcRoute()">
+                    <i class="fas fa-route"></i> Calcola
+                  </button>
+                </div>
+
+                <div class="map-tip">
+                  <i class="fas fa-info-circle"></i>
+                  Clicca sulla mappa per piazzare i pin oppure scrivi gli indirizzi sopra
+                </div>
+
+                <div id="mapContainer" class="map-container"></div>
+
+                <div id="routeInfo" class="route-info" style="display:none">
+                  <div class="route-info-item">
+                    <i class="fas fa-road" style="color:var(--green)"></i>
+                    <span id="routeKm">—</span>
+                  </div>
+                  <div class="route-info-item">
+                    <i class="fas fa-clock" style="color:var(--blue)"></i>
+                    <span id="routeMins">—</span>
+                  </div>
+                  <div class="route-info-item">
+                    <i class="fas fa-leaf" style="color:var(--green)"></i>
+                    <span id="routeCo2">—</span>
+                  </div>
+                  <div class="route-info-item">
+                    <i class="fas fa-star" style="color:var(--yellow)"></i>
+                    <span id="routePts">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- CARPOOLING -->
               <div id="cpRow" class="frow" style="display:none">
                 <label>Email collega (car sharing)</label>
-                <div class="input-wrap"><i class="ic fas fa-user-friends"></i><input id="iCp" type="email" placeholder="collega@azienda.it"></div>
+                <div class="input-wrap">
+                  <i class="ic fas fa-user-friends"></i>
+                  <input id="iCp" type="email" placeholder="collega@azienda.it"/>
+                </div>
                 <p class="hint">🎉 Riceverete entrambi i punti!</p>
               </div>
+
+              <!-- NOTE -->
               <div class="frow">
                 <label>Note (opzionale)</label>
-                <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="iNote" type="text" placeholder="es. Riunione Milano"></div>
+                <div class="input-wrap">
+                  <i class="ic fas fa-pen"></i>
+                  <input id="iNote" type="text" placeholder="es. Riunione Milano"/>
+                </div>
               </div>
-              <div class="co2-est">
-                <div class="co2-est-inner"><span>Stima CO₂</span><strong id="pCO2">0</strong><span>kg salvata</span></div>
+
+              <!-- STIMA -->
+              <div class="co2-est" id="co2EstBox">
+                <div class="co2-est-inner">
+                  <span>Stima CO₂</span>
+                  <strong id="pCO2">0</strong>
+                  <span>kg salvata</span>
+                </div>
                 <div class="co2-divider"></div>
-                <div class="co2-est-inner"><span>Punti</span><strong id="pPts">0</strong><span>pt</span></div>
+                <div class="co2-est-inner">
+                  <span>Punti</span>
+                  <strong id="pPts">0</strong>
+                  <span>pt</span>
+                </div>
+                <div class="co2-divider"></div>
+                <div class="co2-est-inner">
+                  <span>Distanza</span>
+                  <strong id="pKm">—</strong>
+                  <span>km</span>
+                </div>
               </div>
+
               <div class="form-btns">
-                <button class="btn-save" onclick="saveAct()"><i class="fas fa-check"></i>Salva</button>
-                <button class="btn-cancel" onclick="cancelAct()"><i class="fas fa-times"></i>Annulla</button>
+                <button class="btn-save" onclick="saveAct()">
+                  <i class="fas fa-check"></i> Salva
+                </button>
+                <button class="btn-cancel" onclick="cancelAct()">
+                  <i class="fas fa-times"></i> Annulla
+                </button>
               </div>
             </div>
           </div>
         </div>
+
         <div class="card">
-          <div class="card-head"><h3><span class="ch-dot dot-blue"></span>Storico Attività</h3></div>
-          <div class="card-body"><div id="allActs" class="act-list"></div></div>
+          <div class="card-head">
+            <h3><span class="ch-dot dot-blue"></span>Storico Attività</h3>
+          </div>
+          <div class="card-body">
+            <div id="allActs" class="act-list"></div>
+          </div>
         </div>
       </div>
 
-      <!-- CHALLENGES -->
+      <!-- ══ SFIDE ══ -->
       <div id="tab-challenges" class="tab-panel">
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-red"></span>Le tue Sfide</h3>
-            <button class="btn-add" onclick="togCh()"><i class="fas fa-plus"></i>Nuova Sfida</button>
+            <h3><span class="ch-dot dot-yellow"></span>Nuova Sfida</h3>
+            <button class="card-link" onclick="toggleChForm()"><i class="fas fa-plus"></i> Crea</button>
           </div>
           <div class="card-body">
             <div id="chForm" class="ch-form" style="display:none">
               <div class="form-grid">
-                <div class="frow"><label>Nome sfida</label><div class="input-wrap"><i class="ic fas fa-fire"></i><input id="cTitle" placeholder="es. Sprint Green Aprile"></div></div>
-                <div class="frow"><label>Target CO₂ (kg)</label><div class="input-wrap"><i class="ic fas fa-cloud"></i><input id="cTarget" type="number" placeholder="50"></div></div>
-                <div class="frow"><label>Punti reward</label><div class="input-wrap"><i class="ic fas fa-star"></i><input id="cPoints" type="number" placeholder="200"></div></div>
-                <div class="frow"><label>Scadenza</label><div class="input-wrap"><i class="ic fas fa-calendar"></i><input id="cDate" type="date"></div></div>
+                <div class="frow">
+                  <label>Titolo</label>
+                  <div class="input-wrap"><i class="ic fas fa-trophy"></i><input id="chTitle" type="text" placeholder="Nome sfida"/></div>
+                </div>
+                <div class="frow">
+                  <label>Obiettivo CO₂ (kg)</label>
+                  <div class="input-wrap"><i class="ic fas fa-leaf"></i><input id="chCo2" type="number" placeholder="es. 50"/></div>
+                </div>
+                <div class="frow">
+                  <label>Punti premio</label>
+                  <div class="input-wrap"><i class="ic fas fa-star"></i><input id="chPts" type="number" placeholder="es. 200"/></div>
+                </div>
+                <div class="frow">
+                  <label>Data fine</label>
+                  <div class="input-wrap"><i class="ic fas fa-calendar"></i><input id="chDate" type="date"/></div>
+                </div>
               </div>
-              <div class="frow"><label>Descrizione</label><div class="input-wrap"><i class="ic fas fa-pen"></i><input id="cDesc" placeholder="Descrizione sfida..."></div></div>
-              <label class="chk-row"><input type="checkbox" id="cPub"><span>🌍 Rendi pubblica</span></label>
-              <button class="btn-save" onclick="createCh()"><i class="fas fa-rocket"></i>Crea Sfida</button>
+              <div class="frow">
+                <label>Descrizione</label>
+                <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="chDesc" type="text" placeholder="Descrivi la sfida..."/></div>
+              </div>
+              <label class="chk-row">
+                <input type="checkbox" id="chPublic"/> Rendi pubblica questa sfida 🌍
+              </label>
+              <button class="btn-add" onclick="saveChallenge()"><i class="fas fa-plus"></i> Crea Sfida</button>
             </div>
             <div id="chList" class="ch-list"></div>
           </div>
         </div>
       </div>
 
-      <!-- LEADERBOARD -->
+      <!-- ══ CLASSIFICA ══ -->
       <div id="tab-leaderboard" class="tab-panel">
         <div class="card">
-          <div class="card-head"><h3><span class="ch-dot dot-yellow"></span>Classifica Team</h3></div>
-          <div class="card-body"><div id="lbList" class="lb-list"></div></div>
+          <div class="card-head">
+            <h3><span class="ch-dot dot-yellow"></span>Classifica Globale</h3>
+          </div>
+          <div class="card-body">
+            <div id="lbList" class="lb-list"></div>
+          </div>
         </div>
       </div>
 
-      <!-- SOCIAL -->
+      <!-- ══ SOCIAL ══ -->
       <div id="tab-social" class="tab-panel">
-        <!-- Notifiche -->
-        <div class="card">
-          <div class="card-head">
-            <h3><span class="ch-dot dot-blue"></span>Notifiche</h3>
-            <button class="card-link" onclick="markAllRead()">Segna tutte lette ✓</button>
-          </div>
-          <div class="card-body"><div id="notifList"></div></div>
-        </div>
-        <!-- Cerca utenti -->
-        <div class="card">
-          <div class="card-head"><h3><span class="ch-dot dot-green"></span>Cerca Utenti</h3></div>
-          <div class="card-body">
-            <div class="input-wrap" style="margin-bottom:16px">
-              <i class="ic fas fa-search"></i>
-              <input id="searchUser" type="text" placeholder="Cerca per @username..." oninput="searchUsers()">
-            </div>
-            <div id="searchResults"></div>
-          </div>
-        </div>
-        <!-- Followers / Following -->
         <div class="two-col">
           <div class="card">
-            <div class="card-head"><h3><span class="ch-dot dot-purple"></span>Followers</h3></div>
-            <div class="card-body"><div id="followersList"></div></div>
+            <div class="card-head">
+              <h3><span class="ch-dot dot-green"></span>Followers</h3>
+            </div>
+            <div class="card-body" id="followersList"></div>
           </div>
           <div class="card">
-            <div class="card-head"><h3><span class="ch-dot dot-yellow"></span>Following</h3></div>
-            <div class="card-body"><div id="followingList"></div></div>
+            <div class="card-head">
+              <h3><span class="ch-dot dot-blue"></span>Following</h3>
+            </div>
+            <div class="card-body" id="followingList"></div>
           </div>
         </div>
-        <!-- Gruppi -->
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-green"></span>Gruppi</h3>
-            <button class="btn-add" onclick="togGroupForm()"><i class="fas fa-plus"></i>Nuovo Gruppo</button>
+            <h3><span class="ch-dot dot-purple"></span>Gruppi</h3>
+            <button class="card-link" onclick="toggleGroupForm()"><i class="fas fa-plus"></i> Crea gruppo</button>
           </div>
           <div class="card-body">
             <div id="groupForm" class="ch-form" style="display:none">
               <div class="form-grid">
-                <div class="frow"><label>Nome gruppo</label><div class="input-wrap"><i class="ic fas fa-users"></i><input id="gName" placeholder="es. Team Green Milano"></div></div>
-                <div class="frow"><label>Descrizione</label><div class="input-wrap"><i class="ic fas fa-pen"></i><input id="gDesc" placeholder="Descrizione..."></div></div>
+                <div class="frow">
+                  <label>Nome gruppo</label>
+                  <div class="input-wrap"><i class="ic fas fa-users"></i><input id="gName" type="text" placeholder="es. Eco Warriors"/></div>
+                </div>
+                <div class="frow">
+                  <label>Descrizione</label>
+                  <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="gDesc" type="text" placeholder="Di cosa si tratta?"/></div>
+                </div>
               </div>
-              <label class="chk-row"><input type="checkbox" id="gPublic" checked><span>🌍 Gruppo pubblico</span></label>
-              <button class="btn-save" onclick="createGroup()"><i class="fas fa-users"></i>Crea Gruppo</button>
+              <label class="chk-row">
+                <input type="checkbox" id="gPublic" checked/> Gruppo pubblico 🌍
+              </label>
+              <button class="btn-add" onclick="createGroup()"><i class="fas fa-plus"></i> Crea</button>
             </div>
-            <div id="groupsList"></div>
+            <div id="groupList"></div>
           </div>
         </div>
       </div>
 
-      <!-- PROFILO -->
+      <!-- ══ NOTIFICHE ══ -->
+      <div id="tab-notifiche" class="tab-panel">
+        <div class="card">
+          <div class="card-head">
+            <h3><span class="ch-dot dot-red"></span>Notifiche</h3>
+            <button class="card-link" onclick="markAllRead()">Segna tutte lette</button>
+          </div>
+          <div class="card-body" id="notifList"></div>
+        </div>
+      </div>
+
+      <!-- ══ PROFILO ══ -->
       <div id="tab-profile" class="tab-panel">
         <div class="two-col">
-          <!-- Avatar Builder -->
           <div class="card">
-            <div class="card-head"><h3><span class="ch-dot dot-purple"></span>Il tuo Mii</h3></div>
+            <div class="card-head">
+              <h3><span class="ch-dot dot-green"></span>Il tuo Avatar</h3>
+              <button class="card-link" onclick="saveProfile()"><i class="fas fa-save"></i> Salva</button>
+            </div>
             <div class="card-body">
               <div class="mii-preview-wrap">
-                <canvas id="miiCanvas" width="160" height="160" class="mii-canvas"></canvas>
+                <canvas id="miiCanvas" class="mii-canvas" width="120" height="120"></canvas>
               </div>
               <div class="mii-options">
                 <div class="mii-opt-group">
-                  <label>🎨 Colore sfondo</label>
-                  <div class="color-row">
-                    <div class="color-swatch" style="background:#16a34a" onclick="setAv('avatar_color','#16a34a')"></div>
-                    <div class="color-swatch" style="background:#3b82f6" onclick="setAv('avatar_color','#3b82f6')"></div>
-                    <div class="color-swatch" style="background:#8b5cf6" onclick="setAv('avatar_color','#8b5cf6')"></div>
-                    <div class="color-swatch" style="background:#f59e0b" onclick="setAv('avatar_color','#f59e0b')"></div>
-                    <div class="color-swatch" style="background:#ef4444" onclick="setAv('avatar_color','#ef4444')"></div>
-                    <div class="color-swatch" style="background:#0f172a" onclick="setAv('avatar_color','#0f172a')"></div>
-                  </div>
+                  <label>🎨 Colore Avatar</label>
+                  <div class="color-row" id="avatarColors"></div>
                 </div>
                 <div class="mii-opt-group">
-                  <label>🧑 Carnagione</label>
-                  <div class="color-row">
-                    <div class="color-swatch" style="background:#fde68a" onclick="setAv('avatar_skin','#fde68a')"></div>
-                    <div class="color-swatch" style="background:#fbbf24" onclick="setAv('avatar_skin','#fbbf24')"></div>
-                    <div class="color-swatch" style="background:#d97706" onclick="setAv('avatar_skin','#d97706')"></div>
-                    <div class="color-swatch" style="background:#92400e" onclick="setAv('avatar_skin','#92400e')"></div>
-                    <div class="color-swatch" style="background:#fecaca" onclick="setAv('avatar_skin','#fecaca')"></div>
-                  </div>
+                  <label>🟤 Tono Pelle</label>
+                  <div class="color-row" id="skinColors"></div>
                 </div>
                 <div class="mii-opt-group">
                   <label>👁️ Occhi</label>
-                  <div class="mii-btn-row">
-                    <button class="mii-opt-btn" onclick="setAv('avatar_eyes','normal')">😐 Normal</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_eyes','happy')">😊 Happy</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_eyes','cool')">😎 Cool</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_eyes','wink')">😉 Wink</button>
-                  </div>
+                  <div class="mii-btn-row" id="eyeOpts"></div>
                 </div>
                 <div class="mii-opt-group">
                   <label>😄 Bocca</label>
-                  <div class="mii-btn-row">
-                    <button class="mii-opt-btn" onclick="setAv('avatar_mouth','smile')">😊 Smile</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_mouth','big')">😁 Big</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_mouth','serious')">😐 Serious</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_mouth','tongue')">😛 Tongue</button>
-                  </div>
+                  <div class="mii-btn-row" id="mouthOpts"></div>
                 </div>
                 <div class="mii-opt-group">
                   <label>💇 Capelli</label>
-                  <div class="mii-btn-row">
-                    <button class="mii-opt-btn" onclick="setAv('avatar_hair','none')">🚫 Niente</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_hair','short')">✂️ Corti</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_hair','long')">💁 Lunghi</button>
-                    <button class="mii-opt-btn" onclick="setAv('avatar_hair','curly')">🌀 Ricci</button>
-                  </div>
+                  <div class="mii-btn-row" id="hairOpts"></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Info profilo -->
           <div class="card">
-            <div class="card-head"><h3><span class="ch-dot dot-green"></span>Info Profilo</h3></div>
+            <div class="card-head">
+              <h3><span class="ch-dot dot-blue"></span>Dati Profilo</h3>
+              <button class="card-link" onclick="saveProfile()"><i class="fas fa-save"></i> Salva</button>
+            </div>
             <div class="card-body">
-              <div class="profile-stats">
-                <div class="ps-item"><div class="ps-val" id="pFollowers">0</div><div class="ps-lbl">Followers</div></div>
-                <div class="ps-item"><div class="ps-val" id="pFollowing">0</div><div class="ps-lbl">Following</div></div>
-                <div class="ps-item"><div class="ps-val" id="pPoints2">0</div><div class="ps-lbl">Punti</div></div>
-              </div>
+              <div class="profile-stats" id="profileStats"></div>
               <div class="frow" style="margin-top:16px">
                 <label>Nome</label>
-                <div class="input-wrap"><i class="ic fas fa-user"></i><input id="pName" type="text" placeholder="Il tuo nome"></div>
+                <div class="input-wrap"><i class="ic fas fa-user"></i><input id="pName" type="text"/></div>
               </div>
               <div class="frow">
                 <label>Username</label>
-                <div class="input-wrap"><i class="ic fas fa-at"></i><input id="pUsername" type="text" placeholder="@username"></div>
+                <div class="input-wrap"><i class="ic fas fa-at"></i><input id="pUsername" type="text"/></div>
               </div>
               <div class="frow">
                 <label>Bio</label>
-                <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="pBio" type="text" placeholder="Scrivi qualcosa su di te..."></div>
+                <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="pBio" type="text" placeholder="Raccontati..."/></div>
               </div>
-              <button class="btn-save" style="margin-top:8px;width:100%" onclick="saveProfile()">
-                <i class="fas fa-save"></i>Salva Profilo
-              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- YEARLY -->
-      <div id="tab-yearly" class="tab-panel">
-        <div class="card">
-          <div class="card-head"><h3><span class="ch-dot dot-green"></span>Riepilogo Annuale 2026</h3></div>
-          <div class="card-body"><div id="yrList"></div></div>
-        </div>
-      </div>
-
-      <!-- ADMIN -->
+      <!-- ══ ADMIN ══ -->
       <div id="tab-admin" class="tab-panel">
         <div class="admin-banner">
           <div class="admin-banner-left">
             <div class="admin-crown-icon">👑</div>
-            <div><h2>Admin Panel</h2><p>Gestisci utenti, attività e privilegi del team</p></div>
-          </div>
-          <button class="btn-refresh" onclick="loadAdminUsers()"><i class="fas fa-sync-alt"></i>Aggiorna</button>
-        </div>
-        <div id="adminStats" class="stats-row" style="margin-bottom:24px"></div>
-        <div class="card">
-          <div class="card-head"><h3><span class="ch-dot dot-yellow"></span>Gestione Utenti</h3></div>
-          <div class="card-body" style="padding:0">
-            <div style="overflow-x:auto">
-              <table class="user-table">
-                <thead>
-                  <tr>
-                    <th>Utente</th><th>Attività</th><th>Punti</th><th>CO₂</th><th>Stato</th><th>Azioni</th>
-                  </tr>
-                </thead>
-                <tbody id="adminTbody"></tbody>
-              </table>
+            <div>
+              <h2>Pannello Amministratore</h2>
+              <p>Gestisci utenti, attività e contenuti della piattaforma</p>
             </div>
+          </div>
+          <button class="btn-refresh" onclick="loadAdminUsers()">
+            <i class="fas fa-sync-alt"></i> Aggiorna
+          </button>
+        </div>
+
+        <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+          <div class="stat-card sc-green">
+            <div class="stat-top"><div class="stat-badge">Totale</div><div class="stat-icon"><i class="fas fa-users"></i></div></div>
+            <div class="stat-val" id="admTotUsers">—</div>
+            <div class="stat-lbl">Utenti registrati</div>
+          </div>
+          <div class="stat-card sc-blue">
+            <div class="stat-top"><div class="stat-badge">Totale</div><div class="stat-icon"><i class="fas fa-bolt"></i></div></div>
+            <div class="stat-val" id="admTotActs">—</div>
+            <div class="stat-lbl">Attività totali</div>
+          </div>
+          <div class="stat-card sc-yellow">
+            <div class="stat-top"><div class="stat-badge">Totale</div><div class="stat-icon"><i class="fas fa-leaf"></i></div></div>
+            <div class="stat-val" id="admTotCo2">—</div>
+            <div class="stat-lbl">kg CO₂ salvata</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3><span class="ch-dot dot-yellow"></span>Gestione Utenti</h3>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th>Utente</th>
+                  <th>Ruolo</th>
+                  <th>Punti</th>
+                  <th>CO₂</th>
+                  <th>Stato</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersList"></tbody>
+            </table>
           </div>
         </div>
       </div>
 
-    </div>
-  </div>
-</div>
+    </div><!-- /page-body -->
+  </main>
 
-<!-- MOBILE NAV -->
-<nav class="mob-nav" id="mobNav" style="display:none">
-  <button class="mn-btn active" onclick="goTab('dashboard',this)"><i class="fas fa-home"></i><span>Home</span></button>
-  <button class="mn-btn" onclick="goTab('log',this)"><i class="fas fa-plus-circle"></i><span>Log</span></button>
-  <button class="mn-btn" onclick="goTab('social',this)"><i class="fas fa-users"></i><span>Social</span></button>
-  <button class="mn-btn" onclick="goTab('leaderboard',this)"><i class="fas fa-trophy"></i><span>Top</span></button>
-  <button class="mn-btn" onclick="goTab('profile',this)"><i class="fas fa-user"></i><span>Profilo</span></button>
-  <button class="mn-btn admin-mn" id="adminMobBtn" onclick="goTab('admin',this)" style="display:none"><i class="fas fa-shield-alt"></i><span>Admin</span></button>
-</nav>
+  <!-- MOB NAV -->
+  <nav class="mob-nav" id="mobNav" style="display:none">
+    <button class="mn-btn active" onclick="showTab('dashboard',this)"><i class="fas fa-home"></i><span>Home</span></button>
+    <button class="mn-btn" onclick="showTab('log',this)"><i class="fas fa-plus-circle"></i><span>Log</span></button>
+    <button class="mn-btn" onclick="showTab('challenges',this)"><i class="fas fa-trophy"></i><span>Sfide</span></button>
+    <button class="mn-btn" onclick="showTab('leaderboard',this)"><i class="fas fa-crown"></i><span>Top</span></button>
+    <button class="mn-btn" onclick="showTab('profile',this)"><i class="fas fa-user"></i><span>Profilo</span></button>
+  </nav>
 
-<!-- MODALI -->
+</div><!-- /app -->
+
+<!-- ══ MODALI ══ -->
+
+<!-- Attività Admin -->
 <div id="actsModal" class="modal-overlay" style="display:none" onclick="closeActsModal(event)">
   <div class="modal-card">
     <div class="modal-head">
-      <h3 id="actsModalTitle">Attività di —</h3>
-      <button class="modal-close" onclick="document.getElementById('actsModal').style.display='none'"><i class="fas fa-times"></i></button>
+      <h3 id="actsModalTitle">Attività Utente</h3>
+      <button class="modal-close" onclick="document.getElementById('actsModal').style.display='none'">✕</button>
     </div>
     <div class="modal-body" id="actsModalBody"></div>
   </div>
 </div>
 
-<!-- MODAL BAN -->
-<div id="banModal" class="modal-overlay" style="display:none">
-  <div class="confirm-card" style="max-width:420px">
-    <div class="confirm-icon">⛔</div>
-    <h3>Ban Utente</h3>
-    <p style="margin-bottom:16px">Specifica durata e motivo del ban</p>
-    <div class="frow">
-      <label>Giorni (vuoto = permanente)</label>
-      <div class="input-wrap"><i class="ic fas fa-calendar"></i><input id="banDays" type="number" placeholder="es. 7 (vuoto = permanente)" min="1"></div>
+<!-- Ban Modal -->
+<div id="banModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-head">
+      <h3>⛔ Banna Utente</h3>
+      <button class="modal-close" onclick="document.getElementById('banModal').style.display='none'">✕</button>
     </div>
-    <div class="frow" style="margin-top:12px">
-      <label>Motivo</label>
-      <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="banReason" placeholder="Motivo del ban..."></div>
-    </div>
-    <div class="confirm-btns" style="margin-top:20px">
-      <button class="confirm-no" onclick="document.getElementById('banModal').style.display='none'">Annulla</button>
-      <button class="confirm-yes" id="banConfirmBtn" style="background:linear-gradient(135deg,#ef4444,#dc2626)">Ban</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL WARN -->
-<div id="warnModal" class="modal-overlay" style="display:none">
-  <div class="confirm-card" style="max-width:420px">
-    <div class="confirm-icon">⚠️</div>
-    <h3>Invia Avviso</h3>
-    <p style="margin-bottom:16px">L'utente riceverà una notifica con il messaggio</p>
-    <div class="frow">
-      <label>Messaggio</label>
-      <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="warnMsg" placeholder="es. Rispetta le regole della community"></div>
-    </div>
-    <div class="confirm-btns" style="margin-top:20px">
-      <button class="confirm-no" onclick="document.getElementById('warnModal').style.display='none'">Annulla</button>
-      <button class="confirm-yes" id="warnConfirmBtn" style="background:linear-gradient(135deg,#f59e0b,#d97706)">Invia Avviso</button>
+    <div class="modal-body">
+      <div class="frow">
+        <label>Motivo ban</label>
+        <div class="input-wrap"><i class="ic fas fa-exclamation-triangle"></i><input id="banReason" type="text" placeholder="es. Comportamento scorretto"/></div>
+      </div>
+      <div class="frow">
+        <label>Durata (giorni, 0 = permanente)</label>
+        <div class="input-wrap"><i class="ic fas fa-calendar"></i><input id="banDays" type="number" placeholder="0" min="0"/></div>
+      </div>
+      <div class="form-btns" style="margin-top:20px">
+        <button class="btn-save" id="banConfirmBtn" style="background:linear-gradient(135deg,var(--red),#dc2626)">
+          <i class="fas fa-ban"></i> Conferma Ban
+        </button>
+        <button class="btn-cancel" onclick="document.getElementById('banModal').style.display='none'">Annulla</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div id="confirmModal" class="modal-overlay" style="display:none">
+<!-- Warn Modal -->
+<div id="warnModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-card" style="max-width:420px">
+    <div class="modal-head">
+      <h3>⚠️ Invia Avviso</h3>
+      <button class="modal-close" onclick="document.getElementById('warnModal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="frow">
+        <label>Messaggio avviso</label>
+        <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="warnMsg" type="text" placeholder="es. Rispetta le regole della community"/></div>
+      </div>
+      <div class="form-btns" style="margin-top:20px">
+        <button class="btn-save" id="warnConfirmBtn" style="background:linear-gradient(135deg,var(--yellow),var(--yellow2));color:#92400e">
+          <i class="fas fa-exclamation-triangle"></i> Invia Avviso
+        </button>
+        <button class="btn-cancel" onclick="document.getElementById('warnModal').style.display='none'">Annulla</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirmModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeConfirm()">
   <div class="confirm-card">
     <div class="confirm-icon" id="confirmIcon">⚠️</div>
     <h3 id="confirmTitle">Sei sicuro?</h3>
-    <p id="confirmMsg">Questa azione è irreversibile.</p>
+    <p id="confirmMsg">Questa azione non può essere annullata.</p>
     <div class="confirm-btns">
-      <button class="confirm-no" onclick="closeConfirm()">Annulla</button>
       <button class="confirm-yes" id="confirmYes">Conferma</button>
+      <button class="confirm-no" onclick="closeConfirm()">Annulla</button>
     </div>
   </div>
 </div>
 
-<div id="notif" class="notif"></div>
 <script src="script.js"></script>
 </body>
 </html>
