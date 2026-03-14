@@ -1,14 +1,243 @@
+// ══════════════════════════════════════════
+//   ECOTRACK — script.js
+// ══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
 
-// ══════════════════════════════════════════
-//   STATO
-// ══════════════════════════════════════════
-let token   = localStorage.getItem('ecotoken');
-let curAct  = null;
-let curS    = 1;
-let isAdmin = false;
-let myProfile = {};
+const BASE = '';
+let token = localStorage.getItem('ecotoken');
+let curAct = null;
+let calcedKm = 0;
+let myProfile = null;
 
+// ══════════════════════════════════════════
+//   API HELPER
+// ══════════════════════════════════════════
+async function api(url, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type':'application/json', ...(token?{'Authorization':'Bearer '+token}:{}) }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(BASE+url, opts);
+    return await r.json();
+  } catch(e) { return { error: e.message }; }
+}
+
+// ══════════════════════════════════════════
+//   TOAST
+// ══════════════════════════════════════════
+let notifTimer;
+function showN(msg, type='success') {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.className = `notif ${type}`;
+  el.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ══════════════════════════════════════════
+//   TUTORIAL
+// ══════════════════════════════════════════
+let tutIdx = 0;
+function goTut(i) {
+  document.querySelectorAll('.tut-step').forEach((s,j) => s.classList.toggle('active', j===i));
+  document.querySelectorAll('.tut-dot').forEach((d,j)  => d.classList.toggle('active', j===i));
+  tutIdx = i;
+  const btn = document.querySelector('.tut-next');
+  btn.textContent = i === 3 ? '🚀 Inizia!' : 'Avanti →';
+}
+function tutNav(dir) {
+  const next = tutIdx + dir;
+  if (next < 0) return;
+  if (next > 3) { closeTut(); return; }
+  goTut(next);
+}
+function closeTut() {
+  document.getElementById('tutOverlay').style.display = 'none';
+  localStorage.setItem('ecoTutDone','1');
+}
+window.goTut = goTut; window.tutNav = tutNav; window.closeTut = closeTut;
+
+// ══════════════════════════════════════════
+//   AUTH
+// ══════════════════════════════════════════
+function switchTab(tab, btn) {
+  document.getElementById('loginForm').style.display    = tab==='login'    ? 'flex' : 'none';
+  document.getElementById('registerForm').style.display = tab==='register' ? 'flex' : 'none';
+  document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+window.switchTab = switchTab;
+
+function togglePwd(id, btn) {
+  const inp = document.getElementById(id);
+  const isText = inp.type === 'text';
+  inp.type = isText ? 'password' : 'text';
+  btn.innerHTML = `<i class="fas fa-eye${isText?'':'-slash'}"></i>`;
+}
+window.togglePwd = togglePwd;
+
+function checkPwd(val) {
+  const checks = [
+    { id:'ph1', ok: val.length >= 8 },
+    { id:'ph2', ok: /[A-Z]/.test(val) },
+    { id:'ph3', ok: /[0-9]/.test(val) },
+    { id:'ph4', ok: /[^A-Za-z0-9]/.test(val) }
+  ];
+  checks.forEach(c => document.getElementById(c.id)?.classList.toggle('ok', c.ok));
+}
+window.checkPwd = checkPwd;
+
+async function doLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('lEmail').value.trim();
+  const pwd   = document.getElementById('lPwd').value;
+  const btn   = e.target.querySelector('.btn-auth');
+  const err   = document.getElementById('lErr');
+  err.textContent = '';
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Accesso...</span>';
+  btn.disabled = true;
+  const d = await api('/api/login','POST',{ email, password:pwd });
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Accedi</span>';
+  if (d.error) { err.textContent = d.error; err.parentElement.classList.add('shake'); setTimeout(()=>err.parentElement.classList.remove('shake'),500); return; }
+  token = d.token;
+  localStorage.setItem('ecotoken', token);
+  bootApp(d.user);
+}
+window.doLogin = doLogin;
+
+async function doRegister(e) {
+  e.preventDefault();
+  const name     = document.getElementById('rName').value.trim();
+  const username = document.getElementById('rUsername').value.trim();
+  const email    = document.getElementById('rEmail').value.trim();
+  const password = document.getElementById('rPwd').value;
+  const btn      = e.target.querySelector('.btn-auth');
+  const err      = document.getElementById('rErr');
+  err.textContent = '';
+  if (password.length < 8) { err.textContent='Password troppo corta!'; return; }
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Registrazione...</span>';
+  btn.disabled = true;
+  const d = await api('/api/register','POST',{ name, username, email, password });
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-user-plus"></i><span>Registrati</span>';
+  if (d.error) { err.textContent = d.error; return; }
+  token = d.token;
+  localStorage.setItem('ecotoken', token);
+  bootApp(d.user);
+}
+window.doRegister = doRegister;
+
+function doLogout(e) {
+  e.stopPropagation();
+  token = null;
+  localStorage.removeItem('ecotoken');
+  location.reload();
+}
+window.doLogout = doLogout;
+
+// ══════════════════════════════════════════
+//   BOOT APP
+// ══════════════════════════════════════════
+function bootApp(user) {
+  myProfile = user;
+  document.getElementById('authWrap').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  if (window.innerWidth <= 768) document.getElementById('mobNav').style.display = 'flex';
+  document.getElementById('sbEmail').textContent = user.email || '';
+  initAdmin(user);
+  drawMii(user, 'sbAvatarCanvas', 36);
+  loadAll();
+  loadProfile();
+  loadNotifCount();
+  if (!localStorage.getItem('ecoTutDone')) document.getElementById('tutOverlay').style.display = 'flex';
+}
+
+function initAdmin(user) {
+  if (user.is_admin) {
+    document.getElementById('adminNavBtn').style.display = 'flex';
+    document.getElementById('sbAdminBadge').style.display = 'inline-flex';
+  }
+}
+
+// ══════════════════════════════════════════
+//   TAB NAVIGATION
+// ══════════════════════════════════════════
+const TAB_TITLES = {
+  dashboard:   ['Dashboard',   'Bentornato! 🌱'],
+  log:         ['Log Attività','Registra la tua attività eco 🌍'],
+  challenges:  ['Sfide',       'Completa sfide e guadagna punti 🏆'],
+  leaderboard: ['Classifica',  'Scala la vetta! 👑'],
+  social:      ['Community',   'Connettiti con altri eco-warriors 👥'],
+  notifiche:   ['Notifiche',   'Le tue notifiche 🔔'],
+  profile:     ['Profilo',     'Personalizza il tuo account ⚙️'],
+  admin:       ['Admin Panel', 'Gestione piattaforma 👑'],
+};
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name)?.classList.add('active');
+  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.mn-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const [title, sub] = TAB_TITLES[name] || [name,''];
+  document.getElementById('topTitle').textContent = title;
+  document.getElementById('topSub').textContent   = sub;
+  if (name==='leaderboard') loadLeaderboard();
+  if (name==='social')      { loadFollowers(); loadFollowing(); loadGroups(); }
+  if (name==='notifiche')   loadNotifications();
+  if (name==='profile')     loadProfile();
+  if (name==='admin')       loadAdminUsers();
+  if (name==='log') {
+    setTimeout(() => { if (map) map.invalidateSize(); }, 200);
+  }
+}
+window.showTab = showTab;
+
+// ══════════════════════════════════════════
+//   LOAD ALL
+// ══════════════════════════════════════════
+function loadAll() {
+  loadStats();
+  loadActivities();
+  loadBadges();
+  loadYearly();
+  loadChallenges();
+}
+
+// ══════════════════════════════════════════
+//   STATS
+// ══════════════════════════════════════════
+async function loadStats() {
+  const d = await api('/api/stats');
+  if (d.error) return;
+  animCount('sWeek', parseFloat(d.co2_week)||0, 1);
+  animCount('sPts',  parseInt(d.points)||0,     0);
+  animCount('sCo2',  parseFloat(d.co2_total)||0, 1);
+  animCount('sActs', parseInt(d.total_activities)||0, 0);
+}
+
+function animCount(id, target, decimals) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const dur = 1000, steps = 40, inc = target/steps;
+  let cur = 0, i = 0;
+  const t = setInterval(() => {
+    cur = Math.min(cur+inc, target);
+    el.textContent = decimals ? cur.toFixed(decimals) : Math.round(cur);
+    if (++i >= steps) clearInterval(t);
+  }, dur/steps);
+}
+
+// ══════════════════════════════════════════
+//   ACTIVITIES
+// ══════════════════════════════════════════
+const ICONS = {
+  Remoto:'🏠', Treno:'🚂', Bici:'🚴', Bus:'🚌', Carpooling:'🚗', Videocall:'💻'
+};
 const RATES = {
   Remoto:    { t:'h', co2:.5,  pts:10  },
   Treno:     { t:'k', co2:.04, pts:2   },
@@ -17,500 +246,54 @@ const RATES = {
   Carpooling:{ t:'k', co2:.06, pts:3   },
   Videocall: { t:'h', co2:.1,  pts:8   }
 };
-const ICONS = { Remoto:'🏠', Treno:'🚂', Bici:'🚴', Bus:'🚌', Carpooling:'🚗', Videocall:'💻' };
-const TABS  = {
-  dashboard:   ['Dashboard',         'Il tuo impatto questa settimana'],
-  log:         ['Log Attività',      'Registra le tue attività green'],
-  challenges:  ['Sfide',             'Partecipa e crea sfide per il team'],
-  leaderboard: ['Classifica',        'Come te la cavi nel team?'],
-  social:      ['Social',            'Followers, gruppi e notifiche'],
-  profile:     ['Il tuo Profilo',    'Personalizza il tuo Mii e il profilo'],
-  yearly:      ['Riepilogo Annuale', 'Il tuo andamento nel 2026'],
-  admin:       ['Admin Panel',       'Gestisci utenti e attività del team']
-};
 
-// ══════════════════════════════════════════
-//   MII AVATAR
-// ══════════════════════════════════════════
-function drawMii(canvas, opts = {}) {
-  const {
-    color = '#16a34a', skin = '#fde68a',
-    eyes = 'normal', mouth = 'smile', hair = 'none',
-    size = canvas.width
-  } = opts;
-  const ctx = canvas.getContext('2d');
-  const s   = size / 160;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // BG
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Collo
-  ctx.fillStyle = skin;
-  ctx.fillRect(68*s, 118*s, 24*s, 20*s);
-
-  // Testa
-  ctx.beginPath();
-  ctx.ellipse(80*s, 86*s, 40*s, 44*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin;
-  ctx.fill();
-
-  // Orecchie
-  ctx.beginPath(); ctx.ellipse(42*s, 88*s, 8*s, 10*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin; ctx.fill();
-  ctx.beginPath(); ctx.ellipse(118*s, 88*s, 8*s, 10*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin; ctx.fill();
-
-  // Capelli
-  if (hair === 'short') {
-    ctx.beginPath();
-    ctx.ellipse(80*s, 60*s, 42*s, 26*s, 0, Math.PI, Math.PI*2);
-    ctx.fillStyle = '#78350f'; ctx.fill();
-    ctx.fillRect(38*s, 60*s, 84*s, 16*s);
-    ctx.fillStyle = '#78350f';
-  } else if (hair === 'long') {
-    ctx.beginPath();
-    ctx.ellipse(80*s, 58*s, 42*s, 26*s, 0, Math.PI, Math.PI*2);
-    ctx.fillStyle = '#78350f'; ctx.fill();
-    ctx.fillRect(38*s, 60*s, 12*s, 50*s);
-    ctx.fillRect(110*s, 60*s, 12*s, 50*s);
-    ctx.fillStyle = '#78350f';
-  } else if (hair === 'curly') {
-    for (let i = 0; i < 6; i++) {
-      ctx.beginPath();
-      ctx.arc((48 + i*12)*s, 52*s, 9*s, 0, Math.PI*2);
-      ctx.fillStyle = '#78350f'; ctx.fill();
-    }
-    ctx.fillRect(38*s, 52*s, 84*s, 14*s);
-    ctx.fillStyle = '#78350f';
+function renderActs(acts, containerId, limit=null) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const list = limit ? acts.slice(0,limit) : acts;
+  if (!list.length) {
+    el.innerHTML = `<div class="empty"><div class="ei">🌱</div><p>Nessuna attività ancora.<br>Inizia a registrare!</p></div>`;
+    return;
   }
-
-  // Sopracciglia
-  ctx.strokeStyle = '#78350f'; ctx.lineWidth = 3*s; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(56*s,72*s); ctx.lineTo(70*s,70*s); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(90*s,70*s); ctx.lineTo(104*s,72*s); ctx.stroke();
-
-  // Occhi
-  if (eyes === 'cool') {
-    // Occhiali
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(53*s, 76*s, 22*s, 12*s);
-    ctx.fillRect(85*s, 76*s, 22*s, 12*s);
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2*s;
-    ctx.beginPath(); ctx.moveTo(75*s,82*s); ctx.lineTo(85*s,82*s); ctx.stroke();
-    // Pupille
-    ctx.fillStyle = 'white';
-    ctx.fillRect(55*s, 78*s, 18*s, 8*s);
-    ctx.fillRect(87*s, 78*s, 18*s, 8*s);
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(60*s, 79*s, 6*s, 6*s);
-    ctx.fillRect(92*s, 79*s, 6*s, 6*s);
-  } else if (eyes === 'happy') {
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3*s;
-    ctx.beginPath(); ctx.arc(64*s, 82*s, 7*s, Math.PI, Math.PI*2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(96*s, 82*s, 7*s, Math.PI, Math.PI*2); ctx.stroke();
-  } else if (eyes === 'wink') {
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath(); ctx.arc(64*s, 82*s, 7*s, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.beginPath(); ctx.arc(66*s, 80*s, 2.5*s, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3*s;
-    ctx.beginPath(); ctx.moveTo(90*s,82*s); ctx.lineTo(102*s,80*s); ctx.stroke();
-  } else {
-    // Normal
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath(); ctx.arc(64*s, 82*s, 7*s, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(96*s, 82*s, 7*s, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.beginPath(); ctx.arc(66*s, 80*s, 2.5*s, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(98*s, 80*s, 2.5*s, 0, Math.PI*2); ctx.fill();
-  }
-
-  // Naso
-  ctx.fillStyle = skin === '#fde68a' ? '#f59e0b' : '#b45309';
-  ctx.beginPath(); ctx.arc(80*s, 94*s, 4*s, 0, Math.PI*2); ctx.fill();
-
-  // Bocca
-  ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 3*s; ctx.lineCap = 'round';
-  if (mouth === 'big') {
-    ctx.beginPath(); ctx.arc(80*s, 104*s, 12*s, 0, Math.PI);
-    ctx.fillStyle = '#991b1b'; ctx.fill();
-    ctx.fillStyle = '#fca5a5';
-    ctx.beginPath(); ctx.arc(80*s, 104*s, 8*s, 0.1, Math.PI-0.1); ctx.fill();
-  } else if (mouth === 'serious') {
-    ctx.beginPath(); ctx.moveTo(68*s,106*s); ctx.lineTo(92*s,106*s); ctx.stroke();
-  } else if (mouth === 'tongue') {
-    ctx.beginPath(); ctx.arc(80*s, 104*s, 10*s, 0, Math.PI);
-    ctx.fillStyle = '#991b1b'; ctx.fill();
-    ctx.fillStyle = '#f87171';
-    ctx.beginPath(); ctx.ellipse(80*s, 112*s, 6*s, 5*s, 0, 0, Math.PI*2); ctx.fill();
-  } else {
-    // smile
-    ctx.beginPath(); ctx.arc(80*s, 100*s, 10*s, 0.2, Math.PI-0.2); ctx.stroke();
-  }
-}
-
-function drawMiniMii(canvas, opts = {}) {
-  drawMii(canvas, { ...opts, size: canvas.width });
-}
-
-function setAv(key, val) {
-  myProfile[key] = val;
-  // Aggiorna active state swatches/btns
-  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.mii-opt-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll(`[onclick*="${val}"]`).forEach(el => el.classList.add('active'));
-  renderMii();
-}
-
-function renderMii() {
-  const c = document.getElementById('miiCanvas');
-  if (!c) return;
-  drawMii(c, {
-    color: myProfile.avatar_color || '#16a34a',
-    skin:  myProfile.avatar_skin  || '#fde68a',
-    eyes:  myProfile.avatar_eyes  || 'normal',
-    mouth: myProfile.avatar_mouth || 'smile',
-    hair:  myProfile.avatar_hair  || 'none'
-  });
-  // Update sidebar canvas
-  const sbC = document.getElementById('sbAvCanvas');
-  if (sbC) drawMiniMii(sbC, {
-    color: myProfile.avatar_color || '#16a34a',
-    skin:  myProfile.avatar_skin  || '#fde68a',
-    eyes:  myProfile.avatar_eyes  || 'normal',
-    mouth: myProfile.avatar_mouth || 'smile',
-    hair:  myProfile.avatar_hair  || 'none'
-  });
-}
-
-function miiCanvasHTML(opts, size = 40) {
-  const id = 'mii_' + Math.random().toString(36).slice(2);
-  setTimeout(() => {
-    const c = document.getElementById(id);
-    if (c) drawMiniMii(c, opts);
-  }, 0);
-  return `<canvas id="${id}" width="${size}" height="${size}" style="border-radius:${size/4}px;border:2px solid var(--green-mid)"></canvas>`;
-}
-
-window.setAv = setAv;
-
-// ══════════════════════════════════════════
-//   TUTORIAL
-// ══════════════════════════════════════════
-function openTut() { document.getElementById('tut').style.display = 'flex'; goS(1); }
-function skipTut() { document.getElementById('tut').style.display = 'none'; localStorage.setItem('tutDone','1'); }
-function goS(n) {
-  curS = n;
-  document.querySelectorAll('.tut-step').forEach(s => s.classList.remove('active'));
-  document.querySelector(`[data-s="${n}"]`).classList.add('active');
-  document.querySelectorAll('.tut-dot').forEach((d,i) => d.classList.toggle('active', i===n-1));
-  const prev = document.getElementById('tPrev');
-  const next = document.getElementById('tNext');
-  prev.style.opacity = n===1 ? '0':'1';
-  prev.style.pointerEvents = n===1 ? 'none':'auto';
-  next.textContent = n===4 ? '🚀 Inizia!' : 'Avanti →';
-}
-function nextS() { if (curS===4) { skipTut(); return; } goS(curS+1); }
-function prevS() { if (curS>1) goS(curS-1); }
-window.openTut=openTut; window.skipTut=skipTut; window.goS=goS; window.nextS=nextS; window.prevS=prevS;
-
-// ══════════════════════════════════════════
-//   AUTH
-// ══════════════════════════════════════════
-function switchAuth(t) {
-  document.getElementById('fLogin').style.display = t==='login'    ? 'flex':'none';
-  document.getElementById('fReg').style.display   = t==='register' ? 'flex':'none';
-  document.getElementById('tLogin').classList.toggle('active', t==='login');
-  document.getElementById('tReg').classList.toggle('active',   t==='register');
-}
-function toggleEye(id) { const e=document.getElementById(id); e.type=e.type==='password'?'text':'password'; }
-function chkPw() {
-  const v = document.getElementById('rPw').value;
-  const s = (id,ok) => document.getElementById(id).classList.toggle('ok',ok);
-  s('h1',v.length>=8); s('h2',/[A-Z]/.test(v)); s('h3',/\d/.test(v)); s('h4',/[!@#$%^&*]/.test(v));
-}
-async function doLogin() {
-  const eEl=document.getElementById('lEmail'), pEl=document.getElementById('lPw');
-  if (!eEl||!pEl) return;
-  const e=eEl.value.trim(), p=pEl.value;
-  if (!e||!p) return setErr('lErr','Compila tutti i campi');
-  const btn=document.querySelector('#fLogin .btn-auth');
-  setLoading(btn,true,'Login');
-  const d=await post('/api/login',{email:e,password:p});
-  setLoading(btn,false,'Login');
-  if (d.error) return setErr('lErr',d.error);
-  token=d.token; localStorage.setItem('ecotoken',token);
-  enterApp(d.user);
-}
-async function doReg() {
-  const n=document.getElementById('rName').value.trim();
-  const u=document.getElementById('rUsername').value.trim();
-  const e=document.getElementById('rEmail').value.trim();
-  const p=document.getElementById('rPw').value;
-  if (!n||!u||!e||!p) return setErr('rErr','Compila tutti i campi');
-  const btn=document.querySelector('#fReg .btn-auth');
-  setLoading(btn,true,'Register');
-  const d=await post('/api/register',{name:n,username:u,email:e,password:p});
-  setLoading(btn,false,'Register');
-  if (d.error) return setErr('rErr',d.error);
-  token=d.token; localStorage.setItem('ecotoken',token);
-  enterApp(d.user);
-}
-function setErr(id,msg) {
-  const e=document.getElementById(id); if (!e) return;
-  e.textContent=msg; e.style.animation='none';
-  requestAnimationFrame(()=>{ e.style.animation='shake .4s ease'; });
-  setTimeout(()=>e.textContent='',4000);
-}
-function setLoading(btn,loading,label) {
-  if (!btn) return;
-  btn.disabled=loading; btn.style.opacity=loading?'.7':'1';
-  const span=btn.querySelector('span');
-  if (span) span.textContent=loading?'Caricamento...':label;
-}
-function logout() { localStorage.removeItem('ecotoken'); location.reload(); }
-function enterApp(u) {
-  document.getElementById('authWrap').style.display='none';
-  document.getElementById('app').style.display='flex';
-  if (window.innerWidth<=768) document.getElementById('mobNav').style.display='flex';
-  document.getElementById('sbEmail').textContent=u.email||'';
-  initAdmin(u);
-  loadAll();
-  loadProfile();
-  loadNotifCount();
-  if (!localStorage.getItem('tutDone')) openTut();
-}
-window.switchAuth=switchAuth; window.toggleEye=toggleEye; window.chkPw=chkPw;
-window.doLogin=doLogin; window.doReg=doReg; window.logout=logout;
-
-// ══════════════════════════════════════════
-//   ADMIN INIT
-// ══════════════════════════════════════════
-function initAdmin(u) {
-  isAdmin=!!u.is_admin;
-  const nameEl=document.getElementById('sbName');
-  nameEl.innerHTML=(u.name||u.username||u.email)+(isAdmin?' <span class="admin-badge">👑</span>':'');
-  document.getElementById('adminSbBtn').style.display =isAdmin?'flex':'none';
-  document.getElementById('adminMobBtn').style.display=isAdmin?'flex':'none';
-}
-
-// ══════════════════════════════════════════
-//   API
-// ══════════════════════════════════════════
-async function api(url,method='GET',body=null) {
-  try {
-    const res=await fetch(url,{method,headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:body?JSON.stringify(body):null});
-    return res.json();
-  } catch(err) { showN('❌ Errore di rete','error'); return {error:err.message}; }
-}
-async function post(url,body) {
-  try {
-    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    return res.json();
-  } catch(err) { showN('❌ Errore di rete','error'); return {error:err.message}; }
-}
-
-// ══════════════════════════════════════════
-//   LOAD ALL
-// ══════════════════════════════════════════
-function loadAll() { loadStats(); loadActs(); loadBadges(); loadLb(); loadYearly(); loadCh(); }
-
-// ══════════════════════════════════════════
-//   PROFILO
-// ══════════════════════════════════════════
-async function loadProfile() {
-  const d=await api('/api/profile'); if (!d||d.error) return;
-  myProfile=d;
-  document.getElementById('pName').value    =d.name||'';
-  document.getElementById('pUsername').value=d.username||'';
-  document.getElementById('pBio').value     =d.bio||'';
-  document.getElementById('pFollowers').textContent=d.followers||0;
-  document.getElementById('pFollowing').textContent=d.following||0;
-  document.getElementById('pPoints2').textContent  =d.points||0;
-  renderMii();
-  // Aggiorna active state
-  document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll(`[onclick*="${d.avatar_color}"]`).forEach(el=>el.classList.add('active'));
-}
-
-async function saveProfile() {
-  const d=await api('/api/profile','PATCH',{
-    name:         document.getElementById('pName').value,
-    username:     document.getElementById('pUsername').value,
-    bio:          document.getElementById('pBio').value,
-    avatar_color: myProfile.avatar_color||'#16a34a',
-    avatar_eyes:  myProfile.avatar_eyes ||'normal',
-    avatar_mouth: myProfile.avatar_mouth||'smile',
-    avatar_hair:  myProfile.avatar_hair ||'none',
-    avatar_skin:  myProfile.avatar_skin ||'#fde68a'
-  });
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN('✅ Profilo salvato!','success');
-  const nameEl=document.getElementById('sbName');
-  nameEl.innerHTML=(d.user.name||d.user.username)+(isAdmin?' <span class="admin-badge">👑</span>':'');
-  renderMii();
-}
-
-window.saveProfile=saveProfile;
-
-// ══════════════════════════════════════════
-//   STATS
-// ══════════════════════════════════════════
-async function loadStats() {
-  const d=await api('/api/stats'); if (!d||d.error) return;
-  anim('sCO2', parseFloat(d.co2_week||0),      1);
-  anim('sPts', parseInt(d.points||0),           0);
-  anim('sActs',parseInt(d.total_activities||0), 0);
-}
-function anim(id,target,dec) {
-  const el=document.getElementById(id); if (!el) return;
-  const dur=900, t0=performance.now();
-  const upd=now=>{ const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,4); el.textContent=(e*target).toFixed(dec); if(p<1) requestAnimationFrame(upd); };
-  requestAnimationFrame(upd);
-}
-
-// ══════════════════════════════════════════
-//   ACTIVITIES
-// ══════════════════════════════════════════
-function selAct(type,btn) {
-  curAct=type;
-  document.querySelectorAll('.at-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
-  const r=RATES[type], form=document.getElementById('logForm');
-  form.style.display='block';
-  document.getElementById('logTitle').textContent=`${ICONS[type]} Stai registrando: ${type}`;
-  document.getElementById('kmRow').style.display=r.t==='k'?'block':'none';
-  document.getElementById('hrRow').style.display=r.t==='h'?'block':'none';
-  document.getElementById('cpRow').style.display=type==='Carpooling'?'block':'none';
-  ['iKm','iHr','iNote','iCp'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  updPreview();
-  form.scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-function updPreview() {
-  if (!curAct) return;
-  const r=RATES[curAct];
-  const km=parseFloat(document.getElementById('iKm').value)||0;
-  const hr=parseFloat(document.getElementById('iHr').value)||0;
-  const val=r.t==='k'?km:hr;
-  document.getElementById('pCO2').textContent=(val*r.co2).toFixed(2);
-  document.getElementById('pPts').textContent=Math.round(val*r.pts);
-}
-function cancelAct() {
-  const form=document.getElementById('logForm');
-  form.style.opacity='0'; form.style.transform='translateY(-8px)';
-  setTimeout(()=>{ form.style.display='none'; form.style.opacity=''; form.style.transform=''; },200);
-  document.querySelectorAll('.at-btn').forEach(b=>b.classList.remove('sel'));
-  curAct=null;
-}
-async function saveAct() {
-  const km=parseFloat(document.getElementById('iKm').value)||0;
-  const hr=parseFloat(document.getElementById('iHr').value)||0;
-  const note=document.getElementById('iNote').value;
-  const cpEl=document.getElementById('iCp');
-  const cp=cpEl?cpEl.value:'';
-  const r=RATES[curAct];
-  if (r.t==='k'&&km===0) return showN('⚠️ Inserisci i km!','error');
-  if (r.t==='h'&&hr===0) return showN('⚠️ Inserisci le ore!','error');
-  const btn=document.querySelector('#logForm .btn-save');
-  if (btn) { btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>Salvataggio...'; }
-  const d=await api('/api/activity','POST',{type:curAct,km,hours:hr,note,carsharing_with:cp});
-  if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-check"></i>Salva'; }
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN(`✅ +${d.points} punti! 🌱 ${d.co2_saved}kg CO₂ salvata`,'success');
-  cancelAct(); loadAll();
-}
-function actHTML(acts) {
-  if (!acts||!acts.length) return `<div class="empty"><div class="ei">🌱</div><p>Nessuna attività ancora.<br>Inizia a tracciare il tuo impatto!</p></div>`;
-  return acts.map((a,i)=>`
-    <div class="act-item" style="animation:fadeSlide .3s ease ${i*.05}s both">
+  el.innerHTML = list.map(a => `
+    <div class="act-item">
       <div class="act-icon-wrap">${ICONS[a.type]||'📌'}</div>
       <div class="act-detail">
         <div class="act-name">${a.type}</div>
-        <div class="act-sub">${[a.km>0?a.km+' km':'',a.hours>0?a.hours+' ore':'',a.note||''].filter(Boolean).join(' · ')}</div>
-        <div class="act-sub">${new Date(a.date).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})}</div>
+        <div class="act-sub">
+          ${a.km>0 ? `📍 ${a.from_addr||''} → ${a.to_addr||''} · <strong>${a.km} km</strong>` : ''}
+          ${a.hours>0 ? `⏱ ${a.hours} ore` : ''}
+          ${a.note ? ` · ${a.note}` : ''}
+          <br>${new Date(a.date).toLocaleDateString('it-IT',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+        </div>
       </div>
       <div class="act-tags">
-        <span class="tag tag-g">-${a.co2_saved} kg</span>
-        <span class="tag tag-y">+${a.points} pt</span>
+        <span class="tag tag-g">🌱 ${a.co2_saved} kg</span>
+        <span class="tag tag-y">⭐ +${a.points}</span>
       </div>
     </div>`).join('');
 }
-async function loadActs() {
-  const acts=await api('/api/activities');
-  const html=actHTML(!acts||acts.error?[]:acts);
-  document.getElementById('recentActs').innerHTML=html;
-  document.getElementById('allActs').innerHTML=html;
+
+async function loadActivities() {
+  const acts = await api('/api/activities');
+  if (acts.error) return;
+  renderActs(acts, 'recentActs', 5);
+  renderActs(acts, 'allActs');
 }
-window.selAct=selAct; window.updPreview=updPreview; window.cancelAct=cancelAct; window.saveAct=saveAct;
 
 // ══════════════════════════════════════════
 //   BADGES
 // ══════════════════════════════════════════
 async function loadBadges() {
-  const bs=await api('/api/badges'); if (!bs||bs.error) return;
-  document.getElementById('sBadges').textContent=bs.filter(b=>b.unlocked).length;
-  document.getElementById('badgeList').innerHTML=bs.map((b,i)=>`
-    <div class="badge-item ${b.unlocked?'on':'off'}" style="animation:fadeSlide .3s ease ${i*.07}s both">
+  const badges = await api('/api/badges');
+  if (badges.error) return;
+  document.getElementById('badgeList').innerHTML = badges.map(b => `
+    <div class="badge-item ${b.unlocked?'on':'off'}">
       <div class="badge-icon">${b.icon}</div>
-      <div><div class="badge-name">${b.name}</div><div class="badge-desc">${b.desc}</div></div>
-    </div>`).join('');
-}
-
-// ══════════════════════════════════════════
-//   CHALLENGES
-// ══════════════════════════════════════════
-function togCh() {
-  const f=document.getElementById('chForm'), visible=f.style.display!=='none';
-  if (visible) { f.style.opacity='0'; f.style.transform='translateY(-6px)'; setTimeout(()=>{ f.style.display='none'; f.style.opacity=''; f.style.transform=''; },200); }
-  else f.style.display='block';
-}
-async function createCh() {
-  const title=document.getElementById('cTitle').value.trim();
-  const target=parseFloat(document.getElementById('cTarget').value);
-  const points=parseInt(document.getElementById('cPoints').value);
-  const date=document.getElementById('cDate').value;
-  if (!title||!target||!points||!date) return showN('⚠️ Compila tutti i campi!','error');
-  const d=await api('/api/challenges','POST',{title,description:document.getElementById('cDesc').value,co2_target:target,points_reward:points,end_date:date,is_public:document.getElementById('cPub').checked});
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN('🚀 Sfida creata!','success'); togCh(); loadCh();
-}
-async function loadCh() {
-  const list=await api('/api/challenges');
-  document.getElementById('chList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">🔥</div><p>Nessuna sfida ancora.</p></div>`
-    :list.map((c,i)=>`
-      <div class="ch-item" style="animation:fadeSlide .3s ease ${i*.06}s both">
-        <div class="ch-ico">🚀</div>
-        <div class="ch-info">
-          <h4>${c.title} ${c.is_public?'🌍':'🔒'}</h4>
-          <p>${c.description||''}</p>
-          <div class="ch-tags">
-            <span class="ch-tag">🎯 ${c.co2_target} kg</span>
-            <span class="ch-tag">🏆 ${c.points_reward} pt</span>
-            <span class="ch-tag">📅 ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>
-          </div>
-        </div>
-      </div>`).join('');
-}
-window.togCh=togCh; window.createCh=createCh;
-
-// ══════════════════════════════════════════
-//   LEADERBOARD
-// ══════════════════════════════════════════
-async function loadLb() {
-  const b=await api('/api/leaderboard'); if (!b||b.error) return;
-  document.getElementById('lbList').innerHTML=b.map((u,i)=>`
-    <div class="lb-row ${i===0?'r1':i===1?'r2':i===2?'r3':''}" style="animation:fadeSlide .3s ease ${i*.06}s both">
-      <span class="lb-rank">${['🥇','🥈','🥉'][i]||'#'+(i+1)}</span>
-      <div class="lb-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},40)}</div>
-      <div class="lb-name">
-        <div class="lb-uname">${u.name||u.email}</div>
-        ${u.username?`<div class="lb-username">@${u.username}</div>`:''}
+      <div>
+        <div class="badge-name">${b.name}</div>
+        <div class="badge-desc">${b.desc}</div>
       </div>
-      <span class="lb-co2">${parseFloat(u.co2_saved||0).toFixed(1)} kg</span>
-      <span class="lb-pts">${u.points||0} pt</span>
     </div>`).join('');
 }
 
@@ -518,445 +301,1213 @@ async function loadLb() {
 //   YEARLY
 // ══════════════════════════════════════════
 async function loadYearly() {
-  const data=await api('/api/yearly'); if (!data||data.error) return;
-  const max=Math.max(...data.map(d=>parseFloat(d.co2)||0),1);
-  document.getElementById('yrList').innerHTML=data.length===0
-    ?`<div class="empty"><div class="ei">📅</div><p>Nessun dato per quest'anno ancora.</p></div>`
-    :data.map((m,i)=>`
-      <div class="yr-row" style="animation:fadeSlide .3s ease ${i*.05}s both">
-        <span class="yr-month">${m.month}</span>
-        <div class="yr-bar"><div class="yr-fill" style="width:${Math.round(parseFloat(m.co2)/max*100)}%"></div></div>
-        <span class="yr-co2">${parseFloat(m.co2).toFixed(1)} kg</span>
-        <span class="yr-pts">${m.points} pt</span>
-      </div>`).join('');
+  const data = await api('/api/yearly');
+  const el = document.getElementById('yearlyChart');
+  if (!el) return;
+  if (!data.length) { el.innerHTML = `<div class="empty"><div class="ei">📊</div><p>Nessun dato annuale.</p></div>`; return; }
+  const max = Math.max(...data.map(d=>parseFloat(d.co2)||0), 1);
+  el.innerHTML = data.map(d => {
+    const pct = Math.round((parseFloat(d.co2)/max)*100);
+    return `
+    <div class="yr-row">
+      <div class="yr-month">${d.month}</div>
+      <div class="yr-bar"><div class="yr-fill" data-w="${pct}"></div></div>
+      <div class="yr-co2">${parseFloat(d.co2).toFixed(1)} kg</div>
+      <div class="yr-pts">⭐${Math.round(d.points)}</div>
+    </div>`;
+  }).join('');
+  setTimeout(() => {
+    document.querySelectorAll('.yr-fill').forEach(f => {
+      f.style.width = f.dataset.w + '%';
+    });
+  }, 100);
 }
 
 // ══════════════════════════════════════════
-//   SOCIAL
+//   CHALLENGES
 // ══════════════════════════════════════════
-async function loadSocial() {
-  loadNotifications();
-  loadFollowers();
-  loadFollowing();
-  loadGroups();
+async function loadChallenges() {
+  const list = await api('/api/challenges');
+  const el = document.getElementById('chList');
+  if (!el) return;
+  if (!list.length) { el.innerHTML = `<div class="empty"><div class="ei">🏆</div><p>Nessuna sfida. Creane una!</p></div>`; return; }
+  el.innerHTML = list.map(c => `
+    <div class="ch-item">
+      <div class="ch-ico">🏆</div>
+      <div class="ch-info" style="flex:1">
+        <h4>${c.title}</h4>
+        <p>${c.description||'Nessuna descrizione'}</p>
+        <div class="ch-tags">
+          ${c.co2_target>0?`<span class="ch-tag">🌱 ${c.co2_target} kg CO₂</span>`:''}
+          ${c.points_reward>0?`<span class="ch-tag">⭐ ${c.points_reward} pt</span>`:''}
+          ${c.end_date?`<span class="ch-tag">📅 ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>`:''}
+          ${c.is_public?'<span class="ch-tag">🌍 Pubblica</span>':''}
+        </div>
+      </div>
+    </div>`).join('');
 }
 
-// Notifiche
+function toggleChForm() {
+  const f = document.getElementById('chForm');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+}
+window.toggleChForm = toggleChForm;
+
+async function saveChallenge() {
+  const d = await api('/api/challenges','POST',{
+    title:       document.getElementById('chTitle').value,
+    description: document.getElementById('chDesc').value,
+    co2_target:  parseFloat(document.getElementById('chCo2').value)||0,
+    points_reward:parseInt(document.getElementById('chPts').value)||0,
+    end_date:    document.getElementById('chDate').value,
+    is_public:   document.getElementById('chPublic').checked
+  });
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('🏆 Sfida creata!','success');
+  toggleChForm();
+  loadChallenges();
+}
+window.saveChallenge = saveChallenge;
+
+// ══════════════════════════════════════════
+//   LEADERBOARD
+// ══════════════════════════════════════════
+async function loadLeaderboard() {
+  const list = await api('/api/leaderboard');
+  const el = document.getElementById('lbList');
+  if (!el||list.error) return;
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = list.map((u,i) => {
+    const c = document.createElement('canvas');
+    c.width = 40; c.height = 40;
+    drawMii(u, null, 40, c);
+    return `
+    <div class="lb-row ${i<3?'r'+(i+1):''}">
+      <div class="lb-rank">${medals[i]||'#'+(i+1)}</div>
+      <div class="lb-av">
+        <canvas width="40" height="40" id="lbAv${u.id}"></canvas>
+      </div>
+      <div class="lb-name">
+        <div class="lb-uname">${u.name||'—'}</div>
+        <div class="lb-username">@${u.username||'—'}</div>
+      </div>
+      <div class="lb-co2">🌱 ${parseFloat(u.co2_saved).toFixed(1)} kg</div>
+      <div class="lb-pts">⭐ ${Math.round(u.points)}</div>
+    </div>`;
+  }).join('');
+  setTimeout(() => list.forEach(u => drawMii(u, 'lbAv'+u.id, 40)), 50);
+}
+
+// ══════════════════════════════════════════
+//   NOTIFICHE
+// ══════════════════════════════════════════
+async function loadNotifCount() {
+  const list = await api('/api/notifications');
+  if (list.error) return;
+  const unread = list.filter(n=>!n.is_read).length;
+  const dot    = document.getElementById('sbNotifDot');
+  const count  = document.getElementById('notifCount');
+  if (unread > 0) {
+    dot?.style && (dot.style.display='block');
+    if (count) { count.style.display='flex'; count.textContent=unread; }
+  } else {
+    dot?.style && (dot.style.display='none');
+    if (count) count.style.display='none';
+  }
+}
+
 async function loadNotifications() {
-  const notifs=await api('/api/notifications');
-  document.getElementById('notifList').innerHTML=!notifs||notifs.error||notifs.length===0
-    ?`<div class="empty"><div class="ei">🔔</div><p>Nessuna notifica ancora.</p></div>`
-    :notifs.map((n,i)=>`
-      <div class="notif-item ${n.is_read?'':'unread'}" style="animation:fadeSlide .25s ease ${i*.04}s both">
-        <div class="notif-item-icon ni-${n.type}">
-          ${{follow:'👤',warn:'⚠️',ban:'⛔',unban:'✅',carsharing:'🚗'}[n.type]||'📢'}
-        </div>
-        <div class="notif-item-body">
-          <div class="notif-item-msg">${n.message}</div>
-          <div class="notif-item-time">${timeAgo(n.created_at)}</div>
-        </div>
-      </div>`).join('');
+  const list = await api('/api/notifications');
+  const el   = document.getElementById('notifList');
+  if (!el) return;
+  if (!list.length||list.error) {
+    el.innerHTML = `<div class="empty"><div class="ei">🔔</div><p>Nessuna notifica.</p></div>`;
+    return;
+  }
+  el.innerHTML = list.map(n => `
+    <div class="notif-item ${n.is_read?'':'unread'}">
+      <div class="notif-item-icon ni-${n.type}">
+        ${n.type==='follow'?'👥':n.type==='warn'?'⚠️':n.type==='ban'?'⛔':n.type==='unban'?'✅':n.type==='carsharing'?'🚗':'🔔'}
+      </div>
+      <div class="notif-item-body">
+        <div class="notif-item-msg">${n.message}</div>
+        <div class="notif-item-time">${new Date(n.created_at).toLocaleString('it-IT')}</div>
+      </div>
+    </div>`).join('');
+  await api('/api/notifications/read','PATCH');
+  loadNotifCount();
 }
 
 async function markAllRead() {
   await api('/api/notifications/read','PATCH');
-  loadNotifications(); loadNotifCount();
+  loadNotifications();
+  showN('✅ Tutte le notifiche lette','info');
 }
+window.markAllRead = markAllRead;
 
-async function loadNotifCount() {
-  const notifs=await api('/api/notifications');
-  if (!notifs||notifs.error) return;
-  const unread=notifs.filter(n=>!n.is_read).length;
-  const dot=document.getElementById('notifDot');
-  const count=document.getElementById('notifCount');
-  if (dot) dot.style.display=unread>0?'block':'none';
-  if (count) { count.style.display=unread>0?'flex':'none'; count.textContent=unread; }
-}
-
-function timeAgo(date) {
-  const s=Math.floor((Date.now()-new Date(date))/1000);
-  if (s<60) return 'Adesso';
-  if (s<3600) return Math.floor(s/60)+' min fa';
-  if (s<86400) return Math.floor(s/3600)+' ore fa';
-  return Math.floor(s/86400)+' giorni fa';
-}
-
-// Cerca utenti
-let searchTimer;
-function searchUsers() {
-  clearTimeout(searchTimer);
-  const q=document.getElementById('searchUser').value.trim();
-  if (!q) { document.getElementById('searchResults').innerHTML=''; return; }
-  searchTimer=setTimeout(async()=>{
-    const r=await api(`/api/user/${q}`);
-    document.getElementById('searchResults').innerHTML=r.error
-      ?`<div class="empty" style="padding:20px"><div class="ei" style="font-size:32px">🔍</div><p>Utente non trovato.</p></div>`
-      :userCardHTML(r);
-  },400);
-}
-
-function userCardHTML(u) {
-  return `
-    <div class="user-card" id="uc-${u.id}">
-      <div class="uc-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},44)}</div>
+// ══════════════════════════════════════════
+//   SOCIAL
+// ══════════════════════════════════════════
+async function loadFollowers() {
+  const list = await api('/api/followers');
+  const el   = document.getElementById('followersList');
+  if (!el) return;
+  if (!list.length||list.error) { el.innerHTML=`<div class="empty"><div class="ei">👥</div><p>Nessun follower ancora.</p></div>`; return; }
+  el.innerHTML = list.map(u => `
+    <div class="user-card">
+      <div class="uc-av"><canvas width="44" height="44" id="fwAv${u.id}"></canvas></div>
       <div class="uc-info">
-        <div class="uc-name">${u.name||u.username}</div>
+        <div class="uc-name">${u.name||'—'}</div>
         <div class="uc-username">@${u.username||'—'}</div>
         <div class="uc-pts">⭐ ${u.points||0} pt</div>
       </div>
-      <button class="btn-follow ${u.isFollowing?'following':''}" id="fbtn-${u.id}"
-        onclick="toggleFollow(${u.id}, ${u.isFollowing})">
-        ${u.isFollowing?'✓ Seguito':'+ Segui'}
-      </button>
-    </div>`;
-}
-
-async function toggleFollow(userId, isFollowing) {
-  if (isFollowing) {
-    await api(`/api/follow/${userId}`,'DELETE');
-  } else {
-    await api(`/api/follow/${userId}`,'POST');
-  }
-  const btn=document.getElementById(`fbtn-${userId}`);
-  if (btn) {
-    const now=!isFollowing;
-    btn.textContent=now?'✓ Seguito':'+ Segui';
-    btn.classList.toggle('following',now);
-    btn.onclick=()=>toggleFollow(userId,now);
-  }
-  loadFollowers(); loadFollowing();
-}
-
-async function loadFollowers() {
-  const list=await api('/api/followers');
-  document.getElementById('followersList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">👤</div><p>Nessun follower ancora.</p></div>`
-    :list.map(u=>`
-      <div class="user-card">
-        <div class="uc-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},44)}</div>
-        <div class="uc-info">
-          <div class="uc-name">${u.name||u.username}</div>
-          <div class="uc-username">@${u.username||'—'}</div>
-        </div>
-      </div>`).join('');
+    </div>`).join('');
+  setTimeout(() => list.forEach(u => drawMii(u,'fwAv'+u.id,44)), 50);
 }
 
 async function loadFollowing() {
-  const list=await api('/api/following');
-  document.getElementById('followingList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">👥</div><p>Non segui ancora nessuno.</p></div>`
-    :list.map(u=>`
-      <div class="user-card">
-        <div class="uc-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},44)}</div>
-        <div class="uc-info">
-          <div class="uc-name">${u.name||u.username}</div>
-          <div class="uc-username">@${u.username||'—'}</div>
-        </div>
-        <button class="btn-follow following" onclick="toggleFollow(${u.id},true)">✓ Seguito</button>
-      </div>`).join('');
+  const list = await api('/api/following');
+  const el   = document.getElementById('followingList');
+  if (!el) return;
+  if (!list.length||list.error) { el.innerHTML=`<div class="empty"><div class="ei">👤</div><p>Non stai seguendo nessuno.</p></div>`; return; }
+  el.innerHTML = list.map(u => `
+    <div class="user-card">
+      <div class="uc-av"><canvas width="44" height="44" id="fgAv${u.id}"></canvas></div>
+      <div class="uc-info">
+        <div class="uc-name">${u.name||'—'}</div>
+        <div class="uc-username">@${u.username||'—'}</div>
+        <div class="uc-pts">⭐ ${u.points||0} pt</div>
+      </div>
+      <button class="btn-follow following" onclick="unfollow(${u.id},this)">Segui già</button>
+    </div>`).join('');
+  setTimeout(() => list.forEach(u => drawMii(u,'fgAv'+u.id,44)), 50);
 }
 
-// Gruppi
-function togGroupForm() {
-  const f=document.getElementById('groupForm'), visible=f.style.display!=='none';
-  if (visible) { f.style.opacity='0'; setTimeout(()=>{ f.style.display='none'; f.style.opacity='1'; },200); }
-  else f.style.display='block';
-}
-async function createGroup() {
-  const name=document.getElementById('gName').value.trim();
-  if (!name) return showN('⚠️ Nome obbligatorio!','error');
-  const d=await api('/api/groups','POST',{name,description:document.getElementById('gDesc').value,is_public:document.getElementById('gPublic').checked});
+async function unfollow(userId, btn) {
+  const d = await api(`/api/follow/${userId}`,'DELETE');
   if (d.error) return showN('❌ '+d.error,'error');
-  showN('👥 Gruppo creato!','success'); togGroupForm(); loadGroups();
+  showN('👋 Non segui più questo utente','info');
+  loadFollowing();
 }
+window.unfollow = unfollow;
+
+// ══════════════════════════════════════════
+//   GRUPPI
+// ══════════════════════════════════════════
 async function loadGroups() {
-  const list=await api('/api/groups');
-  document.getElementById('groupsList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">👥</div><p>Nessun gruppo ancora.</p></div>`
-    :list.map((g,i)=>`
-      <div class="group-card" style="animation:fadeSlide .3s ease ${i*.05}s both">
-        <div class="group-icon">👥</div>
-        <div class="group-info">
-          <div class="group-name">${g.name} ${g.is_public?'🌍':'🔒'}</div>
-          <div class="group-desc">${g.description||''}</div>
-          <div class="group-meta">👤 ${g.member_count} membri · creato da ${g.owner_name}</div>
-        </div>
-        <button class="btn-join ${g.is_member?'leave':''}" id="gbtn-${g.id}"
-          onclick="toggleGroup(${g.id},${g.is_member})">
-          ${g.is_member?'Esci':'Unisciti'}
-        </button>
-      </div>`).join('');
+  const list = await api('/api/groups');
+  const el   = document.getElementById('groupList');
+  if (!el) return;
+  if (!list.length||list.error) { el.innerHTML=`<div class="empty"><div class="ei">👥</div><p>Nessun gruppo. Creane uno!</p></div>`; return; }
+  el.innerHTML = list.map(g => `
+    <div class="group-card">
+      <div class="group-icon">👥</div>
+      <div class="group-info">
+        <div class="group-name">${g.name}</div>
+        <div class="group-desc">${g.description||''}</div>
+        <div class="group-meta">👤 ${g.member_count} membri · ${g.is_public?'🌍 Pubblico':'🔒 Privato'}</div>
+      </div>
+      <button class="btn-join ${g.is_member?'leave':''}" onclick="${g.is_member?`leaveGroup(${g.id},this)`:`joinGroup(${g.id},this)`}">
+        ${g.is_member?'Abbandona':'Unisciti'}
+      </button>
+    </div>`).join('');
 }
-async function toggleGroup(groupId, isMember) {
-  if (isMember) await api(`/api/groups/${groupId}/leave`,'DELETE');
-  else          await api(`/api/groups/${groupId}/join`,'POST');
+
+async function joinGroup(id, btn) {
+  const d = await api(`/api/groups/${id}/join`,'POST');
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('🎉 Sei entrato nel gruppo!','success');
   loadGroups();
 }
-
-window.searchUsers=searchUsers; window.toggleFollow=toggleFollow;
-window.togGroupForm=togGroupForm; window.createGroup=createGroup; window.toggleGroup=toggleGroup;
-window.markAllRead=markAllRead;
-
-// ══════════════════════════════════════════
-//   TABS
-// ══════════════════════════════════════════
-function goTab(tab,btn) {
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.querySelectorAll('.sb-btn,.mn-btn').forEach(b=>b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  const [t,s]=TABS[tab]||['',''];
-  document.getElementById('pageTitle').textContent=t;
-  document.getElementById('pageSub').textContent=s;
-  if (tab==='admin')   loadAdminUsers();
-  if (tab==='social')  loadSocial();
-  if (tab==='profile') loadProfile();
-  window.scrollTo({top:0,behavior:'smooth'});
+async function leaveGroup(id, btn) {
+  const d = await api(`/api/groups/${id}/leave`,'DELETE');
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('👋 Hai abbandonato il gruppo','info');
+  loadGroups();
 }
-window.goTab=goTab;
+function toggleGroupForm() {
+  const f = document.getElementById('groupForm');
+  f.style.display = f.style.display==='none' ? 'block' : 'none';
+}
+async function createGroup() {
+  const d = await api('/api/groups','POST',{
+    name:      document.getElementById('gName').value,
+    description:document.getElementById('gDesc').value,
+    is_public: document.getElementById('gPublic').checked
+  });
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('🎉 Gruppo creato!','success');
+  toggleGroupForm();
+  loadGroups();
+}
+window.joinGroup=joinGroup; window.leaveGroup=leaveGroup;
+window.toggleGroupForm=toggleGroupForm; window.createGroup=createGroup;
+// ══════════════════════════════════════════
+//   MII AVATAR BUILDER
+// ══════════════════════════════════════════
+const AVATAR_COLORS = ['#16a34a','#3b82f6','#8b5cf6','#ef4444','#f59e0b','#ec4899','#14b8a6','#f97316'];
+const SKIN_COLORS   = ['#fde68a','#fcd9a0','#d4a76a','#a0714a','#7c4a2d','#f5cba7','#e8a87c','#c68642'];
+const EYE_OPTS      = ['normal','happy','sleepy','surprised','wink','cool'];
+const MOUTH_OPTS    = ['smile','grin','open','sad','smirk','tongue'];
+const HAIR_OPTS     = ['none','short','long','curly','bun','mohawk','wavy','cap'];
+
+let miiState = {
+  color: '#16a34a',
+  skin:  '#fde68a',
+  eyes:  'normal',
+  mouth: 'smile',
+  hair:  'none'
+};
+
+function drawMii(user, canvasId, size=120, canvasEl=null) {
+  const canvas = canvasEl || document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.width  = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const cx  = size/2, cy = size/2, r = size/2;
+
+  const color = user?.avatar_color || miiState.color || '#16a34a';
+  const skin  = user?.avatar_skin  || miiState.skin  || '#fde68a';
+  const eyes  = user?.avatar_eyes  || miiState.eyes  || 'normal';
+  const mouth = user?.avatar_mouth || miiState.mouth || 'smile';
+  const hair  = user?.avatar_hair  || miiState.hair  || 'none';
+
+  // Background circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  const grad = ctx.createRadialGradient(cx-r*.2, cy-r*.2, r*.1, cx, cy, r);
+  grad.addColorStop(0, lighten(color, 40));
+  grad.addColorStop(1, color);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Body / shirt
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + r*.85, r*.55, r*.35, 0, Math.PI, 0);
+  ctx.fillStyle = darken(color, 15);
+  ctx.fill();
+
+  // Neck
+  ctx.beginPath();
+  ctx.roundRect(cx - r*.12, cy + r*.28, r*.24, r*.22, 4);
+  ctx.fillStyle = skin;
+  ctx.fill();
+
+  // Face
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + r*.05, r*.38, r*.42, 0, 0, Math.PI*2);
+  const skinGrad = ctx.createRadialGradient(cx - r*.1, cy - r*.05, r*.05, cx, cy, r*.5);
+  skinGrad.addColorStop(0, lighten(skin, 20));
+  skinGrad.addColorStop(1, skin);
+  ctx.fillStyle = skinGrad;
+  ctx.fill();
+
+  // Cheek blush
+  ctx.beginPath();
+  ctx.ellipse(cx - r*.22, cy + r*.18, r*.1, r*.07, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,150,150,.3)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + r*.22, cy + r*.18, r*.1, r*.07, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Hair
+  drawHair(ctx, cx, cy, r, color, hair, skin);
+
+  // Eyes
+  drawEyes(ctx, cx, cy, r, eyes, color);
+
+  // Mouth
+  drawMouth(ctx, cx, cy, r, mouth);
+
+  // Nose (small dot)
+  ctx.beginPath();
+  ctx.arc(cx, cy + r*.1, r*.03, 0, Math.PI*2);
+  ctx.fillStyle = darken(skin, 20);
+  ctx.fill();
+}
+
+function drawHair(ctx, cx, cy, r, color, style, skin) {
+  const hc = darken(color, 25);
+  ctx.fillStyle = hc;
+  switch(style) {
+    case 'short':
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - r*.28, r*.38, r*.22, 0, Math.PI, 0);
+      ctx.fill();
+      break;
+    case 'long':
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - r*.28, r*.4, r*.24, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.rect(cx - r*.4, cy - r*.25, r*.18, r*.55);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.rect(cx + r*.22, cy - r*.25, r*.18, r*.55);
+      ctx.fill();
+      break;
+    case 'curly':
+      for (let i=0; i<6; i++) {
+        const angle = (Math.PI / 5) * i - Math.PI*.1;
+        const hx = cx + Math.cos(angle) * r*.32;
+        const hy = cy - r*.18 + Math.sin(angle) * r*.15;
+        ctx.beginPath();
+        ctx.arc(hx, hy, r*.12, 0, Math.PI*2);
+        ctx.fill();
+      }
+      break;
+    case 'bun':
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - r*.3, r*.36, r*.2, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*.38, r*.12, 0, Math.PI*2);
+      ctx.fill();
+      break;
+    case 'mohawk':
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - r*.28, r*.14, r*.32, 0, 0, Math.PI*2);
+      ctx.fill();
+      break;
+    case 'wavy':
+      ctx.beginPath();
+      ctx.moveTo(cx - r*.38, cy - r*.15);
+      for (let x = -r*.38; x <= r*.38; x += r*.1) {
+        ctx.quadraticCurveTo(cx + x + r*.05, cy - r*.38, cx + x + r*.1, cy - r*.2);
+      }
+      ctx.lineTo(cx + r*.38, cy - r*.15);
+      ctx.arc(cx, cy - r*.15, r*.38, 0, Math.PI, true);
+      ctx.fill();
+      break;
+    case 'cap':
+      // Bill
+      ctx.beginPath();
+      ctx.ellipse(cx + r*.12, cy - r*.12, r*.3, r*.08, -.2, 0, Math.PI*2);
+      ctx.fill();
+      // Cap
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - r*.2, r*.38, r*.26, 0, Math.PI, 0);
+      ctx.fill();
+      break;
+    default:
+      break;
+  }
+}
+
+function drawEyes(ctx, cx, cy, r, style, color) {
+  const ey = cy - r*.07;
+  const ex1 = cx - r*.14, ex2 = cx + r*.14;
+  const es  = r*.065;
+
+  switch(style) {
+    case 'happy':
+      [[ex1,ey],[ex2,ey]].forEach(([x,y]) => {
+        ctx.beginPath();
+        ctx.arc(x, y, es, Math.PI, 0);
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = r*.04;
+        ctx.stroke();
+      });
+      break;
+    case 'sleepy':
+      [[ex1,ey],[ex2,ey]].forEach(([x,y]) => {
+        ctx.beginPath();
+        ctx.arc(x, y+es*.3, es, Math.PI, 0);
+        ctx.fillStyle = '#1e293b'; ctx.fill();
+        ctx.beginPath();
+        ctx.rect(x-es, y-es*.3, es*2, es*.8);
+        ctx.fillStyle = '#fde68a'; ctx.fill();
+      });
+      break;
+    case 'surprised':
+      [[ex1,ey],[ex2,ey]].forEach(([x,y]) => {
+        ctx.beginPath();
+        ctx.arc(x, y, es*1.3, 0, Math.PI*2);
+        ctx.fillStyle = 'white'; ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, es*.7, 0, Math.PI*2);
+        ctx.fillStyle = '#1e293b'; ctx.fill();
+      });
+      break;
+    case 'wink':
+      // Left eye wink
+      ctx.beginPath();
+      ctx.arc(ex1, ey, es, Math.PI, 0);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = r*.04; ctx.stroke();
+      // Right eye normal
+      ctx.beginPath();
+      ctx.arc(ex2, ey, es, 0, Math.PI*2);
+      ctx.fillStyle = '#1e293b'; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(ex2 + es*.25, ey - es*.25, es*.3, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fill();
+      break;
+    case 'cool':
+      // Sunglasses
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(ex1 - es*1.1, ey - es*.8, es*2.2, es*1.6, es*.4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(ex2 - es*1.1, ey - es*.8, es*2.2, es*1.6, es*.4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(ex1 + es*1.1, ey); ctx.lineTo(ex2 - es*1.1, ey);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = es*.4; ctx.stroke();
+      break;
+    default: // normal
+      [[ex1,ey],[ex2,ey]].forEach(([x,y]) => {
+        ctx.beginPath();
+        ctx.arc(x, y, es, 0, Math.PI*2);
+        ctx.fillStyle = '#1e293b'; ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + es*.3, y - es*.3, es*.35, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fill();
+      });
+  }
+}
+
+function drawMouth(ctx, cx, cy, r, style) {
+  const my = cy + r*.22;
+  ctx.strokeStyle = '#b45309';
+  ctx.lineWidth   = r*.04;
+  ctx.lineCap     = 'round';
+
+  switch(style) {
+    case 'grin':
+      ctx.beginPath();
+      ctx.arc(cx, my - r*.06, r*.16, .15*Math.PI, .85*Math.PI);
+      ctx.fillStyle = '#7f1d1d';
+      ctx.fill();
+      ctx.strokeStyle = '#b45309';
+      ctx.stroke();
+      // Teeth
+      ctx.fillStyle = 'white';
+      ctx.fillRect(cx - r*.12, my - r*.09, r*.24, r*.07);
+      break;
+    case 'open':
+      ctx.beginPath();
+      ctx.ellipse(cx, my, r*.1, r*.08, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#7f1d1d'; ctx.fill();
+      break;
+    case 'sad':
+      ctx.beginPath();
+      ctx.arc(cx, my + r*.1, r*.14, 1.2*Math.PI, 1.8*Math.PI);
+      ctx.stroke();
+      break;
+    case 'smirk':
+      ctx.beginPath();
+      ctx.moveTo(cx - r*.1, my + r*.02);
+      ctx.quadraticCurveTo(cx, my - r*.04, cx + r*.14, my - r*.06);
+      ctx.stroke();
+      break;
+    case 'tongue':
+      ctx.beginPath();
+      ctx.arc(cx, my - r*.04, r*.13, .1*Math.PI, .9*Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(cx, my + r*.04, r*.07, r*.06, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#f87171'; ctx.fill();
+      break;
+    default: // smile
+      ctx.beginPath();
+      ctx.arc(cx, my - r*.06, r*.14, .15*Math.PI, .85*Math.PI);
+      ctx.stroke();
+  }
+}
+
+// Color helpers
+function lighten(hex, pct) {
+  const n = parseInt(hex.replace('#',''),16);
+  const r = Math.min(255,((n>>16)&255)+pct*2.55|0);
+  const g = Math.min(255,((n>>8)&255)+pct*2.55|0);
+  const b = Math.min(255,(n&255)+pct*2.55|0);
+  return `rgb(${r},${g},${b})`;
+}
+function darken(hex, pct) {
+  const n = parseInt(hex.replace('#',''),16);
+  const r = Math.max(0,((n>>16)&255)-pct*2.55|0);
+  const g = Math.max(0,((n>>8)&255)-pct*2.55|0);
+  const b = Math.max(0,(n&255)-pct*2.55|0);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ══════════════════════════════════════════
+//   PROFILO
+// ══════════════════════════════════════════
+async function loadProfile() {
+  const d = await api('/api/profile');
+  if (d.error) return;
+  myProfile = d;
+
+  document.getElementById('pName').value     = d.name     || '';
+  document.getElementById('pUsername').value = d.username || '';
+  document.getElementById('pBio').value      = d.bio      || '';
+  document.getElementById('sbName').childNodes[0].textContent = (d.name||d.email)+' ';
+
+  // Profile stats
+  const ps = document.getElementById('profileStats');
+  if (ps) ps.innerHTML = `
+    <div class="ps-item"><div class="ps-val">${Math.round(d.points||0)}</div><div class="ps-lbl">Punti</div></div>
+    <div class="ps-item"><div class="ps-val">${parseFloat(d.co2_saved||0).toFixed(1)}</div><div class="ps-lbl">kg CO₂</div></div>
+    <div class="ps-item"><div class="ps-val">${d.followers||0}</div><div class="ps-lbl">Follower</div></div>`;
+
+  // Sync mii state
+  miiState = {
+    color: d.avatar_color || '#16a34a',
+    skin:  d.avatar_skin  || '#fde68a',
+    eyes:  d.avatar_eyes  || 'normal',
+    mouth: d.avatar_mouth || 'smile',
+    hair:  d.avatar_hair  || 'none'
+  };
+
+  renderMiiBuilder();
+  drawMii(miiState, 'miiCanvas',  120);
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+}
+
+function renderMiiBuilder() {
+  // Avatar colors
+  const acEl = document.getElementById('avatarColors');
+  if (acEl) acEl.innerHTML = AVATAR_COLORS.map(c => `
+    <div class="color-swatch ${miiState.color===c?'active':''}"
+      style="background:${c}"
+      onclick="setMii('color','${c}',this)">
+    </div>`).join('');
+
+  // Skin colors
+  const scEl = document.getElementById('skinColors');
+  if (scEl) scEl.innerHTML = SKIN_COLORS.map(c => `
+    <div class="color-swatch ${miiState.skin===c?'active':''}"
+      style="background:${c}"
+      onclick="setMii('skin','${c}',this)">
+    </div>`).join('');
+
+  // Eye opts
+  const eyEl = document.getElementById('eyeOpts');
+  if (eyEl) eyEl.innerHTML = EYE_OPTS.map(o => `
+    <button class="mii-opt-btn ${miiState.eyes===o?'active':''}"
+      onclick="setMii('eyes','${o}',this)">
+      ${o==='normal'?'😐':o==='happy'?'😊':o==='sleepy'?'😴':o==='surprised'?'😲':o==='wink'?'😉':'😎'}
+      ${o}
+    </button>`).join('');
+
+  // Mouth opts
+  const moEl = document.getElementById('mouthOpts');
+  if (moEl) moEl.innerHTML = MOUTH_OPTS.map(o => `
+    <button class="mii-opt-btn ${miiState.mouth===o?'active':''}"
+      onclick="setMii('mouth','${o}',this)">
+      ${o==='smile'?'🙂':o==='grin'?'😁':o==='open'?'😮':o==='sad'?'🙁':o==='smirk'?'😏':'😛'}
+      ${o}
+    </button>`).join('');
+
+  // Hair opts
+  const haEl = document.getElementById('hairOpts');
+  if (haEl) haEl.innerHTML = HAIR_OPTS.map(o => `
+    <button class="mii-opt-btn ${miiState.hair===o?'active':''}"
+      onclick="setMii('hair','${o}',this)">
+      ${o==='none'?'🚫':o==='short'?'👦':o==='long'?'👩':o==='curly'?'🌀':o==='bun'?'🎀':o==='mohawk'?'🦔':o==='wavy'?'🌊':'🧢'}
+      ${o}
+    </button>`).join('');
+}
+
+function setMii(key, val, btn) {
+  miiState[key] = val;
+
+  // Update active class
+  const parentRow = btn.closest('.color-row, .mii-btn-row');
+  if (parentRow) parentRow.querySelectorAll('.active').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Redraw
+  drawMii(miiState, 'miiCanvas', 120);
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+}
+window.setMii = setMii;
+
+async function saveProfile() {
+  const d = await api('/api/profile','PATCH',{
+    name:         document.getElementById('pName').value,
+    username:     document.getElementById('pUsername').value,
+    bio:          document.getElementById('pBio').value,
+    avatar_color: miiState.color,
+    avatar_skin:  miiState.skin,
+    avatar_eyes:  miiState.eyes,
+    avatar_mouth: miiState.mouth,
+    avatar_hair:  miiState.hair
+  });
+  if (d.error) return showN('❌ '+d.error,'error');
+  showN('✅ Profilo salvato!','success');
+  loadProfile();
+}
+window.saveProfile = saveProfile;
+
+// ══════════════════════════════════════════
+//   MAPPA LEAFLET
+// ══════════════════════════════════════════
+let map         = null;
+let markerFrom  = null;
+let markerTo    = null;
+let routeLine   = null;
+let geocodeTimers = {};
+
+const MAP_PROFILES = {
+  Treno:'driving-car', Bici:'cycling-regular',
+  Bus:'driving-car',   Carpooling:'driving-car'
+};
+
+function initMap() {
+  if (map) return;
+  const container = document.getElementById('mapContainer');
+  if (!container) return;
+
+  map = L.map('mapContainer', { zoomControl:true, attributionControl:true })
+         .setView([45.4642, 9.1900], 6);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OSM</a>',
+    maxZoom: 19
+  }).addTo(map);
+
+  // Click mappa per piazzare pin
+  map.on('click', async (e) => {
+    const { lat, lng } = e.latlng;
+    if (!markerFrom) {
+      setMapPin('from', lat, lng);
+      const addr = await reverseGeocode(lat, lng);
+      document.getElementById('iFrom').value = addr;
+    } else if (!markerTo) {
+      setMapPin('to', lat, lng);
+      const addr = await reverseGeocode(lat, lng);
+      document.getElementById('iTo').value = addr;
+      calcRoute();
+    } else {
+      clearPins();
+      setMapPin('from', lat, lng);
+      const addr = await reverseGeocode(lat, lng);
+      document.getElementById('iFrom').value = addr;
+    }
+  });
+}
+
+function makePin(type) {
+  const color = type==='from' ? '#16a34a' : '#ef4444';
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:26px;height:26px;
+      border-radius:50% 50% 50% 0;
+      background:${color};
+      border:3px solid white;
+      box-shadow:0 3px 12px rgba(0,0,0,.35);
+      transform:rotate(-45deg);
+    "></div>`,
+    iconSize:[26,26], iconAnchor:[13,26]
+  });
+}
+
+function setMapPin(type, lat, lng) {
+  const icon = makePin(type);
+  if (type==='from') {
+    if (markerFrom) map.removeLayer(markerFrom);
+    markerFrom = L.marker([lat,lng],{ icon, draggable:true }).addTo(map);
+    markerFrom.on('dragend', async e => {
+      const p = e.target.getLatLng();
+      document.getElementById('iFrom').value = await reverseGeocode(p.lat, p.lng);
+      if (markerTo) calcRoute();
+    });
+  } else {
+    if (markerTo) map.removeLayer(markerTo);
+    markerTo = L.marker([lat,lng],{ icon, draggable:true }).addTo(map);
+    markerTo.on('dragend', async e => {
+      const p = e.target.getLatLng();
+      document.getElementById('iTo').value = await reverseGeocode(p.lat, p.lng);
+      if (markerFrom) calcRoute();
+    });
+  }
+}
+
+function clearPins() {
+  if (markerFrom) { map.removeLayer(markerFrom); markerFrom=null; }
+  if (markerTo)   { map.removeLayer(markerTo);   markerTo=null;   }
+  if (routeLine)  { map.removeLayer(routeLine);   routeLine=null;  }
+  calcedKm = 0;
+  document.getElementById('routeInfo').style.display = 'none';
+  document.getElementById('iFrom').value = '';
+  document.getElementById('iTo').value   = '';
+  updPreview();
+}
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers:{ 'Accept-Language':'it' } }
+    );
+    const d = await r.json();
+    return d.display_name?.split(',').slice(0,3).join(', ') || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  } catch { return `${lat.toFixed(4)}, ${lng.toFixed(4)}`; }
+}
+
+async function geocodeLive(type) {
+  const id     = type==='from' ? 'iFrom' : 'iTo';
+  const suggId = type==='from' ? 'fromSugg' : 'toSugg';
+  const q      = document.getElementById(id).value.trim();
+  const sugg   = document.getElementById(suggId);
+  clearTimeout(geocodeTimers[type]);
+  if (q.length < 3) { sugg.innerHTML=''; return; }
+  geocodeTimers[type] = setTimeout(async () => {
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`,
+        { headers:{ 'Accept-Language':'it' } }
+      );
+      const results = await r.json();
+      sugg.innerHTML = results.map(p => `
+        <div class="addr-sugg-item"
+          onclick="selectAddr('${type}',${p.lat},${p.lon},\`${p.display_name.replace(/`/g,"'").replace(/"/g,'&quot;')}\`)">
+          <i class="fas fa-map-marker-alt"></i>
+          <span>${p.display_name.split(',').slice(0,3).join(', ')}</span>
+        </div>`).join('');
+    } catch {}
+  }, 400);
+}
+window.geocodeLive = geocodeLive;
+
+window.selectAddr = async function(type, lat, lng, label) {
+  lat = parseFloat(lat); lng = parseFloat(lng);
+  const id     = type==='from' ? 'iFrom' : 'iTo';
+  const suggId = type==='from' ? 'fromSugg' : 'toSugg';
+  document.getElementById(id).value       = label.split(',').slice(0,3).join(', ');
+  document.getElementById(suggId).innerHTML = '';
+  setMapPin(type, lat, lng);
+  map.setView([lat,lng], 13);
+  if (markerFrom && markerTo) calcRoute();
+};
+
+window.calcRoute = async function() {
+  if (!markerFrom || !markerTo) return showN('⚠️ Inserisci partenza e destinazione!','error');
+  const btn = document.querySelector('.btn-calc-route');
+  if (btn) { btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Calcolo...'; btn.disabled=true; }
+
+  const f = markerFrom.getLatLng();
+  const t = markerTo.getLatLng();
+  const profile = MAP_PROFILES[curAct] || 'driving-car';
+
+  const d = await api('/api/route-distance','POST',{
+    fromLat: f.lat, fromLng: f.lng,
+    toLat:   t.lat, toLng:   t.lng,
+    profile
+  });
+
+  if (btn) { btn.innerHTML='<i class="fas fa-route"></i> Calcola'; btn.disabled=false; }
+  if (d.error) return showN('❌ Percorso non trovato. Prova indirizzi diversi.','error');
+
+  calcedKm = d.km;
+
+  // Disegna percorso
+  if (routeLine) map.removeLayer(routeLine);
+  let latlngs;
+  try   { latlngs = decodePolyline(d.geometry); }
+  catch { latlngs = [[f.lat,f.lng],[t.lat,t.lng]]; }
+
+  routeLine = L.polyline(latlngs, {
+    color:'#16a34a', weight:5, opacity:.9
+  }).addTo(map);
+  map.fitBounds(routeLine.getBounds(), { padding:[40,40] });
+
+  // Route info box
+  const rr    = RATES[curAct];
+  const co2   = (calcedKm * rr.co2).toFixed(2);
+  const pts   = Math.round(calcedKm * rr.pts);
+  document.getElementById('routeKm').textContent   = d.km   + ' km';
+  document.getElementById('routeMins').textContent  = d.mins + ' min';
+  document.getElementById('routeCo2').textContent   = co2   + ' kg CO₂ salvata';
+  document.getElementById('routePts').textContent   = '+' + pts + ' punti';
+  document.getElementById('routeInfo').style.display = 'flex';
+
+  // Aggiorna stima
+  document.getElementById('pCO2').textContent = co2;
+  document.getElementById('pPts').textContent = pts;
+  document.getElementById('pKm').textContent  = d.km;
+};
+
+function decodePolyline(encoded) {
+  let idx=0, lat=0, lng=0, res=[];
+  while (idx < encoded.length) {
+    let b, shift=0, result=0;
+    do { b=encoded.charCodeAt(idx++)-63; result|=(b&0x1f)<<shift; shift+=5; } while(b>=0x20);
+    lat += (result&1) ? ~(result>>1) : (result>>1);
+    shift=0; result=0;
+    do { b=encoded.charCodeAt(idx++)-63; result|=(b&0x1f)<<shift; shift+=5; } while(b>=0x20);
+    lng += (result&1) ? ~(result>>1) : (result>>1);
+    res.push([lat/1e5, lng/1e5]);
+  }
+  return res;
+}
+// ══════════════════════════════════════════
+//   LOG ATTIVITÀ
+// ══════════════════════════════════════════
+function selAct(type, btn) {
+  curAct  = type;
+  calcedKm = 0;
+
+  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+
+  const isRemote  = type==='Remoto'   || type==='Videocall';
+  const hasMap    = type==='Treno'    || type==='Bici' ||
+                    type==='Bus'      || type==='Carpooling';
+
+  document.getElementById('logForm').style.display   = 'block';
+  document.getElementById('hrRow').style.display     = isRemote ? 'block' : 'none';
+  document.getElementById('mapBlock').style.display  = hasMap   ? 'block' : 'none';
+  document.getElementById('cpRow').style.display     = type==='Carpooling' ? 'block' : 'none';
+
+  const emojis = { Remoto:'🏠', Treno:'🚂', Bici:'🚴', Bus:'🚌', Carpooling:'🚗', Videocall:'💻' };
+  document.getElementById('logTitle').innerHTML =
+    `${emojis[type]||'📌'} <span style="color:var(--green)">${type}</span>`;
+
+  // Reset mappa se cambio tipo
+  if (hasMap) {
+    setTimeout(() => {
+      initMap();
+      if (map) map.invalidateSize();
+    }, 100);
+  }
+
+  // Reset route info
+  if (document.getElementById('routeInfo'))
+    document.getElementById('routeInfo').style.display = 'none';
+  calcedKm = 0;
+  updPreview();
+}
+window.selAct = selAct;
+
+function updPreview() {
+  const rr = RATES[curAct];
+  if (!rr) return;
+  let val = 0;
+  if (rr.t === 'k') val = calcedKm || 0;
+  if (rr.t === 'h') val = parseFloat(document.getElementById('iHr')?.value) || 0;
+  const co2 = (val * rr.co2).toFixed(2);
+  const pts = Math.round(val * rr.pts);
+  if (document.getElementById('pCO2')) document.getElementById('pCO2').textContent = co2;
+  if (document.getElementById('pPts')) document.getElementById('pPts').textContent = pts;
+  if (document.getElementById('pKm'))  document.getElementById('pKm').textContent  = rr.t==='k' ? (calcedKm||'—') : '—';
+}
+window.updPreview = updPreview;
+
+async function saveAct() {
+  if (!curAct) return showN('⚠️ Seleziona un tipo di attività!','error');
+
+  const rr    = RATES[curAct];
+  const hours = parseFloat(document.getElementById('iHr')?.value)  || 0;
+  const note  = document.getElementById('iNote')?.value || '';
+  const cp    = document.getElementById('iCp')?.value   || '';
+
+  const fromAddr = document.getElementById('iFrom')?.value || '';
+  const toAddr   = document.getElementById('iTo')?.value   || '';
+
+  // Validazione
+  if (rr.t==='h' && hours <= 0) return showN('⚠️ Inserisci le ore lavorate!','error');
+  if (rr.t==='k' && calcedKm <= 0) return showN('⚠️ Calcola prima il percorso sulla mappa!','error');
+
+  const payload = {
+    type:            curAct,
+    km:              rr.t==='k' ? calcedKm : 0,
+    hours:           rr.t==='h' ? hours    : 0,
+    note,
+    from_addr:       fromAddr,
+    to_addr:         toAddr,
+    carsharing_with: cp
+  };
+
+  const btn = document.querySelector('.btn-save');
+  if (btn) { btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Salvo...'; btn.disabled=true; }
+
+  const d = await api('/api/activity','POST', payload);
+
+  if (btn) { btn.innerHTML='<i class="fas fa-check"></i> Salva'; btn.disabled=false; }
+  if (d.error) return showN('❌ '+d.error,'error');
+
+  showN(`✅ Attività salvata! +${d.points} punti 🌱`,'success');
+  cancelAct();
+  loadAll();
+}
+window.saveAct = saveAct;
+
+function cancelAct() {
+  curAct   = null;
+  calcedKm = 0;
+  document.getElementById('logForm').style.display  = 'none';
+  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('sel'));
+
+  // Reset inputs
+  const ids = ['iHr','iNote','iCp','iFrom','iTo'];
+  ids.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+
+  // Reset mappa
+  if (map && markerFrom) { map.removeLayer(markerFrom); markerFrom=null; }
+  if (map && markerTo)   { map.removeLayer(markerTo);   markerTo=null;   }
+  if (map && routeLine)  { map.removeLayer(routeLine);  routeLine=null;  }
+
+  // Reset route info e stima
+  const ri = document.getElementById('routeInfo');
+  if (ri) ri.style.display = 'none';
+  if (document.getElementById('pCO2')) document.getElementById('pCO2').textContent = '0';
+  if (document.getElementById('pPts')) document.getElementById('pPts').textContent = '0';
+  if (document.getElementById('pKm'))  document.getElementById('pKm').textContent  = '—';
+
+  // Nascondi suggerimenti
+  ['fromSugg','toSugg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+}
+window.cancelAct = cancelAct;
 
 // ══════════════════════════════════════════
 //   ADMIN
 // ══════════════════════════════════════════
 async function loadAdminUsers() {
-  const users=await api('/api/admin/users');
-  if (!users||users.error) return showN('❌ '+(users?.error||'Errore'),'error');
-  const totalCo2=users.reduce((s,u)=>s+parseFloat(u.co2_saved||0),0);
-  const totalActs=users.reduce((s,u)=>s+parseInt(u.activity_count||0),0);
-  const admins=users.filter(u=>u.is_admin).length;
-  const banned=users.filter(u=>u.is_banned).length;
+  const list = await api('/api/admin/users');
+  if (list.error) return showN('❌ Accesso negato','error');
 
-  document.getElementById('adminStats').innerHTML=`
-    <div class="stat-card sc-blue" style="margin:0">
-      <div class="stat-top"><div class="stat-icon"><i class="fas fa-users"></i></div><span class="stat-badge">totale</span></div>
-      <div class="stat-val">${users.length}</div>
-      <div class="stat-lbl">${admins} admin · ${banned} bannati</div>
-      <div class="stat-glow g-blue"></div>
-    </div>
-    <div class="stat-card sc-green" style="margin:0">
-      <div class="stat-top"><div class="stat-icon"><i class="fas fa-cloud"></i></div><span class="stat-badge">team</span></div>
-      <div class="stat-val">${totalCo2.toFixed(1)}</div>
-      <div class="stat-lbl">kg CO₂ totali</div>
-      <div class="stat-glow g-green"></div>
-    </div>
-    <div class="stat-card sc-yellow" style="margin:0">
-      <div class="stat-top"><div class="stat-icon"><i class="fas fa-tasks"></i></div><span class="stat-badge">totali</span></div>
-      <div class="stat-val">${totalActs}</div>
-      <div class="stat-lbl">Attività team</div>
-      <div class="stat-glow g-yellow"></div>
-    </div>`;
+  // Stats
+  document.getElementById('admTotUsers').textContent = list.length;
+  document.getElementById('admTotActs').textContent  =
+    list.reduce((s,u) => s + parseInt(u.activity_count||0), 0);
+  document.getElementById('admTotCo2').textContent   =
+    list.reduce((s,u) => s + parseFloat(u.co2_saved||0), 0).toFixed(1);
 
-  document.getElementById('adminTbody').innerHTML=users.length===0
-    ?`<tr><td colspan="6"><div class="empty"><div class="ei">👥</div><p>Nessun utente.</p></div></td></tr>`
-    :users.map((u,i)=>`
-      <tr style="animation:fadeSlide .25s ease ${i*.04}s both">
-        <td>
-          <div class="u-info">
-            <div class="u-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},36)}</div>
-            <div>
-              <div class="u-name">${u.name||'—'}</div>
-              <div class="u-email">${u.username?'@'+u.username+' · ':''} ${u.email}</div>
-            </div>
+  const tbody = document.getElementById('adminUsersList');
+  tbody.innerHTML = list.map(u => `
+    <tr>
+      <td>
+        <div class="u-info">
+          <div class="u-av"><canvas width="36" height="36" id="admAv${u.id}"></canvas></div>
+          <div>
+            <div class="u-name">${u.name||'—'} ${u.is_admin?'<span class="admin-badge">ADMIN</span>':''}</div>
+            <div class="u-email">@${u.username||'—'} · ${u.email}</div>
           </div>
-        </td>
-        <td style="font-weight:700">${u.activity_count}</td>
-        <td><span class="pill pill-yellow">⭐ ${u.points}</span></td>
-        <td><span class="pill pill-green">🌱 ${parseFloat(u.co2_saved||0).toFixed(1)} kg</span></td>
-        <td>
-          ${u.is_admin?'<span class="pill pill-yellow">👑 Admin</span>':
-            u.is_banned?`<span class="pill pill-red">⛔ Bannato</span>`
-                       :'<span class="pill pill-gray">👤 User</span>'}
-        </td>
-        <td>
-          <div style="display:flex;gap:5px;flex-wrap:wrap">
-            <button class="btn-icon" title="Vedi attività" onclick="openActsModal(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-list"></i></button>
-            <button class="btn-icon warn" title="Invia avviso" onclick="openWarnModal(${u.id})"><i class="fas fa-exclamation-triangle"></i></button>
-            ${u.is_banned
-              ?`<button class="btn-icon" title="Rimuovi ban" onclick="unbanUser(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-unlock"></i></button>`
-              :`<button class="btn-icon ban" title="Banna utente" onclick="openBanModal(${u.id})"><i class="fas fa-ban"></i></button>`}
-            <button class="btn-icon reset" title="Azzera punti" onclick="resetPoints(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-undo"></i></button>
-            <button class="btn-icon crown" title="${u.is_admin?'Rimuovi admin':'Promuovi admin'}" onclick="toggleAdmin(${u.id},${!u.is_admin},'${esc(u.name||u.email)}')"><i class="fas fa-crown"></i></button>
-            <button class="btn-icon del" title="Elimina utente" onclick="deleteUser(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-trash"></i></button>
-          </div>
-        </td>
-      </tr>`).join('');
-}
+        </div>
+      </td>
+      <td>
+        <span class="pill ${u.is_admin?'pill-yellow':'pill-gray'}">
+          ${u.is_admin?'👑 Admin':'👤 User'}
+        </span>
+      </td>
+      <td><strong>⭐ ${Math.round(u.points||0)}</strong></td>
+      <td>${parseFloat(u.co2_saved||0).toFixed(1)} kg</td>
+      <td>
+        <span class="pill ${u.is_banned?'pill-red':'pill-green'}">
+          ${u.is_banned ? '⛔ Bannato' : '✅ Attivo'}
+        </span>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-icon" title="Vedi attività" onclick="viewUserActs(${u.id},'${u.name||u.email}')">
+            <i class="fas fa-list"></i>
+          </button>
+          <button class="btn-icon crown" title="Toggle admin" onclick="toggleAdmin(${u.id},${!u.is_admin})">
+            <i class="fas fa-crown"></i>
+          </button>
+          <button class="btn-icon warn" title="Avviso" onclick="openWarnModal(${u.id})">
+            <i class="fas fa-exclamation-triangle"></i>
+          </button>
+          <button class="btn-icon reset" title="Azzera punti" onclick="resetPoints(${u.id})">
+            <i class="fas fa-undo"></i>
+          </button>
+          ${u.is_banned
+            ? `<button class="btn-icon" title="Rimuovi ban" onclick="unbanUser(${u.id})" style="color:var(--green)"><i class="fas fa-unlock"></i></button>`
+            : `<button class="btn-icon ban" title="Banna" onclick="openBanModal(${u.id})"><i class="fas fa-ban"></i></button>`
+          }
+          <button class="btn-icon del" title="Elimina utente" onclick="deleteUser(${u.id},'${u.name||u.email}')">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`).join('');
 
-function esc(str) { return (str||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-// BAN
-let banTargetId=null;
-function openBanModal(userId) {
-  banTargetId=userId;
-  document.getElementById('banDays').value='';
-  document.getElementById('banReason').value='';
-  document.getElementById('banModal').style.display='flex';
-  document.getElementById('banConfirmBtn').onclick=async()=>{
-    const days=parseInt(document.getElementById('banDays').value)||null;
-    const reason=document.getElementById('banReason').value;
-    const d=await api(`/api/admin/user/${banTargetId}/ban`,'POST',{days,reason});
-    document.getElementById('banModal').style.display='none';
-        if (d.error) return showN('❌ '+d.error,'error');
-    showN('⛔ Utente bannato!','success');
-    loadAdminUsers();
-  };
+  setTimeout(() => list.forEach(u => drawMii(u, 'admAv'+u.id, 36)), 50);
 }
+window.loadAdminUsers = loadAdminUsers;
 
-// WARN
-let warnTargetId=null;
-function openWarnModal(userId) {
-  warnTargetId=userId;
-  document.getElementById('warnMsg').value='';
-  document.getElementById('warnModal').style.display='flex';
-  document.getElementById('warnConfirmBtn').onclick=async()=>{
-    const message=document.getElementById('warnMsg').value.trim();
-    if (!message) return showN('⚠️ Inserisci un messaggio!','error');
-    const d=await api(`/api/admin/user/${warnTargetId}/warn`,'POST',{message});
-    document.getElementById('warnModal').style.display='none';
+async function viewUserActs(userId, name) {
+  document.getElementById('actsModalTitle').textContent = `Attività di ${name}`;
+  document.getElementById('actsModal').style.display   = 'flex';
+  const body = document.getElementById('actsModalBody');
+  body.innerHTML = '<div style="text-align:center;padding:30px"><i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--muted)"></i></div>';
+  const list = await api(`/api/admin/activities/${userId}`);
+  if (!list.length) { body.innerHTML='<p style="text-align:center;color:var(--muted);padding:20px">Nessuna attività.</p>'; return; }
+  body.innerHTML = list.map(a => `
+    <div class="adm-act-item">
+      <div style="font-size:24px">${ICONS[a.type]||'📌'}</div>
+      <div style="flex:1">
+        <div style="font-weight:700">${a.type}</div>
+        <div style="font-size:12px;color:var(--muted)">
+          ${a.km>0?`${a.from_addr||''} → ${a.to_addr||''} · ${a.km} km`:''}
+          ${a.hours>0?`${a.hours}h`:''}
+          ${a.note?`· ${a.note}`:''}
+        </div>
+        <div style="font-size:11px;color:var(--muted2)">${new Date(a.date).toLocaleString('it-IT')}</div>
+      </div>
+      <span class="tag tag-g">🌱 ${a.co2_saved} kg</span>
+      <span class="tag tag-y">⭐ ${a.points}</span>
+      <button class="adm-act-del" onclick="deleteAct(${a.id},${userId},'${name}')">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>`).join('');
+}
+window.viewUserActs = viewUserActs;
+
+async function deleteAct(actId, userId, name) {
+  openConfirm('🗑️','Elimina attività','Questa azione rimuoverà i punti dall\'utente. Confermi?', async () => {
+    const d = await api(`/api/admin/activity/${actId}`,'DELETE');
     if (d.error) return showN('❌ '+d.error,'error');
-    showN('⚠️ Avviso inviato!','info');
-    loadAdminUsers();
-  };
-}
-
-// UNBAN
-function unbanUser(userId, name) {
-  showConfirm('✅','Rimuovi ban','Vuoi rimuovere il ban a '+name+'?', async()=>{
-    const d=await api(`/api/admin/user/${userId}/unban`,'POST');
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('✅ Ban rimosso!','success');
-    loadAdminUsers();
-  }, 'linear-gradient(135deg,var(--green),var(--green2))');
-}
-
-// RESET PUNTI
-function resetPoints(userId, name) {
-  showConfirm('🔄','Azzera punti','Vuoi azzerare i punti di '+name+'?', async()=>{
-    const d=await api(`/api/admin/user/${userId}/reset-points`,'POST');
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('🔄 Punti azzerati!','info');
-    loadAdminUsers();
-  }, 'linear-gradient(135deg,var(--blue),var(--blue2))');
-}
-
-// TOGGLE ADMIN
-function toggleAdmin(userId, makeAdmin, name) {
-  showConfirm(
-    makeAdmin?'👑':'👤',
-    makeAdmin?'Promuovi ad Admin':'Rimuovi Admin',
-    makeAdmin?`Vuoi promuovere ${name} ad Admin?`:`Vuoi rimuovere i privilegi admin a ${name}?`,
-    async()=>{
-      const d=await api(`/api/admin/user/${userId}/role`,'PATCH',{is_admin:makeAdmin});
-      if (d.error) return showN('❌ '+d.error,'error');
-      showN(makeAdmin?'👑 Admin aggiunto!':'👤 Admin rimosso!','success');
-      loadAdminUsers();
-    },
-    makeAdmin?'linear-gradient(135deg,var(--yellow),var(--yellow2))':'linear-gradient(135deg,var(--muted),var(--muted2))'
-  );
-}
-
-// DELETE USER
-function deleteUser(userId, name) {
-  showConfirm('🗑️','Elimina Utente',`Sei sicuro di voler eliminare ${name}? L'azione è irreversibile!`, async()=>{
-    const d=await api(`/api/admin/user/${userId}`,'DELETE');
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('🗑️ Utente eliminato!','success');
+    showN('🗑️ Attività eliminata','info');
+    viewUserActs(userId, name);
     loadAdminUsers();
   });
 }
+window.deleteAct = deleteAct;
 
-// ATTIVITÀ MODAL
-async function openActsModal(userId, name) {
-  document.getElementById('actsModalTitle').textContent='Attività di '+name;
-  document.getElementById('actsModal').style.display='flex';
-  const acts=await api(`/api/admin/activities/${userId}`);
-  document.getElementById('actsModalBody').innerHTML=!acts||acts.error||acts.length===0
-    ?`<div class="empty"><div class="ei">📋</div><p>Nessuna attività.</p></div>`
-    :acts.map(a=>`
-      <div class="adm-act-item">
-        <div style="font-size:22px">${ICONS[a.type]||'📌'}</div>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${a.type}</div>
-          <div style="font-size:12px;color:var(--muted)">${a.km>0?a.km+' km':''}${a.hours>0?a.hours+' ore':''} · ${a.co2_saved} kg · ${a.points} pt</div>
-          <div style="font-size:11px;color:var(--muted2)">${new Date(a.date).toLocaleDateString('it-IT')}</div>
-        </div>
-        <button class="adm-act-del" onclick="delActAdmin(${a.id})" title="Elimina"><i class="fas fa-trash"></i></button>
-      </div>`).join('');
+async function toggleAdmin(userId, makeAdmin) {
+  openConfirm(
+    makeAdmin?'👑':'👤',
+    makeAdmin?'Promuovi ad Admin':'Rimuovi ruolo Admin',
+    makeAdmin?'Questo utente avrà accesso al pannello admin.':'Questo utente perderà i privilegi admin.',
+    async () => {
+      const d = await api(`/api/admin/user/${userId}/role`,'PATCH',{ is_admin:makeAdmin });
+      if (d.error) return showN('❌ '+d.error,'error');
+      showN(makeAdmin?'👑 Admin assegnato!':'👤 Ruolo rimosso','info');
+      loadAdminUsers();
+    }
+  );
 }
+window.toggleAdmin = toggleAdmin;
 
-async function delActAdmin(actId) {
-  const d=await api(`/api/admin/activity/${actId}`,'DELETE');
+async function resetPoints(userId) {
+  openConfirm('🔄','Azzera Punti','Tutti i punti e le CO₂ di questo utente verranno azzerati.', async () => {
+    const d = await api(`/api/admin/user/${userId}/reset-points`,'POST');
+    if (d.error) return showN('❌ '+d.error,'error');
+    showN('🔄 Punti azzerati','info');
+    loadAdminUsers();
+  });
+}
+window.resetPoints = resetPoints;
+
+// Ban Modal
+let pendingBanUserId = null;
+function openBanModal(userId) {
+  pendingBanUserId = userId;
+  document.getElementById('banReason').value = '';
+  document.getElementById('banDays').value   = '';
+  document.getElementById('banModal').style.display = 'flex';
+  document.getElementById('banConfirmBtn').onclick = async () => {
+    const reason = document.getElementById('banReason').value;
+    const days   = parseInt(document.getElementById('banDays').value) || 0;
+    const d = await api(`/api/admin/user/${pendingBanUserId}/ban`,'POST',{ reason, days:days||null });
+    if (d.error) return showN('❌ '+d.error,'error');
+    document.getElementById('banModal').style.display = 'none';
+    showN('⛔ Utente bannato','info');
+    loadAdminUsers();
+  };
+}
+window.openBanModal = openBanModal;
+
+async function unbanUser(userId) {
+  const d = await api(`/api/admin/user/${userId}/unban`,'POST');
   if (d.error) return showN('❌ '+d.error,'error');
-  showN('🗑️ Attività eliminata!','success');
-  // Ricarica modal con stesso userId
+  showN('✅ Ban rimosso','success');
   loadAdminUsers();
-  // Ricarica body modal
-  const body=document.getElementById('actsModalBody');
-  const del=body.querySelector(`[onclick="delActAdmin(${actId})"]`);
-  if (del) del.closest('.adm-act-item').remove();
 }
+window.unbanUser = unbanUser;
+
+// Warn Modal
+let pendingWarnUserId = null;
+function openWarnModal(userId) {
+  pendingWarnUserId = userId;
+  document.getElementById('warnMsg').value = '';
+  document.getElementById('warnModal').style.display = 'flex';
+  document.getElementById('warnConfirmBtn').onclick = async () => {
+    const message = document.getElementById('warnMsg').value;
+    if (!message) return showN('⚠️ Scrivi un messaggio!','error');
+    const d = await api(`/api/admin/user/${pendingWarnUserId}/warn`,'POST',{ message });
+    if (d.error) return showN('❌ '+d.error,'error');
+    document.getElementById('warnModal').style.display = 'none';
+    showN('⚠️ Avviso inviato','info');
+  };
+}
+window.openWarnModal = openWarnModal;
+
+async function deleteUser(userId, name) {
+  openConfirm('🗑️',`Elimina ${name}`,
+    'Questa azione è irreversibile. Tutte le attività verranno eliminate.',
+    async () => {
+      const d = await api(`/api/admin/user/${userId}`,'DELETE');
+      if (d.error) return showN('❌ '+d.error,'error');
+      showN('🗑️ Utente eliminato','info');
+      loadAdminUsers();
+    }
+  );
+}
+window.deleteUser = deleteUser;
 
 function closeActsModal(e) {
-  if (e.target.id==='actsModal') document.getElementById('actsModal').style.display='none';
+  if (e.target === document.getElementById('actsModal'))
+    document.getElementById('actsModal').style.display = 'none';
 }
-
-window.openBanModal=openBanModal; window.openWarnModal=openWarnModal;
-window.unbanUser=unbanUser; window.resetPoints=resetPoints;
-window.toggleAdmin=toggleAdmin; window.deleteUser=deleteUser;
-window.openActsModal=openActsModal; window.delActAdmin=delActAdmin;
-window.closeActsModal=closeActsModal; window.loadAdminUsers=loadAdminUsers;
+window.closeActsModal = closeActsModal;
 
 // ══════════════════════════════════════════
 //   CONFIRM MODAL
 // ══════════════════════════════════════════
-let confirmCb=null;
-function showConfirm(icon, title, msg, cb, btnStyle=null) {
-  document.getElementById('confirmIcon').textContent=icon;
-  document.getElementById('confirmTitle').textContent=title;
-  document.getElementById('confirmMsg').textContent=msg;
-  const yes=document.getElementById('confirmYes');
-  if (btnStyle) yes.style.background=btnStyle;
-  else yes.style.background='linear-gradient(135deg,var(--red),#dc2626)';
-  confirmCb=cb;
-  document.getElementById('confirmModal').style.display='flex';
+let confirmCb = null;
+function openConfirm(icon, title, msg, cb) {
+  document.getElementById('confirmIcon').textContent  = icon;
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent   = msg;
+  document.getElementById('confirmModal').style.display = 'flex';
+  confirmCb = cb;
+  document.getElementById('confirmYes').onclick = async () => {
+    closeConfirm();
+    if (confirmCb) await confirmCb();
+  };
 }
-function closeConfirm() { document.getElementById('confirmModal').style.display='none'; confirmCb=null; }
-document.getElementById('confirmYes').onclick=async()=>{ closeConfirm(); if(confirmCb) await confirmCb(); };
-window.closeConfirm=closeConfirm;
+function closeConfirm() {
+  document.getElementById('confirmModal').style.display = 'none';
+  confirmCb = null;
+}
+window.openConfirm = openConfirm;
+window.closeConfirm = closeConfirm;
 
 // ══════════════════════════════════════════
-//   TOAST
+//   CLICK OUTSIDE SUGGERIMENTI
 // ══════════════════════════════════════════
-let notifTimer;
-function showN(msg, type='success') {
-  const el=document.getElementById('notif');
-  el.textContent=msg; el.className=`notif ${type}`;
-  el.classList.add('show');
-  clearTimeout(notifTimer);
-  notifTimer=setTimeout(()=>el.classList.remove('show'),3500);
-}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.map-search-wrap')) {
+    document.querySelectorAll('.addr-sugg').forEach(s => s.innerHTML='');
+  }
+});
 
 // ══════════════════════════════════════════
 //   INIT
 // ══════════════════════════════════════════
 if (token) {
-  api('/api/profile').then(d=>{
-    if (d&&!d.error) {
-      document.getElementById('authWrap').style.display='none';
-      document.getElementById('app').style.display='flex';
-      if (window.innerWidth<=768) document.getElementById('mobNav').style.display='flex';
-      document.getElementById('sbEmail').textContent=d.email||'';
-      initAdmin(d);
-      loadAll();
-      loadProfile();
-      loadNotifCount();
-    } else {
+  api('/api/profile').then(d => {
+    if (d.error) {
       localStorage.removeItem('ecotoken');
-      token=null;
+      token = null;
+      return;
     }
+    bootApp(d);
   });
+} else {
+  document.getElementById('authWrap').style.display = 'flex';
+  document.getElementById('app').style.display      = 'none';
 }
 
-// Aggiorna notifiche ogni 30 sec
-setInterval(loadNotifCount, 30000);
-
-}); // END DOMContentLoaded
+}); // end DOMContentLoaded

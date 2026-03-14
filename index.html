@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>EcoTrack</title>
+  <title>EcoTrack 🌍</title>
   <link rel="stylesheet" href="style.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -13,6 +13,16 @@
 
 <!-- ══ TOAST ══ -->
 <div id="notif" class="notif"></div>
+
+<!-- ══ CO2 EXPLOSION OVERLAY ══ -->
+<div id="co2Explosion" class="co2-explosion" style="display:none">
+  <div class="co2-exp-inner">
+    <div class="co2-exp-icon">🌍</div>
+    <div class="co2-exp-kg" id="co2ExpKg">+0 kg</div>
+    <div class="co2-exp-label">CO₂ salvata!</div>
+    <div class="co2-exp-pts" id="co2ExpPts">+0 punti ⭐</div>
+  </div>
+</div>
 
 <!-- ══ TUTORIAL ══ -->
 <div class="tut-overlay" id="tutOverlay" style="display:none">
@@ -24,25 +34,31 @@
       <p>Traccia le tue abitudini eco-sostenibili, guadagna punti e salva il pianeta insieme alla community.</p>
     </div>
     <div class="tut-step" id="tut1">
-      <div class="tut-emoji">🗺️</div>
-      <h2>Mappa Percorsi</h2>
-      <p>Registra i tuoi spostamenti con la mappa interattiva. Inserisci partenza e arrivo, calcola il percorso reale e guadagna punti automaticamente!</p>
+      <div class="tut-emoji">🌍</div>
+      <h2>CO₂ è tutto!</h2>
+      <p>Ogni attività che registri salva CO₂. Vai in bici, prendi il treno, lavora da remoto — il pianeta ti ringrazia con punti e badge!</p>
     </div>
     <div class="tut-step" id="tut2">
-      <div class="tut-emoji">🏆</div>
-      <h2>Sfide & Badge</h2>
-      <p>Completa sfide ecologiche, sblocca badge esclusivi e scala la classifica globale.</p>
+      <div class="tut-emoji">🛍️</div>
+      <h2>Shop Avatar</h2>
+      <p>Usa i punti guadagnati per sbloccare capelli, occhi e colori esclusivi per il tuo avatar. Più CO₂ salvi, più pezzi rari puoi comprare!</p>
     </div>
     <div class="tut-step" id="tut3">
-      <div class="tut-emoji">👥</div>
-      <h2>Community</h2>
-      <p>Segui altri utenti, unisciti ai gruppi e condividi i tuoi progressi con il mondo!</p>
+      <div class="tut-emoji">🗺️</div>
+      <h2>Mappa Percorsi</h2>
+      <p>Inserisci partenza e arrivo sulla mappa per calcolare i km reali del tuo spostamento eco.</p>
+    </div>
+    <div class="tut-step" id="tut4">
+      <div class="tut-emoji">🏆</div>
+      <h2>Sfide & Community</h2>
+      <p>Completa sfide, scala la classifica e unisciti ai gruppi. Chi salva più CO₂ vince!</p>
     </div>
     <div class="tut-dots">
       <div class="tut-dot active" onclick="goTut(0)"></div>
       <div class="tut-dot" onclick="goTut(1)"></div>
       <div class="tut-dot" onclick="goTut(2)"></div>
       <div class="tut-dot" onclick="goTut(3)"></div>
+      <div class="tut-dot" onclick="goTut(4)"></div>
     </div>
     <div class="tut-actions">
       <button class="tut-prev" onclick="tutNav(-1)">← Indietro</button>
@@ -63,7 +79,7 @@
       <div class="logo-icon"><i class="fas fa-leaf"></i></div>
       <span>EcoTrack</span>
     </div>
-    <p class="auth-sub">Traccia il tuo impatto ambientale 🌍</p>
+    <p class="auth-sub">Ogni azione conta. Inizia a salvare CO₂ 🌍</p>
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchTab('login',this)">Accedi</button>
       <button class="auth-tab" onclick="switchTab('register',this)">Registrati</button>
@@ -143,29 +159,46 @@
       <span>EcoTrack</span>
     </div>
 
+    <!-- CO2 BARRA SIDEBAR -->
+    <div class="sb-co2-bar">
+      <div class="sb-co2-label">
+        <i class="fas fa-leaf"></i>
+        <span>CO₂ Salvata</span>
+        <strong id="sbCo2Val">0 kg</strong>
+      </div>
+      <div class="sb-co2-track">
+        <div class="sb-co2-fill" id="sbCo2Fill"></div>
+      </div>
+      <div class="sb-co2-next" id="sbCo2Next">Prossimo badge: 10 kg</div>
+    </div>
+
     <div class="sb-section">Menu</div>
     <nav class="sb-nav">
       <button class="sb-btn active" onclick="showTab('dashboard',this)">
-        <div class="sb-icon"><i class="fas fa-home"></i></div> Dashboard
+        <div class="sb-icon"><i class="fas fa-home"></i></div>Dashboard
       </button>
       <button class="sb-btn" onclick="showTab('log',this)">
-        <div class="sb-icon"><i class="fas fa-plus-circle"></i></div> Log Attività
+        <div class="sb-icon"><i class="fas fa-plus-circle"></i></div>Log Attività
+      </button>
+      <button class="sb-btn" onclick="showTab('shop',this)">
+        <div class="sb-icon"><i class="fas fa-store"></i></div>Shop Avatar
+        <span class="sb-new-badge">NEW</span>
       </button>
       <button class="sb-btn" onclick="showTab('challenges',this)">
-        <div class="sb-icon"><i class="fas fa-trophy"></i></div> Sfide
+        <div class="sb-icon"><i class="fas fa-trophy"></i></div>Sfide
       </button>
       <button class="sb-btn" onclick="showTab('leaderboard',this)">
-        <div class="sb-icon"><i class="fas fa-crown"></i></div> Classifica
+        <div class="sb-icon"><i class="fas fa-crown"></i></div>Classifica
       </button>
     </nav>
 
     <div class="sb-section">Sociale</div>
     <nav class="sb-nav">
       <button class="sb-btn" onclick="showTab('social',this)">
-        <div class="sb-icon"><i class="fas fa-users"></i></div> Community
+        <div class="sb-icon"><i class="fas fa-users"></i></div>Community
       </button>
       <button class="sb-btn" onclick="showTab('notifiche',this)">
-        <div class="sb-icon"><i class="fas fa-bell"></i></div> Notifiche
+        <div class="sb-icon"><i class="fas fa-bell"></i></div>Notifiche
         <div class="sb-notif-dot" id="sbNotifDot" style="display:none"></div>
       </button>
     </nav>
@@ -173,10 +206,10 @@
     <div class="sb-section">Account</div>
     <nav class="sb-nav">
       <button class="sb-btn" onclick="showTab('profile',this)">
-        <div class="sb-icon"><i class="fas fa-user"></i></div> Profilo
+        <div class="sb-icon"><i class="fas fa-user"></i></div>Profilo
       </button>
       <button class="sb-btn" id="adminNavBtn" style="display:none" onclick="showTab('admin',this)">
-        <div class="sb-icon"><i class="fas fa-shield-alt"></i></div> Admin
+        <div class="sb-icon"><i class="fas fa-shield-alt"></i></div>Admin
         <span class="admin-badge">ADMIN</span>
       </button>
     </nav>
@@ -191,7 +224,9 @@
         </div>
         <div class="sb-uemail" id="sbEmail">—</div>
       </div>
-      <button class="sb-logout" onclick="doLogout(event)" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+      <button class="sb-logout" onclick="doLogout(event)" title="Logout">
+        <i class="fas fa-sign-out-alt"></i>
+      </button>
     </div>
   </aside>
 
@@ -202,9 +237,21 @@
     <div class="topbar">
       <div class="topbar-left">
         <h1 id="topTitle">Dashboard</h1>
-        <p id="topSub">Benvenuto su EcoTrack 🌱</p>
+        <p id="topSub">Bentornato! 🌱</p>
       </div>
       <div class="topbar-right">
+        <!-- CO2 pill topbar -->
+        <div class="topbar-co2-pill">
+          <i class="fas fa-leaf"></i>
+          <span id="topCo2">0</span>
+          <span>kg CO₂</span>
+        </div>
+        <!-- Punti pill -->
+        <div class="topbar-pts-pill">
+          <i class="fas fa-star"></i>
+          <span id="topPts">0</span>
+          <span>pt</span>
+        </div>
         <button class="topbar-btn" onclick="showTab('log',null)" title="Nuova attività">
           <i class="fas fa-plus"></i>
         </button>
@@ -213,7 +260,7 @@
           <span class="notif-count" id="notifCount" style="display:none">0</span>
         </button>
         <button class="topbar-btn" onclick="showTab('profile',null)" title="Profilo">
-          <i class="fas fa-user"></i>
+          <canvas id="topAvatarCanvas" width="28" height="28" style="border-radius:8px;display:block"></canvas>
         </button>
       </div>
     </div>
@@ -223,16 +270,37 @@
 
       <!-- ══ DASHBOARD ══ -->
       <div id="tab-dashboard" class="tab-panel active">
-        <div class="stats-row">
-          <div class="stat-card sc-green">
-            <div class="stat-top">
-              <div class="stat-badge">Settimana</div>
-              <div class="stat-icon"><i class="fas fa-leaf"></i></div>
+
+        <!-- CO2 HERO CARD -->
+        <div class="co2-hero-card">
+          <div class="co2-hero-left">
+            <div class="co2-hero-label">CO₂ Totale Salvata 🌍</div>
+            <div class="co2-hero-val" id="heroCo2">0</div>
+            <div class="co2-hero-unit">kg di CO₂</div>
+            <div class="co2-hero-sub" id="heroCo2Sub">Equivale a 0 alberi piantati 🌳</div>
+            <div class="co2-hero-bar-wrap">
+              <div class="co2-hero-bar">
+                <div class="co2-hero-fill" id="heroCo2Fill"></div>
+              </div>
+              <span class="co2-hero-target" id="heroCo2Target">/ 10 kg</span>
             </div>
-            <div class="stat-val" id="sWeek">0</div>
-            <div class="stat-lbl">kg CO₂ salvata</div>
-            <div class="stat-glow g-green"></div>
           </div>
+          <div class="co2-hero-right">
+            <div class="co2-planet" id="co2Planet">🌍</div>
+            <div class="co2-hero-stats">
+              <div class="co2-hs-item">
+                <span class="co2-hs-val" id="heroCo2Week">0</span>
+                <span class="co2-hs-lbl">kg questa settimana</span>
+              </div>
+              <div class="co2-hs-item">
+                <span class="co2-hs-val" id="heroCo2Month">0</span>
+                <span class="co2-hs-lbl">kg questo mese</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-row">
           <div class="stat-card sc-yellow">
             <div class="stat-top">
               <div class="stat-badge">Totale</div>
@@ -244,11 +312,11 @@
           </div>
           <div class="stat-card sc-blue">
             <div class="stat-top">
-              <div class="stat-badge">Totale</div>
-              <div class="stat-icon"><i class="fas fa-globe"></i></div>
+              <div class="stat-badge">Settimana</div>
+              <div class="stat-icon"><i class="fas fa-calendar-week"></i></div>
             </div>
-            <div class="stat-val" id="sCo2">0</div>
-            <div class="stat-lbl">kg CO₂ totale</div>
+            <div class="stat-val" id="sWeek">0</div>
+            <div class="stat-lbl">kg CO₂ questa settimana</div>
             <div class="stat-glow g-blue"></div>
           </div>
           <div class="stat-card sc-purple">
@@ -284,7 +352,7 @@
 
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-blue"></span>Andamento Annuale</h3>
+            <h3><span class="ch-dot dot-blue"></span>Andamento CO₂ Annuale</h3>
           </div>
           <div class="card-body" id="yearlyChart"></div>
         </div>
@@ -327,7 +395,7 @@
                 <label>Ore lavorate / durata</label>
                 <div class="input-wrap">
                   <i class="ic fas fa-clock"></i>
-                  <input id="iHr" type="number" placeholder="es. 8" min="0" max="24" oninput="updPreview()"/>
+                  <input id="iHr" type="number" placeholder="es. 8" min="0.5" max="24" step="0.5" oninput="updPreview()"/>
                 </div>
               </div>
 
@@ -349,18 +417,15 @@
                     </div>
                     <div id="toSugg" class="addr-sugg"></div>
                   </div>
-                  <button class="btn-calc-route" onclick="calcRoute()">
+                  <button class="btn-calc-route" id="calcRouteBtn" onclick="calcRoute()">
                     <i class="fas fa-route"></i> Calcola
                   </button>
                 </div>
-
                 <div class="map-tip">
                   <i class="fas fa-info-circle"></i>
-                  Clicca sulla mappa per piazzare i pin oppure scrivi gli indirizzi sopra
+                  Scrivi gli indirizzi oppure clicca sulla mappa per piazzare i pin · Pin trascinabili!
                 </div>
-
                 <div id="mapContainer" class="map-container"></div>
-
                 <div id="routeInfo" class="route-info" style="display:none">
                   <div class="route-info-item">
                     <i class="fas fa-road" style="color:var(--green)"></i>
@@ -370,8 +435,8 @@
                     <i class="fas fa-clock" style="color:var(--blue)"></i>
                     <span id="routeMins">—</span>
                   </div>
-                  <div class="route-info-item">
-                    <i class="fas fa-leaf" style="color:var(--green)"></i>
+                  <div class="route-info-item co2-highlight">
+                    <i class="fas fa-leaf"></i>
                     <span id="routeCo2">—</span>
                   </div>
                   <div class="route-info-item">
@@ -381,7 +446,7 @@
                 </div>
               </div>
 
-              <!-- CARPOOLING -->
+              <!-- CARPOOLING EMAIL -->
               <div id="cpRow" class="frow" style="display:none">
                 <label>Email collega (car sharing)</label>
                 <div class="input-wrap">
@@ -400,12 +465,13 @@
                 </div>
               </div>
 
-              <!-- STIMA -->
+              <!-- STIMA CO2 -->
               <div class="co2-est" id="co2EstBox">
-                <div class="co2-est-inner">
-                  <span>Stima CO₂</span>
+                <div class="co2-est-inner co2-est-main">
+                  <i class="fas fa-leaf co2-est-icon"></i>
+                  <span>CO₂ Salvata</span>
                   <strong id="pCO2">0</strong>
-                  <span>kg salvata</span>
+                  <span>kg</span>
                 </div>
                 <div class="co2-divider"></div>
                 <div class="co2-est-inner">
@@ -423,7 +489,7 @@
 
               <div class="form-btns">
                 <button class="btn-save" onclick="saveAct()">
-                  <i class="fas fa-check"></i> Salva
+                  <i class="fas fa-check"></i> Salva Attività
                 </button>
                 <button class="btn-cancel" onclick="cancelAct()">
                   <i class="fas fa-times"></i> Annulla
@@ -443,11 +509,40 @@
         </div>
       </div>
 
+      <!-- ══ SHOP ══ -->
+      <div id="tab-shop" class="tab-panel">
+        <div class="shop-hero">
+          <div class="shop-hero-left">
+            <div class="shop-hero-title">🛍️ Shop Avatar</div>
+            <div class="shop-hero-sub">Usa i punti guadagnati salvando CO₂ per sbloccare pezzi esclusivi!</div>
+            <div class="shop-pts-badge">
+              <i class="fas fa-star"></i>
+              <span>I tuoi punti:</span>
+              <strong id="shopUserPts">0</strong>
+            </div>
+          </div>
+          <div class="shop-hero-preview">
+            <canvas id="shopPreviewCanvas" width="100" height="100"></canvas>
+          </div>
+        </div>
+
+        <div class="shop-tabs">
+          <button class="shop-tab active" onclick="filterShop('all',this)">Tutti</button>
+          <button class="shop-tab" onclick="filterShop('hair',this)">💇 Capelli</button>
+          <button class="shop-tab" onclick="filterShop('eyes',this)">👁️ Occhi</button>
+          <button class="shop-tab" onclick="filterShop('mouth',this)">😄 Bocca</button>
+          <button class="shop-tab" onclick="filterShop('color',this)">🎨 Colori</button>
+          <button class="shop-tab" onclick="filterShop('skin',this)">🟤 Pelle</button>
+        </div>
+
+        <div id="shopGrid" class="shop-grid"></div>
+      </div>
+
       <!-- ══ SFIDE ══ -->
       <div id="tab-challenges" class="tab-panel">
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-yellow"></span>Nuova Sfida</h3>
+            <h3><span class="ch-dot dot-yellow"></span>Sfide Attive</h3>
             <button class="card-link" onclick="toggleChForm()"><i class="fas fa-plus"></i> Crea</button>
           </div>
           <div class="card-body">
@@ -475,7 +570,7 @@
                 <div class="input-wrap"><i class="ic fas fa-pen"></i><input id="chDesc" type="text" placeholder="Descrivi la sfida..."/></div>
               </div>
               <label class="chk-row">
-                <input type="checkbox" id="chPublic"/> Rendi pubblica questa sfida 🌍
+                <input type="checkbox" id="chPublic"/> Rendi pubblica 🌍
               </label>
               <button class="btn-add" onclick="saveChallenge()"><i class="fas fa-plus"></i> Crea Sfida</button>
             </div>
@@ -488,7 +583,7 @@
       <div id="tab-leaderboard" class="tab-panel">
         <div class="card">
           <div class="card-head">
-            <h3><span class="ch-dot dot-yellow"></span>Classifica Globale</h3>
+            <h3><span class="ch-dot dot-green"></span>Top CO₂ Salvata 🌍</h3>
           </div>
           <div class="card-body">
             <div id="lbList" class="lb-list"></div>
@@ -500,22 +595,18 @@
       <div id="tab-social" class="tab-panel">
         <div class="two-col">
           <div class="card">
-            <div class="card-head">
-              <h3><span class="ch-dot dot-green"></span>Followers</h3>
-            </div>
+            <div class="card-head"><h3><span class="ch-dot dot-green"></span>Followers</h3></div>
             <div class="card-body" id="followersList"></div>
           </div>
           <div class="card">
-            <div class="card-head">
-              <h3><span class="ch-dot dot-blue"></span>Following</h3>
-            </div>
+            <div class="card-head"><h3><span class="ch-dot dot-blue"></span>Following</h3></div>
             <div class="card-body" id="followingList"></div>
           </div>
         </div>
         <div class="card">
           <div class="card-head">
             <h3><span class="ch-dot dot-purple"></span>Gruppi</h3>
-            <button class="card-link" onclick="toggleGroupForm()"><i class="fas fa-plus"></i> Crea gruppo</button>
+            <button class="card-link" onclick="toggleGroupForm()"><i class="fas fa-plus"></i> Crea</button>
           </div>
           <div class="card-body">
             <div id="groupForm" class="ch-form" style="display:none">
@@ -583,6 +674,10 @@
                   <label>💇 Capelli</label>
                   <div class="mii-btn-row" id="hairOpts"></div>
                 </div>
+                <p class="shop-hint">
+                  <i class="fas fa-lock"></i> Sblocca più stili nello
+                  <button onclick="showTab('shop',null)" class="link-btn">Shop Avatar</button>!
+                </p>
               </div>
             </div>
           </div>
@@ -637,7 +732,7 @@
             <div class="stat-val" id="admTotActs">—</div>
             <div class="stat-lbl">Attività totali</div>
           </div>
-          <div class="stat-card sc-yellow">
+          <div class="stat-card sc-green" style="--green:#22c55e">
             <div class="stat-top"><div class="stat-badge">Totale</div><div class="stat-icon"><i class="fas fa-leaf"></i></div></div>
             <div class="stat-val" id="admTotCo2">—</div>
             <div class="stat-lbl">kg CO₂ salvata</div>
@@ -673,7 +768,7 @@
   <nav class="mob-nav" id="mobNav" style="display:none">
     <button class="mn-btn active" onclick="showTab('dashboard',this)"><i class="fas fa-home"></i><span>Home</span></button>
     <button class="mn-btn" onclick="showTab('log',this)"><i class="fas fa-plus-circle"></i><span>Log</span></button>
-    <button class="mn-btn" onclick="showTab('challenges',this)"><i class="fas fa-trophy"></i><span>Sfide</span></button>
+    <button class="mn-btn" onclick="showTab('shop',this)"><i class="fas fa-store"></i><span>Shop</span></button>
     <button class="mn-btn" onclick="showTab('leaderboard',this)"><i class="fas fa-crown"></i><span>Top</span></button>
     <button class="mn-btn" onclick="showTab('profile',this)"><i class="fas fa-user"></i><span>Profilo</span></button>
   </nav>
@@ -681,8 +776,6 @@
 </div><!-- /app -->
 
 <!-- ══ MODALI ══ -->
-
-<!-- Attività Admin -->
 <div id="actsModal" class="modal-overlay" style="display:none" onclick="closeActsModal(event)">
   <div class="modal-card">
     <div class="modal-head">
@@ -693,7 +786,6 @@
   </div>
 </div>
 
-<!-- Ban Modal -->
 <div id="banModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal-card" style="max-width:420px">
     <div class="modal-head">
@@ -706,7 +798,7 @@
         <div class="input-wrap"><i class="ic fas fa-exclamation-triangle"></i><input id="banReason" type="text" placeholder="es. Comportamento scorretto"/></div>
       </div>
       <div class="frow">
-        <label>Durata (giorni, 0 = permanente)</label>
+        <label>Durata in giorni (0 = permanente)</label>
         <div class="input-wrap"><i class="ic fas fa-calendar"></i><input id="banDays" type="number" placeholder="0" min="0"/></div>
       </div>
       <div class="form-btns" style="margin-top:20px">
@@ -719,7 +811,6 @@
   </div>
 </div>
 
-<!-- Warn Modal -->
 <div id="warnModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal-card" style="max-width:420px">
     <div class="modal-head">
@@ -741,7 +832,6 @@
   </div>
 </div>
 
-<!-- Confirm Modal -->
 <div id="confirmModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeConfirm()">
   <div class="confirm-card">
     <div class="confirm-icon" id="confirmIcon">⚠️</div>
