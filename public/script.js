@@ -1551,7 +1551,7 @@ window.unbanUser = unbanUser;
 
 async function deleteUser(id) {
   const users = await apiRequest('/api/admin/users');
-  const u = Array.isArray(users) ? users.find(x => x.id === id) : null;
+  const u = Array.isArray(users) ? users.find(x => x.id === parseInt(id)) : null;
   const name = u ? u.name : 'questo utente';
   showConfirm('Elimina utente', `Eliminare ${escapeHtml(name)}? Azione irreversibile.`, async () => {
     const data = await apiRequest(`/api/admin/users/${id}`, 'DELETE');
