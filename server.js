@@ -14,9 +14,10 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // ══════════════════════════════════════════
-//   DB INIT
+//   DB INIT - CORRETTO
 // ══════════════════════════════════════════
 async function initDB() {
+  // Prima creiamo la tabella users con tutte le colonne necessarie
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id           SERIAL PRIMARY KEY,
@@ -106,28 +107,36 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT NOW()
     )`);
 
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_until TIMESTAMP`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_reason TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT DEFAULT '#16a34a'`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_eyes  TEXT DEFAULT 'normal'`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mouth TEXT DEFAULT 'smile'`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_hair  TEXT DEFAULT 'none'`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_skin  TEXT DEFAULT '#fde68a'`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''`);
+  // Aggiungiamo eventuali colonne mancanti (sicurezza extra)
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_until TIMESTAMP`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_reason TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT DEFAULT '#16a34a'`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_eyes  TEXT DEFAULT 'normal'`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_mouth TEXT DEFAULT 'smile'`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_hair  TEXT DEFAULT 'none'`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_skin  TEXT DEFAULT '#fde68a'`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''`);
+  } catch (err) {
+    console.log('⚠️ Alcune colonne potrebbero già esistere, continuo...');
+  }
 
-  // Auto seed admin
+  // Auto seed admin - ora is_admin esiste sicuramente
   const adminExists = await pool.query('SELECT id FROM users WHERE email = $1', ['admin@ecotrack.com']);
   if (adminExists.rows.length === 0) {
     const hash = await bcrypt.hash('Admin@2026!', 10);
     await pool.query(
-      'INSERT INTO users (name, username, email, password, is_admin) VALUES ($1,$2,$3,$4,$5)',
+      'INSERT INTO users (name, username, email, password, is_admin) VALUES ($1, $2, $3, $4, $5)',
       ['Admin', 'admin', 'admin@ecotrack.com', hash, true]
     );
     console.log('👑 Account admin creato!');
+  } else {
+    console.log('👑 Account admin già esistente');
   }
-  console.log('✅ DB inizializzato');
+  
+  console.log('✅ DB inizializzato correttamente');
 }
 
 // ══════════════════════════════════════════
@@ -183,7 +192,10 @@ app.post('/api/register', async (req, res) => {
     );
     const user = r.rows[0];
     res.json({ token: makeToken(user), user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Register error:', e);
+    res.status(500).json({ error: 'Errore durante la registrazione' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -210,7 +222,10 @@ app.post('/api/login', async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(400).json({ error: 'Password errata' });
     res.json({ token: makeToken(user), user });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Login error:', e);
+    res.status(500).json({ error: 'Errore durante il login' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -220,7 +235,10 @@ app.get('/api/profile', auth, async (req, res) => {
   try {
     const r = await pool.query('SELECT id,name,username,email,is_admin,points,co2_saved,avatar_color,avatar_eyes,avatar_mouth,avatar_hair,avatar_skin,bio FROM users WHERE id=$1', [req.user.id]);
     res.json(r.rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Profile error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento del profilo' }); 
+  }
 });
 
 app.patch('/api/profile', auth, async (req, res) => {
@@ -240,7 +258,10 @@ app.patch('/api/profile', auth, async (req, res) => {
       [name, username, bio, avatar_color, avatar_eyes, avatar_mouth, avatar_hair, avatar_skin, req.user.id]
     );
     res.json({ success: true, user: r.rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Profile update error:', e);
+    res.status(500).json({ error: 'Errore nel salvataggio del profilo' }); 
+  }
 });
 
 // Profilo pubblico
@@ -256,7 +277,10 @@ app.get('/api/user/:username', auth, async (req, res) => {
     const following = await pool.query('SELECT COUNT(*) FROM follows WHERE follower_id=$1',  [user.id]);
     const isFollowing = await pool.query('SELECT id FROM follows WHERE follower_id=$1 AND following_id=$2', [req.user.id, user.id]);
     res.json({ ...user, followers: parseInt(followers.rows[0].count), following: parseInt(following.rows[0].count), isFollowing: isFollowing.rows.length > 0 });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('User search error:', e);
+    res.status(500).json({ error: 'Errore nella ricerca utente' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -273,14 +297,20 @@ app.post('/api/follow/:userId', auth, async (req, res) => {
       [req.params.userId, 'follow', `@${req.user.username || req.user.name} ha iniziato a seguirti!`, JSON.stringify({ from: req.user.id })]
     );
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Follow error:', e);
+    res.status(500).json({ error: 'Errore nel follow' }); 
+  }
 });
 
 app.delete('/api/follow/:userId', auth, async (req, res) => {
   try {
     await pool.query('DELETE FROM follows WHERE follower_id=$1 AND following_id=$2', [req.user.id, req.params.userId]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Unfollow error:', e);
+    res.status(500).json({ error: 'Errore nell\'unfollow' }); 
+  }
 });
 
 app.get('/api/followers', auth, async (req, res) => {
@@ -289,7 +319,10 @@ app.get('/api/followers', auth, async (req, res) => {
       SELECT u.id,u.name,u.username,u.avatar_color,u.avatar_skin,u.points
       FROM follows f JOIN users u ON u.id=f.follower_id WHERE f.following_id=$1`, [req.user.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Followers error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento followers' }); 
+  }
 });
 
 app.get('/api/following', auth, async (req, res) => {
@@ -298,7 +331,10 @@ app.get('/api/following', auth, async (req, res) => {
       SELECT u.id,u.name,u.username,u.avatar_color,u.avatar_skin,u.points
       FROM follows f JOIN users u ON u.id=f.following_id WHERE f.follower_id=$1`, [req.user.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Following error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento following' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -315,7 +351,10 @@ app.post('/api/groups', auth, async (req, res) => {
     const group = r.rows[0];
     await pool.query('INSERT INTO group_members (group_id,user_id,role) VALUES ($1,$2,$3)', [group.id, req.user.id, 'owner']);
     res.json(group);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Group creation error:', e);
+    res.status(500).json({ error: 'Errore nella creazione del gruppo' }); 
+  }
 });
 
 app.get('/api/groups', auth, async (req, res) => {
@@ -328,21 +367,30 @@ app.get('/api/groups', auth, async (req, res) => {
       WHERE g.is_public=true OR g.owner_id=$1
       ORDER BY g.created_at DESC`, [req.user.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Groups error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento gruppi' }); 
+  }
 });
 
 app.post('/api/groups/:id/join', auth, async (req, res) => {
   try {
     await pool.query('INSERT INTO group_members (group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.params.id, req.user.id]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Join group error:', e);
+    res.status(500).json({ error: 'Errore nell\'unirsi al gruppo' }); 
+  }
 });
 
 app.delete('/api/groups/:id/leave', auth, async (req, res) => {
   try {
     await pool.query('DELETE FROM group_members WHERE group_id=$1 AND user_id=$2', [req.params.id, req.user.id]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Leave group error:', e);
+    res.status(500).json({ error: 'Errore nell\'abbandonare il gruppo' }); 
+  }
 });
 
 app.get('/api/groups/:id/members', auth, async (req, res) => {
@@ -352,7 +400,10 @@ app.get('/api/groups/:id/members', auth, async (req, res) => {
       FROM group_members gm JOIN users u ON u.id=gm.user_id
       WHERE gm.group_id=$1 ORDER BY gm.role DESC, u.points DESC`, [req.params.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Group members error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento membri' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -365,14 +416,20 @@ app.get('/api/notifications', auth, async (req, res) => {
       [req.user.id]
     );
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Notifications error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento notifiche' }); 
+  }
 });
 
 app.patch('/api/notifications/read', auth, async (req, res) => {
   try {
     await pool.query('UPDATE notifications SET is_read=true WHERE user_id=$1', [req.user.id]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Mark read error:', e);
+    res.status(500).json({ error: 'Errore nell\'aggiornamento notifiche' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -383,7 +440,10 @@ app.get('/api/stats', auth, async (req, res) => {
     const week = await pool.query(`SELECT COALESCE(SUM(co2_saved),0) AS co2_week FROM activities WHERE user_id=$1 AND date>=NOW()-INTERVAL '7 days'`, [req.user.id]);
     const tot  = await pool.query(`SELECT COALESCE(SUM(points),0) AS points, COALESCE(SUM(co2_saved),0) AS co2_total, COUNT(*) AS total_activities FROM activities WHERE user_id=$1`, [req.user.id]);
     res.json({ ...week.rows[0], ...tot.rows[0] });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Stats error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento statistiche' }); 
+  }
 });
 
 const CO2_RATES = {
@@ -418,14 +478,20 @@ app.post('/api/activity', auth, async (req, res) => {
       }
     }
     res.json({ success:true, co2_saved:co2, points:pts });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Activity error:', e);
+    res.status(500).json({ error: 'Errore nel salvataggio attività' }); 
+  }
 });
 
 app.get('/api/activities', auth, async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM activities WHERE user_id=$1 ORDER BY date DESC LIMIT 50',[req.user.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Activities error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento attività' }); 
+  }
 });
 
 app.get('/api/badges', auth, async (req, res) => {
@@ -440,7 +506,10 @@ app.get('/api/badges', auth, async (req, res) => {
       { name:'Point Master',   icon:'⭐', desc:'500 punti',       unlocked: pts>=500  },
       { name:'Sustainability+',icon:'💚', desc:'100 kg CO₂',     unlocked: co2>=100  },
     ]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Badges error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento badge' }); 
+  }
 });
 
 app.get('/api/leaderboard', auth, async (req, res) => {
@@ -451,7 +520,10 @@ app.get('/api/leaderboard', auth, async (req, res) => {
       FROM users u LEFT JOIN activities a ON a.user_id=u.id
       GROUP BY u.id ORDER BY points DESC LIMIT 20`);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Leaderboard error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento classifica' }); 
+  }
 });
 
 app.get('/api/yearly', auth, async (req, res) => {
@@ -462,14 +534,20 @@ app.get('/api/yearly', auth, async (req, res) => {
       FROM activities WHERE user_id=$1 AND EXTRACT(YEAR FROM date)=EXTRACT(YEAR FROM NOW())
       GROUP BY month,month_num ORDER BY month_num`,[req.user.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Yearly error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento dati annuali' }); 
+  }
 });
 
 app.get('/api/challenges', auth, async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM challenges WHERE user_id=$1 OR is_public=true ORDER BY created_at DESC',[req.user.id]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Challenges error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento sfide' }); 
+  }
 });
 
 app.post('/api/challenges', auth, async (req, res) => {
@@ -479,7 +557,10 @@ app.post('/api/challenges', auth, async (req, res) => {
     const r = await pool.query('INSERT INTO challenges (user_id,title,description,co2_target,points_reward,end_date,is_public) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
       [req.user.id,title,description,co2_target||0,points_reward||0,end_date,is_public||false]);
     res.json(r.rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Challenge creation error:', e);
+    res.status(500).json({ error: 'Errore nella creazione sfida' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -494,7 +575,10 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
       FROM users u LEFT JOIN activities a ON a.user_id=u.id
       GROUP BY u.id ORDER BY points DESC`);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Admin users error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento utenti' }); 
+  }
 });
 
 // Ban temporaneo
@@ -507,7 +591,10 @@ app.post('/api/admin/user/:id/ban', requireAdmin, async (req, res) => {
     await pool.query('INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
       [req.params.id, 'ban', `⛔ Il tuo account è stato bannato${days ? ` per ${days} giorni` : ' permanentemente'}. Motivo: ${reason || 'Violazione regole'}`]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Ban error:', e);
+    res.status(500).json({ error: 'Errore nel ban' }); 
+  }
 });
 
 // Unban
@@ -517,7 +604,10 @@ app.post('/api/admin/user/:id/unban', requireAdmin, async (req, res) => {
     await pool.query('INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
       [req.params.id, 'unban', '✅ Il tuo account è stato riattivato dall\'amministratore.']);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Unban error:', e);
+    res.status(500).json({ error: 'Errore nell\'unban' }); 
+  }
 });
 
 // Avviso
@@ -526,9 +616,12 @@ app.post('/api/admin/user/:id/warn', requireAdmin, async (req, res) => {
   if (!message) return res.status(400).json({ error: 'Messaggio obbligatorio' });
   try {
     await pool.query('INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
-      [req.params.id, 'warn', `⚠️ Avviso dall\'admin: ${message}`]);
+      [req.params.id, 'warn', `⚠️ Avviso dall'admin: ${message}`]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Warn error:', e);
+    res.status(500).json({ error: 'Errore nell\'invio avviso' }); 
+  }
 });
 
 // Azzera punti
@@ -538,21 +631,30 @@ app.post('/api/admin/user/:id/reset-points', requireAdmin, async (req, res) => {
     await pool.query('INSERT INTO notifications (user_id,type,message) VALUES ($1,$2,$3)',
       [req.params.id, 'warn', '⚠️ I tuoi punti sono stati azzerati dall\'amministratore.']);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Reset points error:', e);
+    res.status(500).json({ error: 'Errore nell\'azzeramento punti' }); 
+  }
 });
 
 app.patch('/api/admin/user/:id/role', requireAdmin, async (req, res) => {
   try {
     await pool.query('UPDATE users SET is_admin=$1 WHERE id=$2', [req.body.is_admin, req.params.id]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Role change error:', e);
+    res.status(500).json({ error: 'Errore nel cambio ruolo' }); 
+  }
 });
 
 app.get('/api/admin/activities/:userId', requireAdmin, async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM activities WHERE user_id=$1 ORDER BY date DESC', [req.params.userId]);
     res.json(r.rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Admin activities error:', e);
+    res.status(500).json({ error: 'Errore nel caricamento attività' }); 
+  }
 });
 
 app.delete('/api/admin/activity/:id', requireAdmin, async (req, res) => {
@@ -563,7 +665,10 @@ app.delete('/api/admin/activity/:id', requireAdmin, async (req, res) => {
     await pool.query('UPDATE users SET points=GREATEST(points-$1,0), co2_saved=GREATEST(co2_saved-$2,0) WHERE id=$3',
       [a.rows[0].points, a.rows[0].co2_saved, a.rows[0].user_id]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Delete activity error:', e);
+    res.status(500).json({ error: 'Errore nell\'eliminazione attività' }); 
+  }
 });
 
 app.delete('/api/admin/user/:id', requireAdmin, async (req, res) => {
@@ -572,7 +677,10 @@ app.delete('/api/admin/user/:id', requireAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE id=$1', [req.params.id]);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('Delete user error:', e);
+    res.status(500).json({ error: 'Errore nell\'eliminazione utente' }); 
+  }
 });
 
 // ══════════════════════════════════════════
@@ -584,4 +692,9 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 //   START
 // ══════════════════════════════════════════
 const PORT = process.env.PORT || 3000;
-initDB().then(() => app.listen(PORT, () => console.log(`🚀 EcoTrack on port ${PORT}`)));
+initDB().then(() => {
+  app.listen(PORT, () => console.log(`🚀 EcoTrack on port ${PORT}`));
+}).catch(err => {
+  console.error('❌ Errore durante inizializzazione DB:', err);
+  process.exit(1);
+});
