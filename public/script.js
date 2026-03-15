@@ -656,6 +656,10 @@ window.searchAddress = searchAddress;
 function selectAddress(fieldId, address) {
   document.getElementById(fieldId).value = address;
   document.getElementById(fieldId + 'Sugg').innerHTML = '';
+  // Auto-calcola il percorso quando entrambi i campi sono compilati
+  const from = document.getElementById('fromAddr')?.value.trim();
+  const to   = document.getElementById('toAddr')?.value.trim();
+  if (from && to) calculateRoute();
 }
 window.selectAddress = selectAddress;
 
@@ -700,9 +704,16 @@ async function calculateRoute() {
       routeWhileDragging: false,
       showAlternatives: false,
       fitSelectedRoutes: true,
+      show: false,
+      collapsible: false,
       lineOptions: { styles: [{ color: '#16a34a', weight: 5 }] },
       createMarker: () => null
     }).addTo(mapInstance);
+    // Nascondi il container delle istruzioni
+    setTimeout(() => {
+      const rc = document.querySelector('.leaflet-routing-container');
+      if (rc) rc.style.display = 'none';
+    }, 500);
 
     routingControl.on('routesfound', e => {
       const km = (e.routes[0].summary.totalDistance / 1000).toFixed(1);
@@ -1215,93 +1226,78 @@ async function loadAvatarSection() {
   const profile = await apiRequest('/api/profile');
   if (!profile.error) { myProfile = { ...myProfile, ...profile }; syncMiiState(profile); }
 
+  const owned = myProfile?.owned_items || [];
+  let shopItems = allShopItems;
+  if (!shopItems.length) { shopItems = await apiRequest('/api/shop'); }
+
+  // Helper: is item unlocked
+  const hasItem = (name) => shopItems && Array.isArray(shopItems) &&
+    !!shopItems.find(i => i.name === name && owned.includes(i.id));
+
+  // COLORI SFONDO
+  const baseColors = ['#16a34a','#22c55e','#3b82f6','#6366f1','#1e293b','#64748b','#ffffff'];
+  const shopColorMap = { 'Viola Reale': '#8b5cf6', 'Rosso Fuoco': '#ef4444', 'Oro Puro': '#f59e0b' };
   const colorOpts = document.getElementById('colorOptions');
   if (colorOpts) {
-    colorOpts.innerHTML = BG_COLORS.map(c => `
-      <div class="color-swatch ${miiState.color === c ? 'selected' : ''}"
-           style="background:${c};border:2px solid ${c === '#ffffff' ? '#e2e8f0' : 'transparent'};"
-           onclick="setAvatarColor('${c}', this)"></div>
-    `).join('');
+    const unlockedColors = [...baseColors, ...Object.entries(shopColorMap).filter(([n]) => hasItem(n)).map(([,c]) => c)];
+    const lockedColors = Object.entries(shopColorMap).filter(([n]) => !hasItem(n));
+    colorOpts.innerHTML =
+      unlockedColors.map(c => `<div class="color-swatch ${miiState.color===c?'selected':''}" style="background:${c};border:2px solid ${c===' #ffffff'?'#e2e8f0':'transparent'};" onclick="setAvatarColor('${c}',this)"></div>`).join('') +
+      lockedColors.map(([n,c]) => `<div class="color-swatch" title="${n} — acquistalo nel negozio!" style="background:${c};opacity:.3;cursor:not-allowed;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;">🔒</span></div>`).join('');
   }
 
+  // CARNAGIONE
   const skinOpts = document.getElementById('skinOptions');
   if (skinOpts) {
     skinOpts.innerHTML = SKIN_COLORS.map(c => `
-      <div class="color-swatch ${miiState.skin === c ? 'selected' : ''}"
-           style="background:${c};"
-           onclick="setAvatarSkin('${c}', this)"></div>
+      <div class="color-swatch ${miiState.skin===c?'selected':''}" style="background:${c};" onclick="setAvatarSkin('${c}',this)"></div>
     `).join('');
   }
 
+  // CAPELLI
+  const hairLabels = { none:'🚫 Nessuno', short:'💇 Corti', long:'💁 Lunghi', curly:'🦱 Ricci', spiky:'⚡ Spiky', bun:'🎀 Bun' };
+  const hairShopMap = { 'Capelli Corti':'short', 'Capelli Lunghi':'long', 'Rainbow Hair':'curly', 'Gold Hair':'spiky', 'Galaxy Hair':'bun', 'Flame Hair':'curly' };
+  const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
-    hairOpts.innerHTML = HAIR_OPTIONS.map(h => `
-      <button class="option-btn ${miiState.hair === h ? 'selected' : ''}" onclick="setAvatarHair('${h}', this)">
-        ${h === 'none' ? '🚫 Nessuno' : h === 'short' ? '💇 Corti' : h === 'long' ? '💁 Lunghi' : h === 'curly' ? '🦱 Ricci' : h === 'spiky' ? '⚡ Spiky' : '🎀 Bun'}
-      </button>
-    `).join('');
+    hairOpts.innerHTML = HAIR_OPTIONS.map(h => {
+      const shopName = Object.entries(hairShopMap).find(([,v]) => v === h)?.[0];
+      const isFree = freeHairs.includes(h) || !shopName;
+      const isOwned = isFree || hasItem(shopName);
+      if (isOwned) return `<button class="option-btn ${miiState.hair===h?'selected':''}" onclick="setAvatarHair('${h}',this)">${hairLabels[h]}</button>`;
+      return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${hairLabels[h]} 🔒</button>`;
+    }).join('');
   }
 
+  // OCCHI
+  const eyeLabels = { normal:'😐 Normali', happy:'😊 Felici', sleepy:'😴 Assonnati', surprised:'😲 Sorpresi', wink:'😉 Occhiolino', cool:'😎 Cool', star:'⭐ Stella', heart:'❤️ Cuore' };
+  const eyeShopMap = { star:'Star Eyes', heart:'Heart Eyes', cool:'Laser Eyes' };
   const eyeOpts = document.getElementById('eyeOptions');
   if (eyeOpts) {
-    eyeOpts.innerHTML = EYE_OPTIONS.map(e => `
-      <button class="option-btn ${miiState.eyes === e ? 'selected' : ''}" onclick="setAvatarEyes('${e}', this)">
-        ${e === 'normal' ? '😐 Normali' : e === 'happy' ? '😊 Felici' : e === 'sleepy' ? '😴 Assonnati' : e === 'surprised' ? '😲 Sorpresi' : e === 'wink' ? '😉 Occhiolino' : e === 'cool' ? '😎 Cool' : e === 'star' ? '⭐ Stella' : '❤️ Cuore'}
-      </button>
-    `).join('');
+    eyeOpts.innerHTML = EYE_OPTIONS.map(e => {
+      const shopName = eyeShopMap[e];
+      const isOwned = !shopName || hasItem(shopName);
+      if (isOwned) return `<button class="option-btn ${miiState.eyes===e?'selected':''}" onclick="setAvatarEyes('${e}',this)">${eyeLabels[e]}</button>`;
+      return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${eyeLabels[e]} 🔒</button>`;
+    }).join('');
   }
 
+  // BOCCA
+  const mouthLabels = { smile:'😊 Sorriso', grin:'😁 Ghigno', open:'😮 Aperta', smirk:'😏 Smorfia', sad:'😢 Triste', rainbow:'🌈 Arcobaleno' };
+  const mouthShopMap = { rainbow:'Rainbow Mouth' };
   const mouthOpts = document.getElementById('mouthOptions');
   if (mouthOpts) {
-    mouthOpts.innerHTML = MOUTH_OPTIONS.map(m => `
-      <button class="option-btn ${miiState.mouth === m ? 'selected' : ''}" onclick="setAvatarMouth('${m}', this)">
-        ${m === 'smile' ? '😊 Sorriso' : m === 'grin' ? '😁 Ghigno' : m === 'open' ? '😮 Aperta' : m === 'smirk' ? '😏 Smorfia' : m === 'sad' ? '😢 Triste' : '🌈 Arcobaleno'}
-      </button>
-    `).join('');
+    mouthOpts.innerHTML = MOUTH_OPTIONS.map(m => {
+      const shopName = mouthShopMap[m];
+      const isOwned = !shopName || hasItem(shopName);
+      if (isOwned) return `<button class="option-btn ${miiState.mouth===m?'selected':''}" onclick="setAvatarMouth('${m}',this)">${mouthLabels[m]}</button>`;
+      return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${mouthLabels[m]} 🔒</button>`;
+    }).join('');
   }
 
   drawMii(miiState, 'miiCanvas', 200);
 }
 
-function setAvatarColor(color, el) {
-  miiState.color = color;
-  document.querySelectorAll('#colorOptions .color-swatch').forEach(s => s.classList.remove('selected'));
-  el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
-}
-window.setAvatarColor = setAvatarColor;
-
-function setAvatarSkin(skin, el) {
-  miiState.skin = skin;
-  document.querySelectorAll('#skinOptions .color-swatch').forEach(s => s.classList.remove('selected'));
-  el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
-}
-window.setAvatarSkin = setAvatarSkin;
-
-function setAvatarHair(hair, el) {
-  miiState.hair = hair;
-  document.querySelectorAll('#hairOptions .option-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
-}
-window.setAvatarHair = setAvatarHair;
-
-function setAvatarEyes(eyes, el) {
-  miiState.eyes = eyes;
-  document.querySelectorAll('#eyeOptions .option-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
-}
-window.setAvatarEyes = setAvatarEyes;
-
-function setAvatarMouth(mouth, el) {
-  miiState.mouth = mouth;
-  document.querySelectorAll('#mouthOptions .option-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
-}
-window.setAvatarMouth = setAvatarMouth;
 
 async function saveAvatar() {
   const data = await apiRequest('/api/profile/avatar', 'PUT', {
