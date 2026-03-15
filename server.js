@@ -684,6 +684,23 @@ app.delete('/api/admin/user/:id', requireAdmin, async (req, res) => {
 });
 
 // ══════════════════════════════════════════
+//   DEBUG ROUTE (DA RIMUOVERE DOPO)
+// ══════════════════════════════════════════
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await pool.query('SELECT id, email, username, is_admin, points FROM users');
+    res.json({
+      count: users.rows.length,
+      users: users.rows,
+      message: "Questa route è solo per debug - rimuovila in produzione!"
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ══════════════════════════════════════════
 //   CATCH ALL
 // ══════════════════════════════════════════
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
