@@ -1,963 +1,1697 @@
-document.addEventListener('DOMContentLoaded', () => {
+'use strict';
 
 // ══════════════════════════════════════════
-//   STATO
+//   GLOBALS
 // ══════════════════════════════════════════
-let token   = localStorage.getItem('ecotoken');
-let curAct  = null;
-let curS    = 1;
-let isAdmin = false;
-let myProfile = {};
+let token          = localStorage.getItem('ecotoken') || null;
+let myProfile      = null;
+let mapInstance    = null;
+let mapInitialized = false;
+let routeLayer     = null;
+let confirmCb      = null;
+let allShopItems   = [];
+let ownedItems     = [];
 
-const RATES = {
-  Remoto:    { t:'h', co2:.5,  pts:10  },
-  Treno:     { t:'k', co2:.04, pts:2   },
-  Bici:      { t:'k', co2:0,   pts:5   },
-  Bus:       { t:'k', co2:.08, pts:1.5 },
-  Carpooling:{ t:'k', co2:.06, pts:3   },
-  Videocall: { t:'h', co2:.1,  pts:8   }
-};
-const ICONS = { Remoto:'🏠', Treno:'🚂', Bici:'🚴', Bus:'🚌', Carpooling:'🚗', Videocall:'💻' };
-const TABS  = {
-  dashboard:   ['Dashboard',         'Il tuo impatto questa settimana'],
-  log:         ['Log Attività',      'Registra le tue attività green'],
-  challenges:  ['Sfide',             'Partecipa e crea sfide per il team'],
-  leaderboard: ['Classifica',        'Come te la cavi nel team?'],
-  social:      ['Social',            'Followers, gruppi e notifiche'],
-  profile:     ['Il tuo Profilo',    'Personalizza il tuo Mii e il profilo'],
-  yearly:      ['Riepilogo Annuale', 'Il tuo andamento nel 2026'],
-  admin:       ['Admin Panel',       'Gestisci utenti e attività del team']
+let miiState = {
+  color: '#16a34a',
+  skin:  '#fde68a',
+  eyes:  'normal',
+  mouth: 'smile',
+  hair:  'none'
 };
 
 // ══════════════════════════════════════════
-//   MII AVATAR
+//   UTILITY
 // ══════════════════════════════════════════
-function drawMii(canvas, opts = {}) {
-  const {
-    color = '#16a34a', skin = '#fde68a',
-    eyes = 'normal', mouth = 'smile', hair = 'none',
-    size = canvas.width
-  } = opts;
-  const ctx = canvas.getContext('2d');
-  const s   = size / 160;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-  // BG
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Collo
-  ctx.fillStyle = skin;
-  ctx.fillRect(68*s, 118*s, 24*s, 20*s);
-
-  // Testa
-  ctx.beginPath();
-  ctx.ellipse(80*s, 86*s, 40*s, 44*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin;
-  ctx.fill();
-
-  // Orecchie
-  ctx.beginPath(); ctx.ellipse(42*s, 88*s, 8*s, 10*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin; ctx.fill();
-  ctx.beginPath(); ctx.ellipse(118*s, 88*s, 8*s, 10*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = skin; ctx.fill();
-
-  // Capelli
-  if (hair === 'short') {
-    ctx.beginPath();
-    ctx.ellipse(80*s, 60*s, 42*s, 26*s, 0, Math.PI, Math.PI*2);
-    ctx.fillStyle = '#78350f'; ctx.fill();
-    ctx.fillRect(38*s, 60*s, 84*s, 16*s);
-    ctx.fillStyle = '#78350f';
-  } else if (hair === 'long') {
-    ctx.beginPath();
-    ctx.ellipse(80*s, 58*s, 42*s, 26*s, 0, Math.PI, Math.PI*2);
-    ctx.fillStyle = '#78350f'; ctx.fill();
-    ctx.fillRect(38*s, 60*s, 12*s, 50*s);
-    ctx.fillRect(110*s, 60*s, 12*s, 50*s);
-    ctx.fillStyle = '#78350f';
-  } else if (hair === 'curly') {
-    for (let i = 0; i < 6; i++) {
-      ctx.beginPath();
-      ctx.arc((48 + i*12)*s, 52*s, 9*s, 0, Math.PI*2);
-      ctx.fillStyle = '#78350f'; ctx.fill();
-    }
-    ctx.fillRect(38*s, 52*s, 84*s, 14*s);
-    ctx.fillStyle = '#78350f';
-  }
-
-  // Sopracciglia
-  ctx.strokeStyle = '#78350f'; ctx.lineWidth = 3*s; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(56*s,72*s); ctx.lineTo(70*s,70*s); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(90*s,70*s); ctx.lineTo(104*s,72*s); ctx.stroke();
-
-  // Occhi
-  if (eyes === 'cool') {
-    // Occhiali
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(53*s, 76*s, 22*s, 12*s);
-    ctx.fillRect(85*s, 76*s, 22*s, 12*s);
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2*s;
-    ctx.beginPath(); ctx.moveTo(75*s,82*s); ctx.lineTo(85*s,82*s); ctx.stroke();
-    // Pupille
-    ctx.fillStyle = 'white';
-    ctx.fillRect(55*s, 78*s, 18*s, 8*s);
-    ctx.fillRect(87*s, 78*s, 18*s, 8*s);
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(60*s, 79*s, 6*s, 6*s);
-    ctx.fillRect(92*s, 79*s, 6*s, 6*s);
-  } else if (eyes === 'happy') {
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3*s;
-    ctx.beginPath(); ctx.arc(64*s, 82*s, 7*s, Math.PI, Math.PI*2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(96*s, 82*s, 7*s, Math.PI, Math.PI*2); ctx.stroke();
-  } else if (eyes === 'wink') {
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath(); ctx.arc(64*s, 82*s, 7*s, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.beginPath(); ctx.arc(66*s, 80*s, 2.5*s, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3*s;
-    ctx.beginPath(); ctx.moveTo(90*s,82*s); ctx.lineTo(102*s,80*s); ctx.stroke();
-  } else {
-    // Normal
-    ctx.fillStyle = '#1e293b';
-    ctx.beginPath(); ctx.arc(64*s, 82*s, 7*s, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(96*s, 82*s, 7*s, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.beginPath(); ctx.arc(66*s, 80*s, 2.5*s, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(98*s, 80*s, 2.5*s, 0, Math.PI*2); ctx.fill();
-  }
-
-  // Naso
-  ctx.fillStyle = skin === '#fde68a' ? '#f59e0b' : '#b45309';
-  ctx.beginPath(); ctx.arc(80*s, 94*s, 4*s, 0, Math.PI*2); ctx.fill();
-
-  // Bocca
-  ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 3*s; ctx.lineCap = 'round';
-  if (mouth === 'big') {
-    ctx.beginPath(); ctx.arc(80*s, 104*s, 12*s, 0, Math.PI);
-    ctx.fillStyle = '#991b1b'; ctx.fill();
-    ctx.fillStyle = '#fca5a5';
-    ctx.beginPath(); ctx.arc(80*s, 104*s, 8*s, 0.1, Math.PI-0.1); ctx.fill();
-  } else if (mouth === 'serious') {
-    ctx.beginPath(); ctx.moveTo(68*s,106*s); ctx.lineTo(92*s,106*s); ctx.stroke();
-  } else if (mouth === 'tongue') {
-    ctx.beginPath(); ctx.arc(80*s, 104*s, 10*s, 0, Math.PI);
-    ctx.fillStyle = '#991b1b'; ctx.fill();
-    ctx.fillStyle = '#f87171';
-    ctx.beginPath(); ctx.ellipse(80*s, 112*s, 6*s, 5*s, 0, 0, Math.PI*2); ctx.fill();
-  } else {
-    // smile
-    ctx.beginPath(); ctx.arc(80*s, 100*s, 10*s, 0.2, Math.PI-0.2); ctx.stroke();
-  }
+function showN(msg, type = 'success') {
+  const el = document.getElementById('notifToast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = `notif-toast show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
-function drawMiniMii(canvas, opts = {}) {
-  drawMii(canvas, { ...opts, size: canvas.width });
+function showConfirm(title, msg, cb, icon = '❓') {
+  document.getElementById('confirmTitle').textContent = icon + ' ' + title;
+  document.getElementById('confirmMsg').textContent   = msg;
+  document.getElementById('confirmOverlay').style.display = 'flex';
+  confirmCb = cb;
 }
-
-function setAv(key, val) {
-  myProfile[key] = val;
-  // Aggiorna active state swatches/btns
-  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.mii-opt-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll(`[onclick*="${val}"]`).forEach(el => el.classList.add('active'));
-  renderMii();
-}
-
-function renderMii() {
-  const c = document.getElementById('miiCanvas');
-  if (!c) return;
-  drawMii(c, {
-    color: myProfile.avatar_color || '#16a34a',
-    skin:  myProfile.avatar_skin  || '#fde68a',
-    eyes:  myProfile.avatar_eyes  || 'normal',
-    mouth: myProfile.avatar_mouth || 'smile',
-    hair:  myProfile.avatar_hair  || 'none'
-  });
-  // Update sidebar canvas
-  const sbC = document.getElementById('sbAvCanvas');
-  if (sbC) drawMiniMii(sbC, {
-    color: myProfile.avatar_color || '#16a34a',
-    skin:  myProfile.avatar_skin  || '#fde68a',
-    eyes:  myProfile.avatar_eyes  || 'normal',
-    mouth: myProfile.avatar_mouth || 'smile',
-    hair:  myProfile.avatar_hair  || 'none'
-  });
-}
-
-function miiCanvasHTML(opts, size = 40) {
-  const id = 'mii_' + Math.random().toString(36).slice(2);
-  setTimeout(() => {
-    const c = document.getElementById(id);
-    if (c) drawMiniMii(c, opts);
-  }, 0);
-  return `<canvas id="${id}" width="${size}" height="${size}" style="border-radius:${size/4}px;border:2px solid var(--green-mid)"></canvas>`;
-}
-
-window.setAv = setAv;
-
-// ══════════════════════════════════════════
-//   TUTORIAL
-// ══════════════════════════════════════════
-function openTut() { document.getElementById('tut').style.display = 'flex'; goS(1); }
-function skipTut() { document.getElementById('tut').style.display = 'none'; localStorage.setItem('tutDone','1'); }
-function goS(n) {
-  curS = n;
-  document.querySelectorAll('.tut-step').forEach(s => s.classList.remove('active'));
-  document.querySelector(`[data-s="${n}"]`).classList.add('active');
-  document.querySelectorAll('.tut-dot').forEach((d,i) => d.classList.toggle('active', i===n-1));
-  const prev = document.getElementById('tPrev');
-  const next = document.getElementById('tNext');
-  prev.style.opacity = n===1 ? '0':'1';
-  prev.style.pointerEvents = n===1 ? 'none':'auto';
-  next.textContent = n===4 ? '🚀 Inizia!' : 'Avanti →';
-}
-function nextS() { if (curS===4) { skipTut(); return; } goS(curS+1); }
-function prevS() { if (curS>1) goS(curS-1); }
-window.openTut=openTut; window.skipTut=skipTut; window.goS=goS; window.nextS=nextS; window.prevS=prevS;
-
-// ══════════════════════════════════════════
-//   AUTH
-// ══════════════════════════════════════════
-function switchAuth(t) {
-  document.getElementById('fLogin').style.display = t==='login'    ? 'flex':'none';
-  document.getElementById('fReg').style.display   = t==='register' ? 'flex':'none';
-  document.getElementById('tLogin').classList.toggle('active', t==='login');
-  document.getElementById('tReg').classList.toggle('active',   t==='register');
-}
-function toggleEye(id) { const e=document.getElementById(id); e.type=e.type==='password'?'text':'password'; }
-function chkPw() {
-  const v = document.getElementById('rPw').value;
-  const s = (id,ok) => document.getElementById(id).classList.toggle('ok',ok);
-  s('h1',v.length>=8); s('h2',/[A-Z]/.test(v)); s('h3',/\d/.test(v)); s('h4',/[!@#$%^&*]/.test(v));
-}
-async function doLogin() {
-  const eEl=document.getElementById('lEmail'), pEl=document.getElementById('lPw');
-  if (!eEl||!pEl) return;
-  const e=eEl.value.trim(), p=pEl.value;
-  if (!e||!p) return setErr('lErr','Compila tutti i campi');
-  const btn=document.querySelector('#fLogin .btn-auth');
-  setLoading(btn,true,'Login');
-  const d=await post('/api/login',{email:e,password:p});
-  setLoading(btn,false,'Login');
-  if (d.error) return setErr('lErr',d.error);
-  token=d.token; localStorage.setItem('ecotoken',token);
-  enterApp(d.user);
-}
-async function doReg() {
-  const n=document.getElementById('rName').value.trim();
-  const u=document.getElementById('rUsername').value.trim();
-  const e=document.getElementById('rEmail').value.trim();
-  const p=document.getElementById('rPw').value;
-  if (!n||!u||!e||!p) return setErr('rErr','Compila tutti i campi');
-  const btn=document.querySelector('#fReg .btn-auth');
-  setLoading(btn,true,'Register');
-  const d=await post('/api/register',{name:n,username:u,email:e,password:p});
-  setLoading(btn,false,'Register');
-  if (d.error) return setErr('rErr',d.error);
-  token=d.token; localStorage.setItem('ecotoken',token);
-  enterApp(d.user);
-}
-function setErr(id,msg) {
-  const e=document.getElementById(id); if (!e) return;
-  e.textContent=msg; e.style.animation='none';
-  requestAnimationFrame(()=>{ e.style.animation='shake .4s ease'; });
-  setTimeout(()=>e.textContent='',4000);
-}
-function setLoading(btn,loading,label) {
-  if (!btn) return;
-  btn.disabled=loading; btn.style.opacity=loading?'.7':'1';
-  const span=btn.querySelector('span');
-  if (span) span.textContent=loading?'Caricamento...':label;
-}
-function logout() { localStorage.removeItem('ecotoken'); location.reload(); }
-function enterApp(u) {
-  document.getElementById('authWrap').style.display='none';
-  document.getElementById('app').style.display='flex';
-  if (window.innerWidth<=768) document.getElementById('mobNav').style.display='flex';
-  document.getElementById('sbEmail').textContent=u.email||'';
-  initAdmin(u);
-  loadAll();
-  loadProfile();
-  loadNotifCount();
-  if (!localStorage.getItem('tutDone')) openTut();
-}
-window.switchAuth=switchAuth; window.toggleEye=toggleEye; window.chkPw=chkPw;
-window.doLogin=doLogin; window.doReg=doReg; window.logout=logout;
-
-// ══════════════════════════════════════════
-//   ADMIN INIT
-// ══════════════════════════════════════════
-function initAdmin(u) {
-  isAdmin=!!u.is_admin;
-  const nameEl=document.getElementById('sbName');
-  nameEl.innerHTML=(u.name||u.username||u.email)+(isAdmin?' <span class="admin-badge">👑</span>':'');
-  document.getElementById('adminSbBtn').style.display =isAdmin?'flex':'none';
-  document.getElementById('adminMobBtn').style.display=isAdmin?'flex':'none';
-}
+window.confirmYes = function () {
+  document.getElementById('confirmOverlay').style.display = 'none';
+  if (confirmCb) { confirmCb(); confirmCb = null; }
+};
+window.confirmNo = function () {
+  document.getElementById('confirmOverlay').style.display = 'none';
+  confirmCb = null;
+};
 
 // ══════════════════════════════════════════
 //   API
 // ══════════════════════════════════════════
-async function api(url,method='GET',body=null) {
+async function api(url, method = 'GET', body = null) {
   try {
-    const res=await fetch(url,{method,headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:body?JSON.stringify(body):null});
-    return res.json();
-  } catch(err) { showN('❌ Errore di rete','error'); return {error:err.message}; }
-}
-async function post(url,body) {
-  try {
-    const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    return res.json();
-  } catch(err) { showN('❌ Errore di rete','error'); return {error:err.message}; }
-}
-
-// ══════════════════════════════════════════
-//   LOAD ALL
-// ══════════════════════════════════════════
-function loadAll() { loadStats(); loadActs(); loadBadges(); loadLb(); loadYearly(); loadCh(); }
-
-// ══════════════════════════════════════════
-//   PROFILO
-// ══════════════════════════════════════════
-async function loadProfile() {
-  const d=await api('/api/profile'); if (!d||d.error) return;
-  myProfile=d;
-  document.getElementById('pName').value    =d.name||'';
-  document.getElementById('pUsername').value=d.username||'';
-  document.getElementById('pBio').value     =d.bio||'';
-  document.getElementById('pFollowers').textContent=d.followers||0;
-  document.getElementById('pFollowing').textContent=d.following||0;
-  document.getElementById('pPoints2').textContent  =d.points||0;
-  renderMii();
-  // Aggiorna active state
-  document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll(`[onclick*="${d.avatar_color}"]`).forEach(el=>el.classList.add('active'));
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' }
+    };
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (body)  opts.body = JSON.stringify(body);
+    const r = await fetch(url, opts);
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) {
+      token = null;
+      localStorage.removeItem('ecotoken');
+      document.getElementById('authWrap').style.display = 'flex';
+      document.getElementById('app').style.display      = 'none';
+    }
+    return d;
+  } catch (err) {
+    console.error('API error:', err);
+    return { error: 'Errore di connessione' };
+  }
 }
 
-async function saveProfile() {
-  const d=await api('/api/profile','PATCH',{
-    name:         document.getElementById('pName').value,
-    username:     document.getElementById('pUsername').value,
-    bio:          document.getElementById('pBio').value,
-    avatar_color: myProfile.avatar_color||'#16a34a',
-    avatar_eyes:  myProfile.avatar_eyes ||'normal',
-    avatar_mouth: myProfile.avatar_mouth||'smile',
-    avatar_hair:  myProfile.avatar_hair ||'none',
-    avatar_skin:  myProfile.avatar_skin ||'#fde68a'
+// ══════════════════════════════════════════
+//   NAVIGATION
+// ══════════════════════════════════════════
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const sec = document.getElementById(id);
+  if (sec) sec.classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.section === id);
   });
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN('✅ Profilo salvato!','success');
-  const nameEl=document.getElementById('sbName');
-  nameEl.innerHTML=(d.user.name||d.user.username)+(isAdmin?' <span class="admin-badge">👑</span>':'');
-  renderMii();
-}
 
-window.saveProfile=saveProfile;
+  const titles = {
+    dashboard:   ['Dashboard',   'Bentornato! 🌱'],
+    activities:  ['Attività',    'Registra le tue azioni eco 🚴'],
+    challenges:  ['Sfide',       'Sfida te stesso e gli altri 🏆'],
+    leaderboard: ['Classifica',  'Chi salva più CO₂? 🥇'],
+    social:      ['Social',      'Condividi la tua eco-journey 💬'],
+    shop:        ['Shop',        'Personalizza il tuo avatar 🛍️'],
+    profile:     ['Profilo',     'Il tuo profilo eco 🌿'],
+    notifiche:   ['Notifiche',   'Le tue notifiche 🔔'],
+    admin:       ['Admin',       'Pannello di controllo 👑'],
+  };
+  const [title, sub] = titles[id] || ['EcoTrack', ''];
+  const tEl = document.getElementById('topbarTitle');
+  const sEl = document.getElementById('topbarSub');
+  if (tEl) tEl.textContent = title;
+  if (sEl) sEl.textContent = sub;
+
+  if      (id === 'dashboard')   loadDashboard();
+  else if (id === 'activities')  loadActivities();
+  else if (id === 'challenges')  loadChallenges();
+  else if (id === 'leaderboard') loadLeaderboard();
+  else if (id === 'social')      loadSocial();
+  else if (id === 'shop')        loadShop();
+  else if (id === 'profile')     loadProfile();
+  else if (id === 'notifiche')   loadNotifiche();
+  else if (id === 'admin')       loadAdmin();
+
+  if (window.innerWidth <= 768)
+    document.getElementById('sidebar')?.classList.remove('open');
+}
+window.showSection = showSection;
+
+function logout() {
+  showConfirm('Logout', 'Sei sicuro di voler uscire?', () => {
+    token     = null;
+    myProfile = null;
+    localStorage.removeItem('ecotoken');
+    document.getElementById('authWrap').style.display = 'flex';
+    document.getElementById('app').style.display      = 'none';
+  }, '👋');
+}
+window.logout = logout;
 
 // ══════════════════════════════════════════
-//   STATS
+//   AUTH TABS
 // ══════════════════════════════════════════
-async function loadStats() {
-  const d=await api('/api/stats'); if (!d||d.error) return;
-  anim('sCO2', parseFloat(d.co2_week||0),      1);
-  anim('sPts', parseInt(d.points||0),           0);
-  anim('sActs',parseInt(d.total_activities||0), 0);
+function switchTab(tab) {
+  const forms = {
+    login:    'loginForm',
+    register: 'registerForm',
+    forgot:   'forgotForm',
+    reset:    'resetForm'
+  };
+  Object.entries(forms).forEach(([t, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = t === tab ? 'flex' : 'none';
+  });
+  document.querySelectorAll('.auth-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
 }
-function anim(id,target,dec) {
-  const el=document.getElementById(id); if (!el) return;
-  const dur=900, t0=performance.now();
-  const upd=now=>{ const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,4); el.textContent=(e*target).toFixed(dec); if(p<1) requestAnimationFrame(upd); };
-  requestAnimationFrame(upd);
+window.switchTab = switchTab;
+
+// ══════════════════════════════════════════
+//   TOGGLE PASSWORD
+// ══════════════════════════════════════════
+function togglePwd(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isText = el.type === 'text';
+  el.type = isText ? 'password' : 'text';
+  btn.querySelector('i').className = isText ? 'fas fa-eye' : 'fas fa-eye-slash';
+}
+window.togglePwd = togglePwd;
+
+// ══════════════════════════════════════════
+//   LOGIN
+// ══════════════════════════════════════════
+async function doLogin(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('lErr');
+  errEl.textContent = '';
+  errEl.style.color = '#ef4444';
+
+  const identifierEl = document.getElementById('lIdentifier')
+                    || document.getElementById('lEmail');
+  const identifier   = identifierEl?.value?.trim();
+  const password     = document.getElementById('lPwd')?.value;
+
+  if (!identifier || !password) {
+    errEl.textContent = 'Campi mancanti';
+    return;
+  }
+
+  const btn = document.querySelector('#loginForm button[type=submit]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+  const d = await api('/api/login', 'POST', { identifier, password });
+
+  if (btn) {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>Accedi</span>';
+  }
+
+  if (d.error) {
+    errEl.textContent = d.error;
+    return;
+  }
+
+  token = d.token;
+  localStorage.setItem('ecotoken', token);
+  myProfile = d.user;
+  syncMiiState(d.user);
+
+  document.getElementById('authWrap').style.display = 'none';
+  document.getElementById('app').style.display      = 'flex';
+  updateSidebar(d.user);
+  await loadDashboard();
+  loadNotifCount();
+  setInterval(loadNotifCount, 30000);
+  if (window.innerWidth <= 768)
+    document.getElementById('mobNav').style.display = 'flex';
+}
+window.doLogin = doLogin;
+
+// ══════════════════════════════════════════
+//   REGISTER
+// ══════════════════════════════════════════
+function checkPwdStrength(pwd) {
+  const has8   = pwd.length >= 8;
+  const hasUp  = /[A-Z]/.test(pwd);
+  const hasNum = /[0-9]/.test(pwd);
+  const hasSym = /[^a-zA-Z0-9]/.test(pwd);
+  const set = (id, ok) => {
+    const el = document.getElementById(id);
+    if (el) el.style.color = ok ? '#16a34a' : '#94a3b8';
+  };
+  set('r8',  has8);
+  set('rUp', hasUp);
+  set('rN',  hasNum);
+  set('rS',  hasSym);
+  return has8 && hasUp && hasNum && hasSym;
+}
+window.checkPwdStrength = checkPwdStrength;
+
+async function doRegister(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('rErr');
+  errEl.textContent = '';
+  errEl.style.color = '#ef4444';
+
+  const name     = document.getElementById('rName')?.value?.trim();
+  const username = document.getElementById('rUsername')?.value?.trim();
+  const email    = document.getElementById('rEmail')?.value?.trim();
+  const password = document.getElementById('rPwd')?.value;
+
+  if (!name || !username || !email || !password) {
+    errEl.textContent = 'Tutti i campi sono obbligatori';
+    return;
+  }
+  if (!checkPwdStrength(password)) {
+    errEl.textContent = 'Password troppo debole';
+    return;
+  }
+
+  const btn = document.querySelector('#registerForm button[type=submit]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrazione...'; }
+
+  const d = await api('/api/register', 'POST', { name, username, email, password });
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Registrati'; }
+
+  if (d.error) { errEl.textContent = d.error; return; }
+
+  errEl.style.color = '#16a34a';
+  errEl.innerHTML   = `✅ Registrazione completata! Ora puoi accedere.`;
+  switchTab('login');
+}
+window.doRegister = doRegister;
+
+// ══════════════════════════════════════════
+//   FORGOT / RESET PASSWORD
+// ══════════════════════════════════════════
+async function doForgotPassword(e) {
+  e.preventDefault();
+  const email = document.getElementById('forgotEmail')?.value?.trim();
+  const errEl = document.getElementById('forgotErr');
+  if (!email) { errEl.textContent = 'Inserisci la tua email'; return; }
+
+  const btn = document.querySelector('#forgotForm button[type=submit]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+  const d = await api('/api/forgot-password', 'POST', { email });
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i><span>Invia Link Reset</span>'; }
+
+  if (d.error) { errEl.textContent = d.error; return; }
+  errEl.style.color = '#16a34a';
+  errEl.textContent = '✅ Email inviata! Controlla la tua casella.';
+  document.getElementById('forgotEmail').value = '';
+}
+window.doForgotPassword = doForgotPassword;
+
+async function doResetPassword(e) {
+  e.preventDefault();
+  const params   = new URLSearchParams(window.location.search);
+  const resetTok = params.get('token');
+  const newPwd   = document.getElementById('resetPwd')?.value;
+  const errEl    = document.getElementById('resetErr');
+
+  if (!resetTok) { errEl.textContent = 'Token mancante'; return; }
+  if (!newPwd)   { errEl.textContent = 'Inserisci la nuova password'; return; }
+  if (!checkPwdStrength(newPwd)) { errEl.textContent = 'Password troppo debole'; return; }
+
+  const d = await api('/api/reset-password', 'POST', { token: resetTok, new_password: newPwd });
+
+  if (d.error) { errEl.textContent = d.error; return; }
+  errEl.style.color = '#16a34a';
+  errEl.textContent = '✅ Password resettata! Ora puoi accedere.';
+  setTimeout(() => switchTab('login'), 2000);
+}
+window.doResetPassword = doResetPassword;
+
+// ══════════════════════════════════════════
+//   SIDEBAR + TOPBAR UPDATE
+// ══════════════════════════════════════════
+function updateSidebar(u) {
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('sbName',   u.name  || '');
+  set('sbEmail',  u.email || '');
+  set('sbPoints', (u.points || 0) + ' pts');
+  set('sbCo2',    parseFloat(u.co2_saved || 0).toFixed(1) + ' kg');
+  set('topCo2',   parseFloat(u.co2_saved || 0).toFixed(1) + ' kg CO₂');
+  set('topPoints',(u.points || 0) + ' pt');
+
+  if (u.is_admin) {
+    const btn = document.getElementById('adminNavBtn');
+    if (btn) btn.style.display = 'flex';
+  }
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+}
+
+function syncMiiState(u) {
+  if (!u) return;
+  miiState.color = u.avatar_color || '#16a34a';
+  miiState.skin  = u.avatar_skin  || '#fde68a';
+  miiState.eyes  = u.avatar_eyes  || 'normal';
+  miiState.mouth = u.avatar_mouth || 'smile';
+  miiState.hair  = u.avatar_hair  || 'none';
+}
+
+// ══════════════════════════════════════════
+//   MII DRAW (Canvas)
+// ══════════════════════════════════════════
+function drawMii(state, canvasId, size = 120) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = size;
+  canvas.height = size;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r  = size * 0.38;
+  const unit = size / 120;
+
+  ctx.clearRect(0, 0, size, size);
+
+  // sfondo
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+  ctx.fillStyle = state.color || '#16a34a';
+  ctx.fill();
+
+  // testa
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = state.skin || '#fde68a';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth   = size * 0.015;
+  ctx.stroke();
+
+  // ── CAPELLI ──────────────────────────────
+  ctx.save();
+  switch (state.hair) {
+    case 'short':
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.fillStyle = '#92400e'; ctx.fill(); break;
+    case 'long':
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r*1.05, r*1.3, 0, Math.PI*1.1, Math.PI*1.9);
+      ctx.fillStyle = '#78350f'; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.fillStyle = '#92400e'; ctx.fill(); break;
+    case 'curly':
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a)*r*0.7, cy - Math.sin(a)*r*0.7 - r*0.2, r*0.25, 0, Math.PI*2);
+        ctx.fillStyle = '#d97706'; ctx.fill();
+      }
+      break;
+    case 'bun':
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*1.15, r*0.35, 0, Math.PI*2);
+      ctx.fillStyle = '#92400e'; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.fillStyle = '#92400e'; ctx.fill(); break;
+    case 'mohawk':
+      ctx.beginPath();
+      ctx.moveTo(cx - r*0.2, cy - r*0.7);
+      ctx.lineTo(cx, cy - r*1.5);
+      ctx.lineTo(cx + r*0.2, cy - r*0.7);
+      ctx.fillStyle = '#dc2626'; ctx.fill(); break;
+    case 'wavy':
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.fillStyle = '#b45309'; ctx.fill();
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.arc(cx - r*0.8 + i*r*0.5, cy + r*0.6, r*0.2, 0, Math.PI*2);
+        ctx.fillStyle = '#b45309'; ctx.fill();
+      }
+      break;
+    case 'cap':
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - r*0.55, r*1.1, r*0.25, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#1d4ed8'; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.6, r*0.9, Math.PI, 0);
+      ctx.fillStyle = '#1d4ed8'; ctx.fill(); break;
+    case 'rainbow':
+      ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7'].forEach((c, i) => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r*(1.05 + i*0.07), Math.PI*1.1, Math.PI*1.9);
+        ctx.strokeStyle = c; ctx.lineWidth = size*0.045; ctx.stroke();
+      }); break;
+    case 'gold':
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      ctx.fillStyle = '#f59e0b'; ctx.fill();
+      ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = size*0.12;
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r*0.95, Math.PI, 0);
+      ctx.fillStyle = '#fcd34d'; ctx.fill();
+      ctx.shadowBlur = 0; break;
+    case 'galaxy':
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      const gGrad = ctx.createLinearGradient(cx-r, cy-r, cx+r, cy);
+      gGrad.addColorStop(0, '#4c1d95');
+      gGrad.addColorStop(0.5, '#7c3aed');
+      gGrad.addColorStop(1, '#ec4899');
+      ctx.fillStyle = gGrad; ctx.fill();
+      for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.arc(
+          cx - r*0.7 + Math.random()*r*1.4,
+          cy - r*0.8 + Math.random()*r*0.6,
+          size*0.018, 0, Math.PI*2
+        );
+        ctx.fillStyle = 'white'; ctx.fill();
+      }
+      break;
+    case 'flame':
+      ctx.beginPath();
+      ctx.arc(cx, cy - r*0.1, r, Math.PI, 0);
+      const fGrad = ctx.createLinearGradient(cx, cy-r*1.2, cx, cy-r*0.1);
+      fGrad.addColorStop(0, '#fbbf24');
+      fGrad.addColorStop(0.5, '#f97316');
+      fGrad.addColorStop(1, '#dc2626');
+      ctx.fillStyle = fGrad; ctx.fill(); break;
+    default: break;
+  }
+  ctx.restore();
+
+  // ── OCCHI ────────────────────────────────
+  const eyeY  = cy - r * 0.12;
+  const eyeXL = cx - r * 0.32;
+  const eyeXR = cx + r * 0.32;
+  const eyeR  = r * 0.13;
+
+  ctx.save();
+  switch (state.eyes) {
+    case 'happy':
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.beginPath();
+        ctx.arc(ex, eyeY + eyeR*0.5, eyeR*1.1, Math.PI, 0, true);
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
+      }); break;
+    case 'sleepy':
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR, 0, Math.PI);
+        ctx.fillStyle = '#1e293b'; ctx.fill();
+      }); break;
+    case 'surprised':
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR*1.4, 0, Math.PI*2);
+        ctx.fillStyle = 'white'; ctx.fill();
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2; ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR*0.7, 0, Math.PI*2);
+        ctx.fillStyle = '#1e293b'; ctx.fill();
+      }); break;
+    case 'wink':
+      ctx.beginPath();
+      ctx.arc(eyeXL, eyeY, eyeR, 0, Math.PI*2);
+      ctx.fillStyle = '#1e293b'; ctx.fill();
+      ctx.beginPath();
+      ctx.arc(eyeXR, eyeY + eyeR*0.5, eyeR*1.1, Math.PI, 0, true);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
+      break;
+    case 'cool':
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath();
+      ctx.roundRect(eyeXL - eyeR*1.5, eyeY - eyeR*0.7, eyeR*3, eyeR*1.4, eyeR*0.4);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(eyeXR - eyeR*1.5, eyeY - eyeR*0.7, eyeR*3, eyeR*1.4, eyeR*0.4);
+      ctx.fill(); break;
+    case 'star':
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.font = `${eyeR*2.2}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('⭐', ex, eyeY);
+      }); break;
+    case 'heart':
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.font = `${eyeR*2.2}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('❤️', ex, eyeY);
+      }); break;
+    case 'laser':
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR, 0, Math.PI*2);
+        ctx.fillStyle = '#ef4444'; ctx.fill();
+        ctx.shadowColor = '#ef4444'; ctx.shadowBlur = size*0.1;
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR*0.4, 0, Math.PI*2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.shadowBlur = 0;
+      }); break;
+    default:
+      [eyeXL, eyeXR].forEach(ex => {
+        ctx.beginPath();
+        ctx.arc(ex, eyeY, eyeR, 0, Math.PI*2);
+        ctx.fillStyle = '#1e293b'; ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ex + eyeR*0.3, eyeY - eyeR*0.3, eyeR*0.3, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
+      });
+  }
+  ctx.restore();
+
+  // ── BOCCA ────────────────────────────────
+  const mouthY = cy + r * 0.32;
+  ctx.save();
+  switch (state.mouth) {
+    case 'grin':
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - r*0.08, r*0.38, 0.15, Math.PI - 0.15);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - r*0.08, r*0.38, 0.15, Math.PI - 0.15);
+      ctx.lineTo(cx - r*0.37, mouthY - r*0.08);
+      ctx.fillStyle = '#fca5a5'; ctx.fill(); break;
+    case 'open':
+      ctx.beginPath();
+      ctx.ellipse(cx, mouthY, r*0.22, r*0.15, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#1e293b'; ctx.fill(); break;
+    case 'smirk':
+      ctx.beginPath();
+      ctx.moveTo(cx - r*0.2, mouthY);
+      ctx.quadraticCurveTo(cx + r*0.1, mouthY - r*0.1, cx + r*0.3, mouthY - r*0.05);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke(); break;
+    case 'tongue':
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - r*0.05, r*0.3, 0, Math.PI);
+      ctx.fillStyle = '#1e293b'; ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx, mouthY + r*0.12, r*0.16, r*0.13, 0, 0, Math.PI*2);
+      ctx.fillStyle = '#f87171'; ctx.fill(); break;
+    case 'sad':
+      ctx.beginPath();
+      ctx.arc(cx, mouthY + r*0.25, r*0.32, Math.PI + 0.3, -0.3);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke(); break;
+    case 'rainbow':
+      ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6'].forEach((c, i) => {
+        ctx.beginPath();
+        ctx.arc(cx, mouthY - r*0.05, r*(0.28 + i*0.04), 0.2, Math.PI - 0.2);
+        ctx.strokeStyle = c; ctx.lineWidth = unit*2; ctx.stroke();
+      }); break;
+    case 'fire':
+      ctx.font = `${r*0.55}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🔥', cx, mouthY + r*0.05); break;
+    default:
+      ctx.beginPath();
+      ctx.arc(cx, mouthY - r*0.05, r*0.32, 0.2, Math.PI - 0.2);
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = unit*2.5; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════
+//   MII BUILDER HELPERS
+// ══════════════════════════════════════════
+function pickMii(cat, val, el) {
+  const itemId = parseInt(el.dataset.itemId);
+  if (itemId && !ownedItems.includes(itemId)) {
+    showN('🔒 Acquista questo oggetto nello Shop!', 'warning');
+    return;
+  }
+  miiState[cat] = val;
+  document.querySelectorAll(`[data-cat="${cat}"]`).forEach(o => o.classList.remove('active','sel'));
+  el.classList.add('active', 'sel');
+  drawMii(miiState, 'miiCanvas', 120);
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+}
+window.pickMii = pickMii;
+
+function pickColor(val, el) {
+  miiState.color = val;
+  el.closest('.color-row')?.querySelectorAll('.color-swatch')
+    .forEach(o => o.classList.remove('active','sel'));
+  el.classList.add('active', 'sel');
+  drawMii(miiState, 'miiCanvas', 120);
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+}
+window.pickColor = pickColor;
+
+function pickSkin(val, el) {
+  miiState.skin = val;
+  el.closest('.color-row')?.querySelectorAll('.color-swatch')
+    .forEach(o => o.classList.remove('active','sel'));
+  el.classList.add('active', 'sel');
+  drawMii(miiState, 'miiCanvas', 120);
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+}
+window.pickSkin = pickSkin;
+
+// ══════════════════════════════════════════
+//   ACTIVITIES TYPE SELECT
+// ══════════════════════════════════════════
+function selectType(val, btn) {
+  document.getElementById('actType').value = val;
+  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('active','sel'));
+  btn.classList.add('active', 'sel');
+  onTypeChange(val);
+}
+window.selectType = selectType;
+
+function onTypeChange(val) {
+  const kmG  = document.getElementById('kmGroup');
+  const hrG  = document.getElementById('hoursGroup');
+  const mapG = document.getElementById('mapGroup');
+  const kbTypes  = ['Bici','Treno','Bus','Carpooling'];
+  const hrTypes  = ['Remoto','Videocall'];
+  const mapTypes = ['Bici','Treno','Bus','Carpooling'];
+
+  if (kmG)  kmG.style.display  = kbTypes.includes(val)  ? 'block' : 'none';
+  if (hrG)  hrG.style.display  = hrTypes.includes(val)  ? 'block' : 'none';
+  if (mapG) mapG.style.display = mapTypes.includes(val) ? 'block' : 'none';
+
+  if (mapTypes.includes(val)) initMap();
+}
+window.onTypeChange = onTypeChange;
+
+// ══════════════════════════════════════════
+//   DASHBOARD
+// ══════════════════════════════════════════
+async function loadDashboard() {
+  const stats = await api('/api/stats');
+  if (stats.error) return;
+
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('co2Total',   parseFloat(stats.co2_saved  || 0).toFixed(1));
+  set('co2Week',    parseFloat(stats.co2_week   || 0).toFixed(1));
+  set('co2Month',   parseFloat(stats.co2_month  || 0).toFixed(1));
+  set('userPoints', stats.points || 0);
+  set('topCo2',     parseFloat(stats.co2_saved  || 0).toFixed(1) + ' kg CO₂');
+  set('topPoints',  (stats.points || 0) + ' pt');
+
+  const yearly = await api('/api/yearly');
+  if (!yearly.error) renderYearlyChart(yearly);
+
+  const acts = await api('/api/activities');
+  const el   = document.getElementById('recentActs');
+  if (el && !acts.error) {
+    if (!acts.length) {
+      el.innerHTML = '<div class="empty"><div class="ei">🌱</div><p>Nessuna attività ancora.<br>Inizia a tracciare!</p></div>';
+    } else {
+      const icons = { Bici:'🚴', Treno:'🚂', Bus:'🚌', Carpooling:'🚗', Remoto:'🏠', Videocall:'💻' };
+      el.innerHTML = acts.slice(0, 5).map(a => `
+        <div class="act-item">
+          <div class="act-icon">${icons[a.type] || '🌱'}</div>
+          <div class="act-info">
+            <div class="act-type">${a.type}${a.note ? ' — ' + a.note : ''}</div>
+            <div class="act-meta">
+              ${a.km > 0 ? a.km + ' km · ' : ''}
+              ${a.hours > 0 ? a.hours + 'h · ' : ''}
+              ${new Date(a.date).toLocaleDateString('it-IT')}
+            </div>
+          </div>
+          <div class="act-co2">-${a.co2_saved} kg</div>
+        </div>`).join('');
+    }
+  }
+
+  const badges = await api('/api/badges');
+  const bEl    = document.getElementById('dashBadges');
+  if (bEl && !badges.error) {
+    const unlocked = badges.filter(b => b.unlocked);
+    if (!unlocked.length) {
+      bEl.innerHTML = '<div class="empty"><p>Nessun badge ancora 🏅</p></div>';
+    } else {
+      bEl.innerHTML = unlocked.map(b => `
+        <div class="badge-item unlocked" title="${b.name}: ${b.desc}">
+          <div class="badge-icon">${b.icon}</div>
+          <div class="badge-name">${b.name}</div>
+        </div>`).join('');
+    }
+  }
+}
+
+function renderYearlyChart(data) {
+  const canvas = document.getElementById('yearlyChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = canvas.offsetWidth  || 600;
+  canvas.height = canvas.offsetHeight || 200;
+  const w = canvas.width, h = canvas.height;
+  const pad = { t:20, r:20, b:40, l:50 };
+
+  ctx.clearRect(0, 0, w, h);
+
+  if (!data.length) {
+    ctx.fillStyle = '#94a3b8';
+    ctx.font      = '14px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nessun dato disponibile', w/2, h/2);
+    return;
+  }
+
+  const maxCo2 = Math.max(...data.map(d => parseFloat(d.co2)), 1);
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  const barGap = chartW / data.length;
+  const barW   = barGap * 0.6;
+
+  ctx.strokeStyle = 'rgba(148,163,184,0.2)';
+  ctx.lineWidth   = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(p => {
+    const y = pad.t + chartH * (1 - p);
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText((maxCo2 * p).toFixed(1), pad.l - 5, y + 4);
+  });
+
+  data.forEach((d, i) => {
+    const x    = pad.l + i * barGap + (barGap - barW) / 2;
+    const barH = (parseFloat(d.co2) / maxCo2) * chartH;
+    const y    = pad.t + chartH - barH;
+    const grad = ctx.createLinearGradient(0, y, 0, y + barH);
+    grad.addColorStop(0, '#22c55e');
+    grad.addColorStop(1, '#16a34a');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, barH, 4);
+    ctx.fill();
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.month, x + barW/2, h - pad.b + 16);
+    if (parseFloat(d.co2) > 0) {
+      ctx.fillStyle = '#22c55e';
+      ctx.font = '9px Inter, sans-serif';
+      ctx.fillText(parseFloat(d.co2).toFixed(1), x + barW/2, y - 4);
+    }
+  });
 }
 
 // ══════════════════════════════════════════
 //   ACTIVITIES
 // ══════════════════════════════════════════
-function selAct(type,btn) {
-  curAct=type;
-  document.querySelectorAll('.at-btn').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
-  const r=RATES[type], form=document.getElementById('logForm');
-  form.style.display='block';
-  document.getElementById('logTitle').textContent=`${ICONS[type]} Stai registrando: ${type}`;
-  document.getElementById('kmRow').style.display=r.t==='k'?'block':'none';
-  document.getElementById('hrRow').style.display=r.t==='h'?'block':'none';
-  document.getElementById('cpRow').style.display=type==='Carpooling'?'block':'none';
-  ['iKm','iHr','iNote','iCp'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  updPreview();
-  form.scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-function updPreview() {
-  if (!curAct) return;
-  const r=RATES[curAct];
-  const km=parseFloat(document.getElementById('iKm').value)||0;
-  const hr=parseFloat(document.getElementById('iHr').value)||0;
-  const val=r.t==='k'?km:hr;
-  document.getElementById('pCO2').textContent=(val*r.co2).toFixed(2);
-  document.getElementById('pPts').textContent=Math.round(val*r.pts);
-}
-function cancelAct() {
-  const form=document.getElementById('logForm');
-  form.style.opacity='0'; form.style.transform='translateY(-8px)';
-  setTimeout(()=>{ form.style.display='none'; form.style.opacity=''; form.style.transform=''; },200);
-  document.querySelectorAll('.at-btn').forEach(b=>b.classList.remove('sel'));
-  curAct=null;
-}
-async function saveAct() {
-  const km=parseFloat(document.getElementById('iKm').value)||0;
-  const hr=parseFloat(document.getElementById('iHr').value)||0;
-  const note=document.getElementById('iNote').value;
-  const cpEl=document.getElementById('iCp');
-  const cp=cpEl?cpEl.value:'';
-  const r=RATES[curAct];
-  if (r.t==='k'&&km===0) return showN('⚠️ Inserisci i km!','error');
-  if (r.t==='h'&&hr===0) return showN('⚠️ Inserisci le ore!','error');
-  const btn=document.querySelector('#logForm .btn-save');
-  if (btn) { btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>Salvataggio...'; }
-  const d=await api('/api/activity','POST',{type:curAct,km,hours:hr,note,carsharing_with:cp});
-  if (btn) { btn.disabled=false; btn.innerHTML='<i class="fas fa-check"></i>Salva'; }
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN(`✅ +${d.points} punti! 🌱 ${d.co2_saved}kg CO₂ salvata`,'success');
-  cancelAct(); loadAll();
-}
-function actHTML(acts) {
-  if (!acts||!acts.length) return `<div class="empty"><div class="ei">🌱</div><p>Nessuna attività ancora.<br>Inizia a tracciare il tuo impatto!</p></div>`;
-  return acts.map((a,i)=>`
-    <div class="act-item" style="animation:fadeSlide .3s ease ${i*.05}s both">
-      <div class="act-icon-wrap">${ICONS[a.type]||'📌'}</div>
-      <div class="act-detail">
-        <div class="act-name">${a.type}</div>
-        <div class="act-sub">${[a.km>0?a.km+' km':'',a.hours>0?a.hours+' ore':'',a.note||''].filter(Boolean).join(' · ')}</div>
-        <div class="act-sub">${new Date(a.date).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})}</div>
+async function loadActivities() {
+  const acts = await api('/api/activities');
+  const el   = document.getElementById('actList');
+  if (!el || acts.error) return;
+
+  if (!acts.length) {
+    el.innerHTML = '<div class="empty"><div class="ei">🌱</div><p>Nessuna attività.<br>Aggiungine una!</p></div>';
+    return;
+  }
+
+  const icons = { Bici:'🚴', Treno:'🚂', Bus:'🚌', Carpooling:'🚗', Remoto:'🏠', Videocall:'💻' };
+  el.innerHTML = acts.map(a => `
+    <div class="act-item">
+      <div class="act-icon">${icons[a.type] || '🌱'}</div>
+      <div class="act-info">
+        <div class="act-type">${a.type}${a.note ? ' — ' + a.note : ''}</div>
+        <div class="act-meta">
+          ${a.km > 0 ? a.km + ' km · ' : ''}
+          ${a.hours > 0 ? a.hours + 'h · ' : ''}
+          ${new Date(a.date).toLocaleDateString('it-IT')}
+          ${a.from_addr ? '· 📍 ' + a.from_addr : ''}
+        </div>
       </div>
-      <div class="act-tags">
-        <span class="tag tag-g">-${a.co2_saved} kg</span>
-        <span class="tag tag-y">+${a.points} pt</span>
+      <div style="text-align:right">
+        <div class="act-co2">-${a.co2_saved} kg</div>
+        <div style="font-size:11px;color:var(--yellow)">+${a.points} pts</div>
       </div>
     </div>`).join('');
 }
-async function loadActs() {
-  const acts=await api('/api/activities');
-  const html=actHTML(!acts||acts.error?[]:acts);
-  document.getElementById('recentActs').innerHTML=html;
-  document.getElementById('allActs').innerHTML=html;
+
+async function logActivity(e) {
+  e.preventDefault();
+  const type      = document.getElementById('actType')?.value;
+  const km        = document.getElementById('actKm')?.value    || 0;
+  const hours     = document.getElementById('actHours')?.value || 0;
+  const note      = document.getElementById('actNote')?.value  || '';
+  const from_addr = document.getElementById('fromAddr')?.value || '';
+  const to_addr   = document.getElementById('toAddr')?.value   || '';
+
+  if (!type) return showN('❌ Seleziona un tipo', 'error');
+
+  const btn = document.querySelector('#actForm button[type=submit]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+  const d = await api('/api/activities', 'POST', { type, km, hours, note, from_addr, to_addr });
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Registra'; }
+  if (d.error) return showN('❌ ' + d.error, 'error');
+
+  showN(`✅ +${d.co2_saved} kg CO₂! +${d.points} punti 🎉`, 'success');
+  document.getElementById('actForm')?.reset();
+  document.getElementById('actType').value             = '';
+  document.getElementById('kmGroup').style.display     = 'none';
+  document.getElementById('hoursGroup').style.display  = 'none';
+  document.getElementById('mapGroup').style.display    = 'none';
+  document.querySelectorAll('.at-btn').forEach(b => b.classList.remove('active','sel'));
+
+  if (myProfile) {
+    myProfile.points   = (myProfile.points   || 0) + d.points;
+    myProfile.co2_saved= (parseFloat(myProfile.co2_saved) || 0) + parseFloat(d.co2_saved);
+    updateSidebar(myProfile);
+  }
+  await loadActivities();
 }
-window.selAct=selAct; window.updPreview=updPreview; window.cancelAct=cancelAct; window.saveAct=saveAct;
+window.logActivity = logActivity;
 
 // ══════════════════════════════════════════
-//   BADGES
+//   MAPPA (Leaflet + Nominatim)
 // ══════════════════════════════════════════
-async function loadBadges() {
-  const bs=await api('/api/badges'); if (!bs||bs.error) return;
-  document.getElementById('sBadges').textContent=bs.filter(b=>b.unlocked).length;
-  document.getElementById('badgeList').innerHTML=bs.map((b,i)=>`
-    <div class="badge-item ${b.unlocked?'on':'off'}" style="animation:fadeSlide .3s ease ${i*.07}s both">
-      <div class="badge-icon">${b.icon}</div>
-      <div><div class="badge-name">${b.name}</div><div class="badge-desc">${b.desc}</div></div>
-    </div>`).join('');
+function initMap() {
+  if (mapInitialized || !window.L) return;
+  mapInitialized = true;
+  mapInstance = L.map('map').setView([45.4642, 9.1900], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(mapInstance);
 }
+
+async function searchRoute() {
+  const from = document.getElementById('fromAddr')?.value?.trim();
+  const to   = document.getElementById('toAddr')?.value?.trim();
+  if (!from || !to) return showN('❌ Inserisci partenza e arrivo', 'error');
+
+  const geocode = async q => {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`
+    );
+    const d = await r.json();
+    return d[0] ? [parseFloat(d[0].lat), parseFloat(d[0].lon)] : null;
+  };
+
+  const [a, b] = await Promise.all([geocode(from), geocode(to)]);
+  if (!a) return showN('❌ Partenza non trovata', 'error');
+  if (!b) return showN('❌ Arrivo non trovato',   'error');
+
+  if (!mapInitialized) initMap();
+  if (routeLayer) mapInstance.removeLayer(routeLayer);
+
+  routeLayer = L.polyline([a, b], { color:'#22c55e', weight:4 }).addTo(mapInstance);
+  mapInstance.fitBounds(routeLayer.getBounds(), { padding:[30,30] });
+
+  const R    = 6371;
+  const dLat = (b[0]-a[0]) * Math.PI/180;
+  const dLon = (b[1]-a[1]) * Math.PI/180;
+  const aa   = Math.sin(dLat/2)**2 +
+               Math.cos(a[0]*Math.PI/180) * Math.cos(b[0]*Math.PI/180) *
+               Math.sin(dLon/2)**2;
+  const km   = R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa));
+
+  const kmEl = document.getElementById('actKm');
+  if (kmEl) kmEl.value = km.toFixed(1);
+  showN(`📍 Distanza: ${km.toFixed(1)} km`, 'success');
+}
+window.searchRoute = searchRoute;
+
+async function getSuggestions(fieldId, query) {
+  const sugg = document.getElementById(fieldId + 'Sugg');
+  if (!sugg) return;
+  if (query.length < 3) { sugg.innerHTML = ''; return; }
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
+    );
+    const d = await r.json();
+    sugg.innerHTML = d.map(p => `
+      <div class="addr-item"
+        onclick="selectAddr('${fieldId}','${p.display_name.replace(/'/g, "\\'")}')">
+        📍 ${p.display_name}
+      </div>`).join('');
+  } catch {}
+}
+window.getSuggestions = getSuggestions;
+
+function selectAddr(fieldId, val) {
+  const el   = document.getElementById(fieldId);
+  const sugg = document.getElementById(fieldId + 'Sugg');
+  if (el)   el.value       = val;
+  if (sugg) sugg.innerHTML = '';
+}
+window.selectAddr = selectAddr;
 
 // ══════════════════════════════════════════
 //   CHALLENGES
 // ══════════════════════════════════════════
-function togCh() {
-  const f=document.getElementById('chForm'), visible=f.style.display!=='none';
-  if (visible) { f.style.opacity='0'; f.style.transform='translateY(-6px)'; setTimeout(()=>{ f.style.display='none'; f.style.opacity=''; f.style.transform=''; },200); }
-  else f.style.display='block';
-}
-async function createCh() {
-  const title=document.getElementById('cTitle').value.trim();
-  const target=parseFloat(document.getElementById('cTarget').value);
-  const points=parseInt(document.getElementById('cPoints').value);
-  const date=document.getElementById('cDate').value;
-  if (!title||!target||!points||!date) return showN('⚠️ Compila tutti i campi!','error');
-  const d=await api('/api/challenges','POST',{title,description:document.getElementById('cDesc').value,co2_target:target,points_reward:points,end_date:date,is_public:document.getElementById('cPub').checked});
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN('🚀 Sfida creata!','success'); togCh(); loadCh();
-}
-async function loadCh() {
-  const list=await api('/api/challenges');
-  document.getElementById('chList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">🔥</div><p>Nessuna sfida ancora.</p></div>`
-    :list.map((c,i)=>`
-      <div class="ch-item" style="animation:fadeSlide .3s ease ${i*.06}s both">
-        <div class="ch-ico">🚀</div>
-        <div class="ch-info">
-          <h4>${c.title} ${c.is_public?'🌍':'🔒'}</h4>
-          <p>${c.description||''}</p>
-          <div class="ch-tags">
-            <span class="ch-tag">🎯 ${c.co2_target} kg</span>
-            <span class="ch-tag">🏆 ${c.points_reward} pt</span>
-            <span class="ch-tag">📅 ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>
-          </div>
+async function loadChallenges() {
+  const data = await api('/api/challenges');
+  const el   = document.getElementById('challengeList');
+  if (!el || data.error) return;
+
+  if (!data.length) {
+    el.innerHTML = '<div class="empty"><div class="ei">🏆</div><p>Nessuna sfida.<br>Creane una!</p></div>';
+    return;
+  }
+
+  el.innerHTML = data.map(c => {
+    const end     = c.end_date ? new Date(c.end_date).toLocaleDateString('it-IT') : '∞';
+    const expired = c.end_date && new Date(c.end_date) < new Date();
+    return `
+      <div class="challenge-item ${expired ? 'expired' : ''}">
+        <div class="ch-header">
+          <div class="ch-title">${c.title}</div>
+          ${c.is_public
+            ? '<span class="pill pill-green">🌍 Pubblica</span>'
+            : '<span class="pill pill-gray">🔒 Privata</span>'}
         </div>
-      </div>`).join('');
+        ${c.description ? `<div class="ch-desc">${c.description}</div>` : ''}
+        <div class="ch-meta">
+          ${c.co2_target > 0 ? `🎯 Target: <b>${c.co2_target} kg CO₂</b> · ` : ''}
+          ${c.points_reward > 0 ? `⭐ Premio: <b>${c.points_reward} pts</b> · ` : ''}
+          📅 Scadenza: <b>${end}</b> · 👤 ${c.creator_name || 'Anonimo'}
+        </div>
+      </div>`;
+  }).join('');
 }
-window.togCh=togCh; window.createCh=createCh;
+
+async function createChallenge(e) {
+  e.preventDefault();
+  const title         = document.getElementById('chTitle')?.value?.trim();
+  const description   = document.getElementById('chDesc')?.value?.trim();
+  const co2_target    = document.getElementById('chCo2')?.value    || 0;
+  const points_reward = document.getElementById('chPts')?.value    || 0;
+  const end_date      = document.getElementById('chDate')?.value   || null;
+  const is_public     = document.getElementById('chPublic')?.checked !== false;
+
+  if (!title) return showN('❌ Titolo obbligatorio', 'error');
+
+  const d = await api('/api/challenges', 'POST', {
+    title, description, co2_target, points_reward, end_date, is_public
+  });
+  if (d.error) return showN('❌ ' + d.error, 'error');
+
+  showN('🏆 Sfida creata!', 'success');
+  document.getElementById('challengeForm')?.reset();
+  await loadChallenges();
+}
+window.createChallenge = createChallenge;
 
 // ══════════════════════════════════════════
 //   LEADERBOARD
 // ══════════════════════════════════════════
-async function loadLb() {
-  const b=await api('/api/leaderboard'); if (!b||b.error) return;
-  document.getElementById('lbList').innerHTML=b.map((u,i)=>`
-    <div class="lb-row ${i===0?'r1':i===1?'r2':i===2?'r3':''}" style="animation:fadeSlide .3s ease ${i*.06}s both">
-      <span class="lb-rank">${['🥇','🥈','🥉'][i]||'#'+(i+1)}</span>
-      <div class="lb-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},40)}</div>
-      <div class="lb-name">
-        <div class="lb-uname">${u.name||u.email}</div>
-        ${u.username?`<div class="lb-username">@${u.username}</div>`:''}
-      </div>
-      <span class="lb-co2">${parseFloat(u.co2_saved||0).toFixed(1)} kg</span>
-      <span class="lb-pts">${u.points||0} pt</span>
-    </div>`).join('');
-}
+async function loadLeaderboard() {
+  const data = await api('/api/leaderboard');
+  const el   = document.getElementById('lbList');
+  if (!el || data.error) return;
 
-// ══════════════════════════════════════════
-//   YEARLY
-// ══════════════════════════════════════════
-async function loadYearly() {
-  const data=await api('/api/yearly'); if (!data||data.error) return;
-  const max=Math.max(...data.map(d=>parseFloat(d.co2)||0),1);
-  document.getElementById('yrList').innerHTML=data.length===0
-    ?`<div class="empty"><div class="ei">📅</div><p>Nessun dato per quest'anno ancora.</p></div>`
-    :data.map((m,i)=>`
-      <div class="yr-row" style="animation:fadeSlide .3s ease ${i*.05}s both">
-        <span class="yr-month">${m.month}</span>
-        <div class="yr-bar"><div class="yr-fill" style="width:${Math.round(parseFloat(m.co2)/max*100)}%"></div></div>
-        <span class="yr-co2">${parseFloat(m.co2).toFixed(1)} kg</span>
-        <span class="yr-pts">${m.points} pt</span>
-      </div>`).join('');
+  if (!data.length) {
+    el.innerHTML = '<div class="empty"><p>Nessun utente in classifica.</p></div>';
+    return;
+  }
+
+  const medals = ['🥇','🥈','🥉'];
+  el.innerHTML = data.map((u, i) => `
+    <div class="lb-item ${i < 3 ? 'top' : ''}">
+      <div class="lb-rank">${medals[i] || (i + 1)}</div>
+      <canvas id="lbav_${u.id}" width="40" height="40"
+        style="border-radius:10px;flex-shrink:0"></canvas>
+      <div class="lb-info">
+        <div class="lb-name">${u.name}</div>
+        <div class="lb-user">@${u.username || ''}</div>
+      </div>
+      <div class="lb-stats">
+        <div class="lb-co2">🌱 ${parseFloat(u.co2_saved || 0).toFixed(1)} kg</div>
+        <div class="lb-pts">⭐ ${u.points || 0} pts</div>
+      </div>
+    </div>`).join('');
+
+  data.forEach(u => drawMii(
+    { color: u.avatar_color||'#16a34a', skin: u.avatar_skin||'#fde68a',
+      eyes:  u.avatar_eyes||'normal',   mouth: u.avatar_mouth||'smile',
+      hair:  u.avatar_hair||'none' },
+    `lbav_${u.id}`, 40
+  ));
 }
 
 // ══════════════════════════════════════════
 //   SOCIAL
 // ══════════════════════════════════════════
-async function loadSocial() {
-  loadNotifications();
-  loadFollowers();
-  loadFollowing();
-  loadGroups();
-}
-
-// Notifiche
-async function loadNotifications() {
-  const notifs=await api('/api/notifications');
-  document.getElementById('notifList').innerHTML=!notifs||notifs.error||notifs.length===0
-    ?`<div class="empty"><div class="ei">🔔</div><p>Nessuna notifica ancora.</p></div>`
-    :notifs.map((n,i)=>`
-      <div class="notif-item ${n.is_read?'':'unread'}" style="animation:fadeSlide .25s ease ${i*.04}s both">
-        <div class="notif-item-icon ni-${n.type}">
-          ${{follow:'👤',warn:'⚠️',ban:'⛔',unban:'✅',carsharing:'🚗'}[n.type]||'📢'}
-        </div>
-        <div class="notif-item-body">
-          <div class="notif-item-msg">${n.message}</div>
-          <div class="notif-item-time">${timeAgo(n.created_at)}</div>
-        </div>
-      </div>`).join('');
-}
-
-async function markAllRead() {
-  await api('/api/notifications/read','PATCH');
-  loadNotifications(); loadNotifCount();
-}
-
-async function loadNotifCount() {
-  const notifs=await api('/api/notifications');
-  if (!notifs||notifs.error) return;
-  const unread=notifs.filter(n=>!n.is_read).length;
-  const dot=document.getElementById('notifDot');
-  const count=document.getElementById('notifCount');
-  if (dot) dot.style.display=unread>0?'block':'none';
-  if (count) { count.style.display=unread>0?'flex':'none'; count.textContent=unread; }
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function timeAgo(date) {
-  const s=Math.floor((Date.now()-new Date(date))/1000);
-  if (s<60) return 'Adesso';
-  if (s<3600) return Math.floor(s/60)+' min fa';
-  if (s<86400) return Math.floor(s/3600)+' ore fa';
-  return Math.floor(s/86400)+' giorni fa';
+  const diff = Math.floor((Date.now() - date) / 1000);
+  if (diff < 60)    return diff + 's fa';
+  if (diff < 3600)  return Math.floor(diff / 60) + 'min fa';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h fa';
+  return Math.floor(diff / 86400) + 'gg fa';
 }
 
-// Cerca utenti
-let searchTimer;
-function searchUsers() {
-  clearTimeout(searchTimer);
-  const q=document.getElementById('searchUser').value.trim();
-  if (!q) { document.getElementById('searchResults').innerHTML=''; return; }
-  searchTimer=setTimeout(async()=>{
-    const r=await api(`/api/user/${q}`);
-    document.getElementById('searchResults').innerHTML=r.error
-      ?`<div class="empty" style="padding:20px"><div class="ei" style="font-size:32px">🔍</div><p>Utente non trovato.</p></div>`
-      :userCardHTML(r);
-  },400);
+async function loadSocial() {
+  const [posts, users] = await Promise.all([
+    api('/api/social/posts'),
+    api('/api/social/users')
+  ]);
+
+  const feed = document.getElementById('socialFeed');
+  if (feed && !posts.error) {
+    if (!posts.length) {
+      feed.innerHTML = '<div class="empty"><div class="ei">💬</div><p>Nessun post ancora.<br>Sii il primo!</p></div>';
+    } else {
+      feed.innerHTML = posts.map(p => `
+        <div class="post-card" id="post_${p.id}">
+          <div class="post-header">
+            <canvas id="pav_${p.id}" width="40" height="40"
+              style="border-radius:10px;flex-shrink:0"></canvas>
+            <div class="post-meta">
+              <div class="post-author">${p.author_name}</div>
+              <div class="post-time">@${p.author_username || ''} · ${timeAgo(new Date(p.created_at))}</div>
+            </div>
+            ${p.author_id === myProfile?.id
+              ? `<button class="btn-icon danger-btn ml-auto" onclick="deletePost(${p.id})">🗑️</button>`
+              : ''}
+          </div>
+          <div class="post-content">${escHtml(p.content)}</div>
+          ${p.image_url ? `<img src="${p.image_url}" class="post-img" alt="post" onerror="this.style.display='none'">` : ''}
+          <div class="post-actions">
+            <button class="btn-like ${p.liked_by_me ? 'liked' : ''}" onclick="toggleLike(${p.id})">
+              ${p.liked_by_me ? '❤️' : '🤍'} ${p.likes_count || 0}
+            </button>
+            <button class="btn-comment" onclick="toggleComments(${p.id})">
+              💬 ${p.comments_count || 0}
+            </button>
+          </div>
+          <div class="comments-section" id="comm_${p.id}" style="display:none"></div>
+        </div>`).join('');
+
+      posts.forEach(p => drawMii(
+        { color: p.avatar_color||'#16a34a', skin: p.avatar_skin||'#fde68a',
+          eyes:  p.avatar_eyes||'normal',   mouth: p.avatar_mouth||'smile',
+          hair:  p.avatar_hair||'none' },
+        `pav_${p.id}`, 40
+      ));
+    }
+  }
+
+  const uList = document.getElementById('userList');
+  if (uList && !users.error) {
+    if (!users.length) {
+      uList.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px">Nessun altro utente.</p>';
+    } else {
+      uList.innerHTML = users.map(u => `
+        <div class="user-item">
+          <canvas id="uav_${u.id}" width="32" height="32"
+            style="border-radius:8px;flex-shrink:0"></canvas>
+          <div class="user-info">
+            <div class="user-name">${u.name}</div>
+            <div class="user-un">@${u.username || ''}</div>
+          </div>
+          <button class="btn-follow ${u.following ? 'following' : ''}"
+            onclick="toggleFollow(${u.id},this)">
+            ${u.following ? '✅' : '➕'}
+          </button>
+        </div>`).join('');
+
+      users.forEach(u => drawMii(
+        { color: u.avatar_color||'#16a34a', skin: u.avatar_skin||'#fde68a',
+          eyes:  u.avatar_eyes||'normal',   mouth: u.avatar_mouth||'smile',
+          hair:  u.avatar_hair||'none' },
+        `uav_${u.id}`, 32
+      ));
+    }
+  }
 }
 
-function userCardHTML(u) {
-  return `
-    <div class="user-card" id="uc-${u.id}">
-      <div class="uc-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},44)}</div>
-      <div class="uc-info">
-        <div class="uc-name">${u.name||u.username}</div>
-        <div class="uc-username">@${u.username||'—'}</div>
-        <div class="uc-pts">⭐ ${u.points||0} pt</div>
-      </div>
-      <button class="btn-follow ${u.isFollowing?'following':''}" id="fbtn-${u.id}"
-        onclick="toggleFollow(${u.id}, ${u.isFollowing})">
-        ${u.isFollowing?'✓ Seguito':'+ Segui'}
-      </button>
+async function createPost(e) {
+  e.preventDefault();
+  const content  = document.getElementById('postContent')?.value?.trim();
+  const imageUrl = document.getElementById('postImage')?.value?.trim() || '';
+  if (!content) return showN('❌ Scrivi qualcosa!', 'error');
+
+  const btn = document.querySelector('#postForm button[type=submit]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+  const d = await api('/api/social/posts', 'POST', { content, image_url: imageUrl });
+  if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Pubblica'; }
+  if (d.error) return showN('❌ ' + d.error, 'error');
+
+  showN('📤 Post pubblicato!', 'success');
+  document.getElementById('postContent').value = '';
+  document.getElementById('postImage').value   = '';
+  await loadSocial();
+}
+window.createPost = createPost;
+
+async function deletePost(postId) {
+  showConfirm('Elimina post', 'Eliminare questo post?', async () => {
+    const d = await api(`/api/social/posts/${postId}`, 'DELETE');
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🗑️ Post eliminato', 'success');
+    await loadSocial();
+  }, '🗑️');
+}
+window.deletePost = deletePost;
+
+async function toggleLike(postId) {
+  const d = await api(`/api/social/posts/${postId}/like`, 'POST');
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  const btn = document.querySelector(`#post_${postId} .btn-like`);
+  if (btn) {
+    btn.classList.toggle('liked', d.liked);
+    btn.textContent = (d.liked ? '❤️' : '🤍') + ' ' + d.likes_count;
+  }
+}
+window.toggleLike = toggleLike;
+
+async function toggleFollow(userId, btn) {
+  const d = await api(`/api/social/follow/${userId}`, 'POST');
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  btn.classList.toggle('following', d.following);
+  btn.textContent = d.following ? '✅' : '➕';
+  showN(d.following ? '✅ Seguito!' : '➖ Smesso di seguire', 'success');
+}
+window.toggleFollow = toggleFollow;
+
+async function toggleComments(postId) {
+  const el = document.getElementById(`comm_${postId}`);
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    const d = await api(`/api/social/posts/${postId}/comments`);
+    if (d.error) return;
+    el.innerHTML = `
+      ${d.map(c => `
+        <div class="comment-item">
+          <span class="comment-author">${c.author_name}:</span>
+          <span class="comment-text">${escHtml(c.content)}</span>
+          <span class="comment-time">${timeAgo(new Date(c.created_at))}</span>
+          ${c.author_id === myProfile?.id
+            ? `<button class="btn-icon danger-btn" onclick="deleteComment(${postId},${c.id})">✕</button>`
+            : ''}
+        </div>`).join('')}
+      <div class="comment-form">
+        <input id="ci_${postId}" class="input-sm"
+          placeholder="Aggiungi un commento..."
+          onkeydown="if(event.key==='Enter'){addComment(${postId});event.preventDefault();}">
+        <button class="btn-sm" onclick="addComment(${postId})">💬</button>
+      </div>`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+window.toggleComments = toggleComments;
+
+async function addComment(postId) {
+  const el      = document.getElementById(`ci_${postId}`);
+  const content = el?.value?.trim();
+  if (!content) return;
+  const d = await api(`/api/social/posts/${postId}/comments`, 'POST', { content });
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  el.value = '';
+  const cb = document.querySelector(`#post_${postId} .btn-comment`);
+  if (cb) cb.textContent = '💬 ' + (d.comments_count || '');
+  // ricarica commenti
+  document.getElementById(`comm_${postId}`).style.display = 'none';
+  await toggleComments(postId);
+}
+window.addComment = addComment;
+
+async function deleteComment(postId, commentId) {
+  const d = await api(`/api/social/comments/${commentId}`, 'DELETE');
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  showN('🗑️ Commento eliminato', 'success');
+  document.getElementById(`comm_${postId}`).style.display = 'none';
+  await toggleComments(postId);
+}
+window.deleteComment = deleteComment;
+
+// ══════════════════════════════════════════
+//   SHOP
+// ══════════════════════════════════════════
+async function loadShop() {
+  const [items, profile] = await Promise.all([
+    api('/api/shop'),
+    api('/api/profile')
+  ]);
+  if (items.error || profile.error) return;
+
+  allShopItems = items;
+  ownedItems   = profile.owned_items || [];
+
+  const shopPts = document.getElementById('shopPoints');
+  if (shopPts) shopPts.textContent = (profile.points || 0) + ' ⭐';
+
+  const cats = [...new Set(items.map(i => i.category))];
+  const el   = document.getElementById('shopGrid');
+  if (!el) return;
+
+  const catLabels = {
+    hair:'💇 Capelli', eyes:'👀 Occhi',
+    mouth:'👄 Bocca',  color:'🎨 Colore', skin:'👤 Pelle'
+  };
+
+  el.innerHTML = cats.map(cat => {
+    const catItems = items.filter(i => i.category === cat);
+    return `
+      <div class="shop-cat">
+        <h3 class="shop-cat-title">${catLabels[cat] || cat}</h3>
+        <div class="shop-items-grid">
+          ${catItems.map(item => {
+            const owned = ownedItems.includes(item.id);
+            return `
+              <div class="shop-item ${owned ? 'owned' : ''} ${item.is_rare ? 'rare' : ''}"
+                onclick="openShopPreview(${item.id})">
+                <div class="shop-item-emoji">${item.emoji}</div>
+                <div class="shop-item-name">${item.name}</div>
+                <div class="shop-item-cost">
+                  ${owned
+                    ? '<span class="owned-badge">✅ Posseduto</span>'
+                    : `<span class="pts-badge">⭐ ${item.cost}</span>`}
+                </div>
+                ${item.is_rare ? '<div class="rare-badge">✨ Raro</div>' : ''}
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openShopPreview(itemId) {
+  const item  = allShopItems.find(i => i.id === itemId);
+  if (!item) return;
+  const owned = ownedItems.includes(item.id);
+  const el    = document.getElementById('shopPreview');
+  if (!el) return;
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <div class="shop-preview-box">
+      <button class="preview-close" onclick="closeShopPreview()">✕</button>
+      <div class="preview-emoji">${item.emoji}</div>
+      <div class="preview-name">${item.name}</div>
+      <div class="preview-desc">${item.description || ''}</div>
+      <div class="preview-cat">Categoria: <b>${item.category}</b></div>
+      ${item.is_rare ? '<div class="preview-rare">✨ Oggetto Raro</div>' : ''}
+      <div class="preview-cost">⭐ ${item.cost} punti</div>
+      ${owned
+        ? '<div class="preview-owned">✅ Già posseduto</div>'
+        : `<button class="btn-buy" onclick="buyItem(${item.id})">🛒 Acquista</button>`}
     </div>`;
 }
+window.openShopPreview = openShopPreview;
 
-async function toggleFollow(userId, isFollowing) {
-  if (isFollowing) {
-    await api(`/api/follow/${userId}`,'DELETE');
-  } else {
-    await api(`/api/follow/${userId}`,'POST');
-  }
-  const btn=document.getElementById(`fbtn-${userId}`);
-  if (btn) {
-    const now=!isFollowing;
-    btn.textContent=now?'✓ Seguito':'+ Segui';
-    btn.classList.toggle('following',now);
-    btn.onclick=()=>toggleFollow(userId,now);
-  }
-  loadFollowers(); loadFollowing();
+function closeShopPreview() {
+  const el = document.getElementById('shopPreview');
+  if (el) el.style.display = 'none';
 }
+window.closeShopPreview = closeShopPreview;
 
-async function loadFollowers() {
-  const list=await api('/api/followers');
-  document.getElementById('followersList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">👤</div><p>Nessun follower ancora.</p></div>`
-    :list.map(u=>`
-      <div class="user-card">
-        <div class="uc-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},44)}</div>
-        <div class="uc-info">
-          <div class="uc-name">${u.name||u.username}</div>
-          <div class="uc-username">@${u.username||'—'}</div>
-        </div>
-      </div>`).join('');
+async function buyItem(itemId) {
+  const item = allShopItems.find(i => i.id === itemId);
+  if (!item) return;
+  showConfirm('Acquisto', `Acquistare "${item.name}" per ${item.cost} punti?`, async () => {
+    const d = await api('/api/shop/buy', 'POST', { item_id: itemId });
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🛍️ Acquistato! ' + item.name, 'success');
+    closeShopPreview();
+    await loadShop();
+  }, '🛒');
 }
-
-async function loadFollowing() {
-  const list=await api('/api/following');
-  document.getElementById('followingList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">👥</div><p>Non segui ancora nessuno.</p></div>`
-    :list.map(u=>`
-      <div class="user-card">
-        <div class="uc-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},44)}</div>
-        <div class="uc-info">
-          <div class="uc-name">${u.name||u.username}</div>
-          <div class="uc-username">@${u.username||'—'}</div>
-        </div>
-        <button class="btn-follow following" onclick="toggleFollow(${u.id},true)">✓ Seguito</button>
-      </div>`).join('');
-}
-
-// Gruppi
-function togGroupForm() {
-  const f=document.getElementById('groupForm'), visible=f.style.display!=='none';
-  if (visible) { f.style.opacity='0'; setTimeout(()=>{ f.style.display='none'; f.style.opacity='1'; },200); }
-  else f.style.display='block';
-}
-async function createGroup() {
-  const name=document.getElementById('gName').value.trim();
-  if (!name) return showN('⚠️ Nome obbligatorio!','error');
-  const d=await api('/api/groups','POST',{name,description:document.getElementById('gDesc').value,is_public:document.getElementById('gPublic').checked});
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN('👥 Gruppo creato!','success'); togGroupForm(); loadGroups();
-}
-async function loadGroups() {
-  const list=await api('/api/groups');
-  document.getElementById('groupsList').innerHTML=!list||list.error||list.length===0
-    ?`<div class="empty"><div class="ei">👥</div><p>Nessun gruppo ancora.</p></div>`
-    :list.map((g,i)=>`
-      <div class="group-card" style="animation:fadeSlide .3s ease ${i*.05}s both">
-        <div class="group-icon">👥</div>
-        <div class="group-info">
-          <div class="group-name">${g.name} ${g.is_public?'🌍':'🔒'}</div>
-          <div class="group-desc">${g.description||''}</div>
-          <div class="group-meta">👤 ${g.member_count} membri · creato da ${g.owner_name}</div>
-        </div>
-        <button class="btn-join ${g.is_member?'leave':''}" id="gbtn-${g.id}"
-          onclick="toggleGroup(${g.id},${g.is_member})">
-          ${g.is_member?'Esci':'Unisciti'}
-        </button>
-      </div>`).join('');
-}
-async function toggleGroup(groupId, isMember) {
-  if (isMember) await api(`/api/groups/${groupId}/leave`,'DELETE');
-  else          await api(`/api/groups/${groupId}/join`,'POST');
-  loadGroups();
-}
-
-window.searchUsers=searchUsers; window.toggleFollow=toggleFollow;
-window.togGroupForm=togGroupForm; window.createGroup=createGroup; window.toggleGroup=toggleGroup;
-window.markAllRead=markAllRead;
+window.buyItem = buyItem;
 
 // ══════════════════════════════════════════
-//   TABS
+//   PROFILE
 // ══════════════════════════════════════════
-function goTab(tab,btn) {
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.querySelectorAll('.sb-btn,.mn-btn').forEach(b=>b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  const [t,s]=TABS[tab]||['',''];
-  document.getElementById('pageTitle').textContent=t;
-  document.getElementById('pageSub').textContent=s;
-  if (tab==='admin')   loadAdminUsers();
-  if (tab==='social')  loadSocial();
-  if (tab==='profile') loadProfile();
-  window.scrollTo({top:0,behavior:'smooth'});
+function getLevel(pts) {
+  if (pts < 100)   return '🌱 Seme';
+  if (pts < 300)   return '🌿 Germoglio';
+  if (pts < 700)   return '🌳 Albero';
+  if (pts < 1500)  return '🌲 Foresta';
+  if (pts < 3000)  return '⚡ Fulmine Verde';
+  if (pts < 6000)  return '🔥 Fiamma Eco';
+  if (pts < 10000) return '💎 Diamante Verde';
+  return '👑 Eco Leggenda';
 }
-window.goTab=goTab;
+window.getLevel = getLevel;
+
+async function loadProfile() {
+  const [profile, badges] = await Promise.all([
+    api('/api/profile'),
+    api('/api/badges')
+  ]);
+  if (profile.error) return;
+
+  myProfile = profile;
+  syncMiiState(profile);
+
+  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+  set('profPoints', profile.points || 0);
+  set('profCo2',    parseFloat(profile.co2_saved || 0).toFixed(1));
+  set('profActs',   profile.total_activities || 0);
+  set('profLevel',  getLevel(profile.points || 0));
+
+  // fill edit form
+  const name = document.getElementById('editName');
+  const user = document.getElementById('editUsername');
+  const bio  = document.getElementById('editBio');
+  if (name) name.value = profile.name     || '';
+  if (user) user.value = profile.username || '';
+  if (bio)  bio.value  = profile.bio      || '';
+
+  // XP bar
+  const pts   = profile.points || 0;
+  const thres = [0,100,300,700,1500,3000,6000,10000];
+  const lvIdx = thres.findIndex(t => pts < t) - 1;
+  const curr  = thres[Math.max(lvIdx, 0)];
+  const next  = thres[Math.min(lvIdx + 1, thres.length - 1)];
+  const pct   = next > curr ? Math.round(((pts - curr) / (next - curr)) * 100) : 100;
+  const xpBar = document.getElementById('xpBar');
+  const xpTxt = document.getElementById('xpText');
+  if (xpBar) xpBar.style.width = pct + '%';
+  if (xpTxt) xpTxt.textContent = `${pts} / ${next} XP`;
+
+  drawMii(miiState, 'miiCanvas', 120);
+  drawMii(miiState, 'sbAvatarCanvas', 36);
+
+  // mark owned/locked in builder
+  const owned = profile.owned_items || [];
+  ownedItems  = owned;
+  document.querySelectorAll('.mii-opt-btn').forEach(o => {
+    o.classList.remove('active', 'sel', 'locked');
+    const iid = parseInt(o.dataset.itemId);
+    if (iid && !owned.includes(iid)) o.classList.add('locked');
+    if (miiState[o.dataset.cat] === o.dataset.val) o.classList.add('active','sel');
+  });
+
+  // badges
+  const bEl = document.getElementById('badgeList');
+  if (bEl && !badges.error) {
+    bEl.innerHTML = badges.map(b => `
+      <div class="badge-item ${b.unlocked ? 'unlocked' : 'locked'}"
+        title="${b.name}: ${b.desc}">
+        <div class="badge-icon">${b.icon}</div>
+        <div class="badge-name">${b.name}</div>
+        ${!b.unlocked ? '<div class="badge-lock">🔒</div>' : ''}
+      </div>`).join('');
+  }
+}
+
+async function saveAvatar() {
+  const btn = document.getElementById('saveAvatarBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+  const d = await api('/api/profile/avatar', 'PUT', {
+    color: miiState.color,
+    skin:  miiState.skin,
+    eyes:  miiState.eyes,
+    mouth: miiState.mouth,
+    hair:  miiState.hair
+  });
+  if (btn) { btn.disabled = false; btn.innerHTML = '💾 Salva Avatar'; }
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  showN('✅ Avatar salvato!', 'success');
+  if (myProfile) updateSidebar({ ...myProfile, ...miiState });
+}
+window.saveAvatar = saveAvatar;
+
+async function saveProfile(e) {
+  e.preventDefault();
+  const name     = document.getElementById('editName')?.value?.trim();
+  const username = document.getElementById('editUsername')?.value?.trim();
+  const bio      = document.getElementById('editBio')?.value?.trim() || '';
+  if (!name || !username) return showN('❌ Nome e username obbligatori', 'error');
+  const d = await api('/api/profile', 'PUT', { name, username, bio });
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  showN('✅ Profilo aggiornato!', 'success');
+  myProfile = { ...myProfile, name, username, bio };
+  updateSidebar(myProfile);
+}
+window.saveProfile = saveProfile;
+
+async function changePassword(e) {
+  e.preventDefault();
+  const current = document.getElementById('pwdCurrent')?.value;
+  const newPwd  = document.getElementById('pwdNew')?.value;
+  const confirm = document.getElementById('pwdConfirm')?.value;
+  if (newPwd !== confirm) return showN('❌ Le password non coincidono', 'error');
+  if (!checkPwdStrength(newPwd)) return showN('❌ Password troppo debole', 'error');
+  const d = await api('/api/profile/password', 'PUT', {
+    current_password: current,
+    new_password:     newPwd
+  });
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  showN('🔐 Password aggiornata!', 'success');
+  document.getElementById('pwdForm')?.reset();
+}
+window.changePassword = changePassword;
+
+// ══════════════════════════════════════════
+//   NOTIFICHE
+// ══════════════════════════════════════════
+async function loadNotifCount() {
+  const d  = await api('/api/notifications/count');
+  const el = document.getElementById('notifBadge');
+  if (!el || d.error) return;
+  el.textContent   = d.count || '';
+  el.style.display = d.count > 0 ? 'inline-flex' : 'none';
+
+  const cnt = document.getElementById('notifCount');
+  if (cnt) {
+    cnt.textContent   = d.count || '';
+    cnt.style.display = d.count > 0 ? 'flex' : 'none';
+  }
+}
+
+async function loadNotifiche() {
+  const data = await api('/api/notifications');
+  const el   = document.getElementById('notifList');
+  if (!el || data.error) return;
+
+  if (!data.length) {
+    el.innerHTML = '<div class="empty"><div class="ei">🔔</div><p>Nessuna notifica.</p></div>';
+    return;
+  }
+
+  el.innerHTML = data.map(n => `
+    <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead(${n.id},this)">
+      <div class="notif-icon">${n.icon || '🔔'}</div>
+      <div class="notif-body">
+        <div class="notif-msg">${n.message}</div>
+        <div class="notif-time">${timeAgo(new Date(n.created_at))}</div>
+      </div>
+      ${!n.read ? '<div class="notif-dot"></div>' : ''}
+    </div>`).join('');
+
+  api('/api/notifications/read-all', 'POST');
+  loadNotifCount();
+}
+
+async function markRead(id, el) {
+  await api(`/api/notifications/${id}/read`, 'POST');
+  el?.classList.remove('unread');
+  el?.querySelector('.notif-dot')?.remove();
+  loadNotifCount();
+}
+window.markRead = markRead;
 
 // ══════════════════════════════════════════
 //   ADMIN
 // ══════════════════════════════════════════
-async function loadAdminUsers() {
-  const users=await api('/api/admin/users');
-  if (!users||users.error) return showN('❌ '+(users?.error||'Errore'),'error');
-  const totalCo2=users.reduce((s,u)=>s+parseFloat(u.co2_saved||0),0);
-  const totalActs=users.reduce((s,u)=>s+parseInt(u.activity_count||0),0);
-  const admins=users.filter(u=>u.is_admin).length;
-  const banned=users.filter(u=>u.is_banned).length;
+async function loadAdmin() {
+  if (!myProfile?.is_admin) {
+    const el = document.getElementById('admin');
+    if (el) el.innerHTML = '<div class="empty"><div class="ei">🚫</div><p>Accesso negato.</p></div>';
+    return;
+  }
 
-  document.getElementById('adminStats').innerHTML=`
-    <div class="stat-card sc-blue" style="margin:0">
-      <div class="stat-top"><div class="stat-icon"><i class="fas fa-users"></i></div><span class="stat-badge">totale</span></div>
-      <div class="stat-val">${users.length}</div>
-      <div class="stat-lbl">${admins} admin · ${banned} bannati</div>
-      <div class="stat-glow g-blue"></div>
-    </div>
-    <div class="stat-card sc-green" style="margin:0">
-      <div class="stat-top"><div class="stat-icon"><i class="fas fa-cloud"></i></div><span class="stat-badge">team</span></div>
-      <div class="stat-val">${totalCo2.toFixed(1)}</div>
-      <div class="stat-lbl">kg CO₂ totali</div>
-      <div class="stat-glow g-green"></div>
-    </div>
-    <div class="stat-card sc-yellow" style="margin:0">
-      <div class="stat-top"><div class="stat-icon"><i class="fas fa-tasks"></i></div><span class="stat-badge">totali</span></div>
-      <div class="stat-val">${totalActs}</div>
-      <div class="stat-lbl">Attività team</div>
-      <div class="stat-glow g-yellow"></div>
-    </div>`;
+  const [users, stats, activities] = await Promise.all([
+    api('/api/admin/users'),
+    api('/api/admin/stats'),
+    api('/api/admin/activities')
+  ]);
 
-  document.getElementById('adminTbody').innerHTML=users.length===0
-    ?`<tr><td colspan="6"><div class="empty"><div class="ei">👥</div><p>Nessun utente.</p></div></td></tr>`
-    :users.map((u,i)=>`
-      <tr style="animation:fadeSlide .25s ease ${i*.04}s both">
-        <td>
-          <div class="u-info">
-            <div class="u-av">${miiCanvasHTML({color:u.avatar_color||'#16a34a',skin:u.avatar_skin||'#fde68a'},36)}</div>
-            <div>
-              <div class="u-name">${u.name||'—'}</div>
-              <div class="u-email">${u.username?'@'+u.username+' · ':''} ${u.email}</div>
-            </div>
-          </div>
-        </td>
-        <td style="font-weight:700">${u.activity_count}</td>
-        <td><span class="pill pill-yellow">⭐ ${u.points}</span></td>
-        <td><span class="pill pill-green">🌱 ${parseFloat(u.co2_saved||0).toFixed(1)} kg</span></td>
-        <td>
-          ${u.is_admin?'<span class="pill pill-yellow">👑 Admin</span>':
-            u.is_banned?`<span class="pill pill-red">⛔ Bannato</span>`
-                       :'<span class="pill pill-gray">👤 User</span>'}
-        </td>
-        <td>
-          <div style="display:flex;gap:5px;flex-wrap:wrap">
-            <button class="btn-icon" title="Vedi attività" onclick="openActsModal(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-list"></i></button>
-            <button class="btn-icon warn" title="Invia avviso" onclick="openWarnModal(${u.id})"><i class="fas fa-exclamation-triangle"></i></button>
-            ${u.is_banned
-              ?`<button class="btn-icon" title="Rimuovi ban" onclick="unbanUser(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-unlock"></i></button>`
-              :`<button class="btn-icon ban" title="Banna utente" onclick="openBanModal(${u.id})"><i class="fas fa-ban"></i></button>`}
-            <button class="btn-icon reset" title="Azzera punti" onclick="resetPoints(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-undo"></i></button>
-            <button class="btn-icon crown" title="${u.is_admin?'Rimuovi admin':'Promuovi admin'}" onclick="toggleAdmin(${u.id},${!u.is_admin},'${esc(u.name||u.email)}')"><i class="fas fa-crown"></i></button>
-            <button class="btn-icon del" title="Elimina utente" onclick="deleteUser(${u.id},'${esc(u.name||u.email)}')"><i class="fas fa-trash"></i></button>
-          </div>
-        </td>
-      </tr>`).join('');
+  const sEl = document.getElementById('adminStats');
+  if (sEl && !stats.error) {
+    sEl.innerHTML = `
+      <div class="admin-stat-card">
+        <div class="asc-val">${stats.total_users || 0}</div>
+        <div class="asc-label">👤 Utenti</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="asc-val">${stats.total_activities || 0}</div>
+        <div class="asc-label">🌱 Attività</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="asc-val">${parseFloat(stats.total_co2 || 0).toFixed(1)}</div>
+        <div class="asc-label">☁️ kg CO₂</div>
+      </div>
+      <div class="admin-stat-card">
+        <div class="asc-val">${stats.total_posts || 0}</div>
+        <div class="asc-label">💬 Post</div>
+      </div>`;
+  }
+
+  const uEl = document.getElementById('adminUsers');
+  if (uEl && !users.error) {
+    uEl.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Utente</th><th>Email</th><th>Punti</th>
+            <th>CO₂</th><th>Ruolo</th><th>Verif.</th><th>Azioni</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => `
+            <tr>
+              <td><b>${u.name}</b><br><span style="color:var(--muted);font-size:12px">@${u.username||''}</span></td>
+              <td>${u.email}</td>
+              <td>⭐ ${u.points || 0}</td>
+              <td>🌱 ${parseFloat(u.co2_saved || 0).toFixed(1)} kg</td>
+              <td>${u.is_admin
+                ? '<span class="pill pill-gold">👑 Admin</span>'
+                : '<span class="pill pill-gray">👤 User</span>'}</td>
+              <td>${u.verified
+                ? '<span class="pill pill-green">✅</span>'
+                : '<span class="pill pill-red">❌</span>'}</td>
+              <td class="admin-actions">
+                <button class="btn-sm"
+                  onclick="adminEditUser(${u.id},'${u.name}','${u.username||''}',${u.points||0},${u.is_admin?1:0})">
+                  ✏️
+                </button>
+                <button class="btn-sm btn-danger"
+                  onclick="adminDeleteUser(${u.id},'${u.name}')">
+                  🗑️
+                </button>
+                ${!u.verified
+                  ? `<button class="btn-sm btn-green" onclick="adminVerifyUser(${u.id})">📧</button>`
+                  : ''}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  const aEl = document.getElementById('adminActivities');
+  if (aEl && !activities.error) {
+    aEl.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Utente</th><th>Tipo</th><th>Km/Ore</th>
+            <th>CO₂</th><th>Punti</th><th>Data</th><th>Azioni</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${activities.map(a => `
+            <tr>
+              <td>${a.user_name || '?'}</td>
+              <td>${a.type}</td>
+              <td>${a.km > 0 ? a.km + ' km' : ''}${a.hours > 0 ? a.hours + 'h' : ''}</td>
+              <td>-${a.co2_saved} kg</td>
+              <td>+${a.points}</td>
+              <td>${new Date(a.date).toLocaleDateString('it-IT')}</td>
+              <td>
+                <button class="btn-sm btn-danger"
+                  onclick="adminDeleteActivity(${a.id})">🗑️</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
 }
 
-function esc(str) { return (str||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-
-// BAN
-let banTargetId=null;
-function openBanModal(userId) {
-  banTargetId=userId;
-  document.getElementById('banDays').value='';
-  document.getElementById('banReason').value='';
-  document.getElementById('banModal').style.display='flex';
-  document.getElementById('banConfirmBtn').onclick=async()=>{
-    const days=parseInt(document.getElementById('banDays').value)||null;
-    const reason=document.getElementById('banReason').value;
-    const d=await api(`/api/admin/user/${banTargetId}/ban`,'POST',{days,reason});
-    document.getElementById('banModal').style.display='none';
-        if (d.error) return showN('❌ '+d.error,'error');
-    showN('⛔ Utente bannato!','success');
-    loadAdminUsers();
-  };
+function adminEditUser(id, name, username, points, isAdmin) {
+  showConfirm('Modifica Utente', `Modificare ${name}?`, () => {
+    const newName  = prompt('Nome:', name)        || name;
+    const newUser  = prompt('Username:', username) || username;
+    const newPts   = parseInt(prompt('Punti:', points) || points, 10);
+    const newAdmin = confirm('Ruolo Admin?');
+    api(`/api/admin/users/${id}`, 'PUT', {
+      name: newName, username: newUser, points: newPts, is_admin: newAdmin
+    }).then(d => {
+      if (d.error) return showN('❌ ' + d.error, 'error');
+      showN('✅ Utente aggiornato!', 'success');
+      loadAdmin();
+    });
+  }, '✏️');
 }
+window.adminEditUser = adminEditUser;
 
-// WARN
-let warnTargetId=null;
-function openWarnModal(userId) {
-  warnTargetId=userId;
-  document.getElementById('warnMsg').value='';
-  document.getElementById('warnModal').style.display='flex';
-  document.getElementById('warnConfirmBtn').onclick=async()=>{
-    const message=document.getElementById('warnMsg').value.trim();
-    if (!message) return showN('⚠️ Inserisci un messaggio!','error');
-    const d=await api(`/api/admin/user/${warnTargetId}/warn`,'POST',{message});
-    document.getElementById('warnModal').style.display='none';
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('⚠️ Avviso inviato!','info');
-    loadAdminUsers();
-  };
+function adminDeleteUser(id, name) {
+  showConfirm('Elimina Utente', `Eliminare definitivamente "${name}"?`, async () => {
+    const d = await api(`/api/admin/users/${id}`, 'DELETE');
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🗑️ Utente eliminato', 'success');
+    loadAdmin();
+  }, '🗑️');
 }
+window.adminDeleteUser = adminDeleteUser;
 
-// UNBAN
-function unbanUser(userId, name) {
-  showConfirm('✅','Rimuovi ban','Vuoi rimuovere il ban a '+name+'?', async()=>{
-    const d=await api(`/api/admin/user/${userId}/unban`,'POST');
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('✅ Ban rimosso!','success');
-    loadAdminUsers();
-  }, 'linear-gradient(135deg,var(--green),var(--green2))');
+async function adminVerifyUser(id) {
+  const d = await api(`/api/admin/users/${id}/verify`, 'POST');
+  if (d.error) return showN('❌ ' + d.error, 'error');
+  showN('✅ Utente verificato!', 'success');
+  loadAdmin();
 }
+window.adminVerifyUser = adminVerifyUser;
 
-// RESET PUNTI
-function resetPoints(userId, name) {
-  showConfirm('🔄','Azzera punti','Vuoi azzerare i punti di '+name+'?', async()=>{
-    const d=await api(`/api/admin/user/${userId}/reset-points`,'POST');
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('🔄 Punti azzerati!','info');
-    loadAdminUsers();
-  }, 'linear-gradient(135deg,var(--blue),var(--blue2))');
+function adminDeleteActivity(id) {
+  showConfirm('Elimina Attività', 'Eliminare questa attività?', async () => {
+    const d = await api(`/api/admin/activities/${id}`, 'DELETE');
+    if (d.error) return showN('❌ ' + d.error, 'error');
+    showN('🗑️ Attività eliminata', 'success');
+    loadAdmin();
+  }, '🗑️');
 }
-
-// TOGGLE ADMIN
-function toggleAdmin(userId, makeAdmin, name) {
-  showConfirm(
-    makeAdmin?'👑':'👤',
-    makeAdmin?'Promuovi ad Admin':'Rimuovi Admin',
-    makeAdmin?`Vuoi promuovere ${name} ad Admin?`:`Vuoi rimuovere i privilegi admin a ${name}?`,
-    async()=>{
-      const d=await api(`/api/admin/user/${userId}/role`,'PATCH',{is_admin:makeAdmin});
-      if (d.error) return showN('❌ '+d.error,'error');
-      showN(makeAdmin?'👑 Admin aggiunto!':'👤 Admin rimosso!','success');
-      loadAdminUsers();
-    },
-    makeAdmin?'linear-gradient(135deg,var(--yellow),var(--yellow2))':'linear-gradient(135deg,var(--muted),var(--muted2))'
-  );
-}
-
-// DELETE USER
-function deleteUser(userId, name) {
-  showConfirm('🗑️','Elimina Utente',`Sei sicuro di voler eliminare ${name}? L'azione è irreversibile!`, async()=>{
-    const d=await api(`/api/admin/user/${userId}`,'DELETE');
-    if (d.error) return showN('❌ '+d.error,'error');
-    showN('🗑️ Utente eliminato!','success');
-    loadAdminUsers();
-  });
-}
-
-// ATTIVITÀ MODAL
-async function openActsModal(userId, name) {
-  document.getElementById('actsModalTitle').textContent='Attività di '+name;
-  document.getElementById('actsModal').style.display='flex';
-  const acts=await api(`/api/admin/activities/${userId}`);
-  document.getElementById('actsModalBody').innerHTML=!acts||acts.error||acts.length===0
-    ?`<div class="empty"><div class="ei">📋</div><p>Nessuna attività.</p></div>`
-    :acts.map(a=>`
-      <div class="adm-act-item">
-        <div style="font-size:22px">${ICONS[a.type]||'📌'}</div>
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${a.type}</div>
-          <div style="font-size:12px;color:var(--muted)">${a.km>0?a.km+' km':''}${a.hours>0?a.hours+' ore':''} · ${a.co2_saved} kg · ${a.points} pt</div>
-          <div style="font-size:11px;color:var(--muted2)">${new Date(a.date).toLocaleDateString('it-IT')}</div>
-        </div>
-        <button class="adm-act-del" onclick="delActAdmin(${a.id})" title="Elimina"><i class="fas fa-trash"></i></button>
-      </div>`).join('');
-}
-
-async function delActAdmin(actId) {
-  const d=await api(`/api/admin/activity/${actId}`,'DELETE');
-  if (d.error) return showN('❌ '+d.error,'error');
-  showN('🗑️ Attività eliminata!','success');
-  // Ricarica modal con stesso userId
-  loadAdminUsers();
-  // Ricarica body modal
-  const body=document.getElementById('actsModalBody');
-  const del=body.querySelector(`[onclick="delActAdmin(${actId})"]`);
-  if (del) del.closest('.adm-act-item').remove();
-}
-
-function closeActsModal(e) {
-  if (e.target.id==='actsModal') document.getElementById('actsModal').style.display='none';
-}
-
-window.openBanModal=openBanModal; window.openWarnModal=openWarnModal;
-window.unbanUser=unbanUser; window.resetPoints=resetPoints;
-window.toggleAdmin=toggleAdmin; window.deleteUser=deleteUser;
-window.openActsModal=openActsModal; window.delActAdmin=delActAdmin;
-window.closeActsModal=closeActsModal; window.loadAdminUsers=loadAdminUsers;
+window.adminDeleteActivity = adminDeleteActivity;
 
 // ══════════════════════════════════════════
-//   CONFIRM MODAL
+//   MOBILE NAV
 // ══════════════════════════════════════════
-let confirmCb=null;
-function showConfirm(icon, title, msg, cb, btnStyle=null) {
-  document.getElementById('confirmIcon').textContent=icon;
-  document.getElementById('confirmTitle').textContent=title;
-  document.getElementById('confirmMsg').textContent=msg;
-  const yes=document.getElementById('confirmYes');
-  if (btnStyle) yes.style.background=btnStyle;
-  else yes.style.background='linear-gradient(135deg,var(--red),#dc2626)';
-  confirmCb=cb;
-  document.getElementById('confirmModal').style.display='flex';
+function toggleMobNav() {
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('sidebarOverlay');
+  const isOpen   = sidebar?.classList.toggle('open');
+  if (overlay) overlay.style.display = isOpen ? 'block' : 'none';
 }
-function closeConfirm() { document.getElementById('confirmModal').style.display='none'; confirmCb=null; }
-document.getElementById('confirmYes').onclick=async()=>{ closeConfirm(); if(confirmCb) await confirmCb(); };
-window.closeConfirm=closeConfirm;
-
-// ══════════════════════════════════════════
-//   TOAST
-// ══════════════════════════════════════════
-let notifTimer;
-function showN(msg, type='success') {
-  const el=document.getElementById('notif');
-  el.textContent=msg; el.className=`notif ${type}`;
-  el.classList.add('show');
-  clearTimeout(notifTimer);
-  notifTimer=setTimeout(()=>el.classList.remove('show'),3500);
-}
+window.toggleMobNav = toggleMobNav;
 
 // ══════════════════════════════════════════
 //   INIT
 // ══════════════════════════════════════════
-if (token) {
-  api('/api/profile').then(d=>{
-    if (d&&!d.error) {
-      document.getElementById('authWrap').style.display='none';
-      document.getElementById('app').style.display='flex';
-      if (window.innerWidth<=768) document.getElementById('mobNav').style.display='flex';
-      document.getElementById('sbEmail').textContent=d.email||'';
-      initAdmin(d);
-      loadAll();
-      loadProfile();
-      loadNotifCount();
-    } else {
-      localStorage.removeItem('ecotoken');
-      token=null;
-    }
+document.addEventListener('DOMContentLoaded', async () => {
+
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => showSection(item.dataset.section));
   });
-}
 
-// Aggiorna notifiche ogni 30 sec
-setInterval(loadNotifCount, 30000);
+  // bind forms (già gestiti via onsubmit nell'HTML, ma doppia sicurezza)
+  const binds = [
+    ['loginForm',     doLogin],
+    ['registerForm',  doRegister],
+    ['actForm',       logActivity],
+    ['postForm',      createPost],
+    ['challengeForm', createChallenge],
+    ['profileForm',   saveProfile],
+    ['pwdForm',       changePassword],
+    ['forgotForm',    doForgotPassword],
+    ['resetForm',     doResetPassword],
+  ];
+  binds.forEach(([id, fn]) => {
+    document.getElementById(id)?.addEventListener('submit', fn);
+  });
 
-}); // END DOMContentLoaded
+  document.getElementById('sidebarOverlay')
+    ?.addEventListener('click', toggleMobNav);
+
+  // check token salvato
+  if (token) {
+    const d = await api('/api/profile');
+    if (!d.error) {
+      myProfile = d;
+      syncMiiState(d);
+      document.getElementById('authWrap').style.display = 'none';
+      document.getElementById('app').style.display      = 'flex';
+      updateSidebar(d);
+      await loadDashboard();
+      loadNotifCount();
+      setInterval(loadNotifCount, 30000);
+      if (window.innerWidth <= 768)
+        document.getElementById('mobNav').style.display = 'flex';
+    } else {
+      token = null;
+      localStorage.removeItem('ecotoken');
+    }
+  }
+
+  // reset-password via URL
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('token') && params.get('action') === 'reset') {
+    switchTab('reset');
+    return;
+  }
+
+  switchTab('login');
+});
