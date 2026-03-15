@@ -147,6 +147,10 @@ function timeAgo(dateStr) {
   return `${Math.floor(h / 24)}g fa`;
 }
 
+function escapeHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // ═══════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════
@@ -237,8 +241,8 @@ async function handleForgotPassword(e) {
   const email = document.getElementById('forgotEmail')?.value.trim();
   if (!email) { showNotification('Inserisci la tua email', 'error'); return; }
   await apiRequest('/api/forgot-password', 'POST', { email });
-  showNotification('📧 Email inviata! Controlla la tua casella.', 'success');
-  setTimeout(() => switchAuthTab('login'), 2000);
+  showNotification('📧 Se l\'email esiste, riceverai il link di reset a breve.', 'success');
+  setTimeout(() => switchAuthTab('login'), 3000);
 }
 window.handleForgotPassword = handleForgotPassword;
 
@@ -284,7 +288,7 @@ function updateSidebar(user) {
   const adminNav = document.getElementById('adminNavItem');
   if (adminNav) adminNav.style.display = user.is_admin ? 'flex' : 'none';
 
-  // Avatar social
+  drawMii(miiState, 'sidebarAvatar', 48);
   const soc = document.getElementById('socialAvatar');
   if (soc) drawMii(miiState, 'socialAvatar', 36);
 }
@@ -302,13 +306,12 @@ async function showSection(section) {
   const target = document.getElementById(section);
   if (target) target.classList.add('active');
 
-  // Chiudi sidebar su mobile
   document.getElementById('sidebar')?.classList.remove('open');
   document.getElementById('sidebarOverlay').style.display = 'none';
 
   switch (section) {
     case 'dashboard':   await loadDashboard();    break;
-    case 'activities':  await loadActivities(); initMapIfNeeded(); break;
+    case 'activities':  await loadActivities(); break;
     case 'challenges':  await loadChallenges();   break;
     case 'leaderboard': await loadLeaderboard();  break;
     case 'social':      await loadSocial();        break;
@@ -330,10 +333,22 @@ function toggleMobileNav() {
 window.toggleMobileNav = toggleMobileNav;
 
 // ═══════════════════════════════════════════
-// DASHBOARD
+// DASHBOARD — Promise.all per velocità
 // ═══════════════════════════════════════════
 async function loadDashboard() {
-  const stats = await apiRequest('/api/stats');
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Buongiorno' : hour < 18 ? 'Buon pomeriggio' : 'Buonasera';
+  document.getElementById('dashGreeting').textContent =
+    `${greet}, ${myProfile?.name || 'utente'}! Continua così 💪`;
+
+  // Carica tutto in parallelo
+  const [stats, activities, yearly, badges] = await Promise.all([
+    apiRequest('/api/stats'),
+    apiRequest('/api/activities'),
+    apiRequest('/api/yearly'),
+    apiRequest('/api/badges'),
+  ]);
+
   if (!stats.error) {
     document.getElementById('dashboardTotalCo2').textContent  = parseFloat(stats.co2_saved || 0).toFixed(1);
     document.getElementById('dashboardWeekCo2').textContent   = parseFloat(stats.co2_week  || 0).toFixed(1);
@@ -341,20 +356,14 @@ async function loadDashboard() {
     document.getElementById('dashboardPoints').textContent    = stats.points || 0;
   }
 
-  const hour = new Date().getHours();
-  const greet = hour < 12 ? 'Buongiorno' : hour < 18 ? 'Buon pomeriggio' : 'Buonasera';
-  document.getElementById('dashGreeting').textContent =
-    `${greet}, ${myProfile?.name || 'utente'}! Continua così 💪`;
-
-  const activities = await apiRequest('/api/activities');
   const rc = document.getElementById('recentActivities');
   if (!activities.error && activities.length > 0) {
     rc.innerHTML = activities.slice(0, 5).map(a => `
       <div class="activity-item">
         <span class="act-icon">${ACTIVITY_ICONS[a.type] || '🌱'}</span>
         <div class="act-info">
-          <strong>${a.type}</strong>
-          <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + a.note : ''}</small>
+          <strong>${escapeHtml(a.type)}</strong>
+          <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + escapeHtml(a.note) : ''}</small>
         </div>
         <div class="act-meta">
           <div class="act-co2">-${a.co2_saved} kg</div>
@@ -366,16 +375,14 @@ async function loadDashboard() {
     rc.innerHTML = `<div class="empty-state"><span>🌱</span><p>Nessuna attività ancora</p></div>`;
   }
 
-  const yearly = await apiRequest('/api/yearly');
   if (!yearly.error && yearly.length > 0) renderYearlyChart(yearly);
   else renderEmptyChart();
 
-  const badges = await apiRequest('/api/badges');
   const rb = document.getElementById('recentBadges');
   if (!badges.error) {
     const unlocked = badges.filter(b => b.unlocked).slice(0, 4);
     rb.innerHTML = unlocked.length
-      ? unlocked.map(b => `<div class="badge-item unlocked"><span>${b.icon}</span><strong>${b.name}</strong></div>`).join('')
+      ? unlocked.map(b => `<div class="badge-item unlocked"><span>${b.icon}</span><strong>${escapeHtml(b.name)}</strong></div>`).join('')
       : `<div class="empty-state"><span>🔒</span><p>Nessun badge ancora</p></div>`;
   }
 }
@@ -414,7 +421,11 @@ function renderYearlyChart(data) {
     g.addColorStop(0, '#16a34a'); g.addColorStop(1, '#86efac');
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(x, y, bw - 6, bh, 4) : ctx.fillRect(x, y, bw - 6, bh);
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, bw - 6, bh, 4);
+    } else {
+      ctx.fillRect(x, y, bw - 6, bh);
+    }
     ctx.fill();
     ctx.fillStyle = '#94a3b8'; ctx.font = '10px Inter,sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(months[i], x + (bw - 6) / 2, H - 15);
@@ -448,10 +459,24 @@ function selectActivityType(type, btn) {
   const rate = CO2_RATES[type];
   document.getElementById('kmGroup').style.display    = rate.type === 'km'    ? 'block' : 'none';
   document.getElementById('hoursGroup').style.display = rate.type === 'hours' ? 'block' : 'none';
-  document.getElementById('mapSection').style.display = rate.type === 'km'    ? 'block' : 'none';
   document.getElementById('saveActivityBtn').disabled = false;
   updateActivityPreview();
-  if (rate.type === 'km' && !mapInitialized) setTimeout(initMap, 100);
+
+  // FIX MAPPA: mostra il container prima di inizializzare Leaflet
+  const mapSection = document.getElementById('mapSection');
+  if (rate.type === 'km') {
+    mapSection.style.display = 'block';
+    // requestAnimationFrame garantisce che il DOM sia visibile prima di init
+    requestAnimationFrame(() => {
+      if (!mapInitialized) {
+        initMap();
+      } else {
+        mapInstance?.invalidateSize();
+      }
+    });
+  } else {
+    mapSection.style.display = 'none';
+  }
 }
 window.selectActivityType = selectActivityType;
 
@@ -496,7 +521,6 @@ async function saveActivity() {
 
   showNotification(`✅ Attività salvata! +${data.co2_saved} kg CO₂, +${data.points} pt`, 'success');
 
-  // Reset
   ['actKm','actHours','actNote','fromAddr','toAddr'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
@@ -506,7 +530,7 @@ async function saveActivity() {
   currentActivityType = null;
 
   if (myProfile) {
-    myProfile.points   = (myProfile.points   || 0) + data.points;
+    myProfile.points    = (myProfile.points    || 0) + data.points;
     myProfile.co2_saved = (myProfile.co2_saved || 0) + data.co2_saved;
     updateSidebar(myProfile);
   }
@@ -526,8 +550,8 @@ async function loadActivities() {
     <div class="activity-item">
       <span class="act-icon">${ACTIVITY_ICONS[a.type] || '🌱'}</span>
       <div class="act-info">
-        <strong>${a.type}</strong>
-        <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + a.note : ''} · ${timeAgo(a.date)}</small>
+        <strong>${escapeHtml(a.type)}</strong>
+        <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + escapeHtml(a.note) : ''} · ${timeAgo(a.date)}</small>
       </div>
       <div class="act-meta">
         <div class="act-co2">-${a.co2_saved} kg</div>
@@ -538,15 +562,23 @@ async function loadActivities() {
 }
 
 // ═══════════════════════════════════════════
-// MAP — FIX MAPPA BIANCA
+// MAP — FIX COMPLETO MAPPA BIANCA
 // ═══════════════════════════════════════════
 function initMap() {
   if (mapInitialized) {
-    setTimeout(() => mapInstance?.invalidateSize(), 200);
+    mapInstance?.invalidateSize();
     return;
   }
   const mapEl = document.getElementById('map');
   if (!mapEl || typeof L === 'undefined') return;
+
+  // Assicurati che il container abbia dimensioni reali prima di init
+  const rect = mapEl.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    // Riprova dopo un breve delay se il container non è ancora visibile
+    setTimeout(initMap, 100);
+    return;
+  }
 
   mapInstance = L.map('map', { zoomControl: true }).setView([41.9028, 12.4964], 6);
 
@@ -556,18 +588,11 @@ function initMap() {
   }).addTo(mapInstance);
 
   mapInitialized = true;
-
-  // FIX: forza il ridisegno dei tile dopo che il container è visibile
-  setTimeout(() => mapInstance.invalidateSize(), 300);
+  // Doppio invalidateSize: uno immediato e uno dopo il rendering
+  mapInstance.invalidateSize();
+  setTimeout(() => mapInstance.invalidateSize(), 250);
 }
 window.initMap = initMap;
-
-function initMapIfNeeded() {
-  setTimeout(() => {
-    if (!mapInitialized && document.getElementById('map')) initMap();
-    else if (mapInstance) mapInstance.invalidateSize();
-  }, 200);
-}
 
 async function searchAddress(fieldId, query) {
   if (query.length < 3) { document.getElementById(fieldId + 'Sugg').innerHTML = ''; return; }
@@ -576,7 +601,7 @@ async function searchAddress(fieldId, query) {
     const data = await res.json();
     const sugg = document.getElementById(fieldId + 'Sugg');
     sugg.innerHTML = data.map(p => `
-      <div class="addr-item" onclick="selectAddress('${fieldId}', '${p.display_name.replace(/'/g, "\\'")}')">${p.display_name}</div>
+      <div class="addr-item" onclick="selectAddress('${fieldId}', ${JSON.stringify(p.display_name)})">${escapeHtml(p.display_name)}</div>
     `).join('');
   } catch {}
 }
@@ -619,7 +644,7 @@ async function calculateRoute() {
     if (!fRes[0]) { showNotification('Partenza non trovata', 'error'); return; }
     if (!tRes[0]) { showNotification('Destinazione non trovata', 'error'); return; }
 
-    if (routingControl) mapInstance.removeControl(routingControl);
+    if (routingControl) { mapInstance.removeControl(routingControl); routingControl = null; }
 
     routingControl = L.Routing.control({
       waypoints: [
@@ -638,6 +663,10 @@ async function calculateRoute() {
       document.getElementById('actKm').value = km;
       updateActivityPreview();
       showNotification(`📍 Distanza: ${km} km`, 'success');
+    });
+
+    routingControl.on('routingerror', () => {
+      showNotification('Percorso non trovato tra questi indirizzi', 'error');
     });
   } catch (err) {
     showNotification('Errore nel calcolo del percorso', 'error');
@@ -663,8 +692,8 @@ async function loadLeaderboard() {
       <div class="leaderboard-item">
         <div class="lb-rank ${rankClass}">${medals[i] || i + 1}</div>
         <div class="lb-info">
-          <strong>${u.name || u.username}</strong>
-          <small>@${u.username || ''}</small>
+          <strong>${escapeHtml(u.name || u.username)}</strong>
+          <small>@${escapeHtml(u.username || '')}</small>
         </div>
         <div class="lb-stats">
           <span class="lb-co2">🌱 ${parseFloat(u.co2_saved || 0).toFixed(1)} kg</span>
@@ -692,16 +721,16 @@ async function loadChallenges() {
     return `
       <div class="challenge-item">
         <div class="challenge-header">
-          <span class="challenge-title">${c.title}</span>
+          <span class="challenge-title">${escapeHtml(c.title)}</span>
           <span class="challenge-badge ${c.is_public ? 'public' : 'private'}">${c.is_public ? '🌍 Pubblica' : '🔒 Privata'}</span>
         </div>
-        <p class="challenge-desc">${c.description || 'Nessuna descrizione'}</p>
+        <p class="challenge-desc">${escapeHtml(c.description || 'Nessuna descrizione')}</p>
         <div class="challenge-meta">
           <span>🎯 ${c.co2_target} kg CO₂</span>
           <span>⭐ ${c.points_reward} pt</span>
           ${c.end_date ? `<span>📅 ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>` : ''}
           ${expired ? '<span style="color:#ef4444;">⏰ Scaduta</span>' : ''}
-          <span>👤 ${c.creator_name || 'Anonimo'}</span>
+          <span>👤 ${escapeHtml(c.creator_name || 'Anonimo')}</span>
         </div>
       </div>
     `;
@@ -755,12 +784,12 @@ async function loadPosts() {
         <div class="post-header">
           <canvas width="36" height="36" style="border-radius:50%;" id="postAvatar${p.id}"></canvas>
           <div class="post-author">
-            <strong>${p.author_name || 'Utente'}</strong>
-            <small>@${p.author_username || ''} · ${timeAgo(p.created_at)}</small>
+            <strong>${escapeHtml(p.author_name || 'Utente')}</strong>
+            <small>@${escapeHtml(p.author_username || '')} · ${timeAgo(p.created_at)}</small>
           </div>
         </div>
         <div class="post-body">${escapeHtml(p.content)}</div>
-        ${p.image_url ? `<img class="post-image" src="${p.image_url}" alt="immagine post" onerror="this.style.display='none'">` : ''}
+        ${p.image_url ? `<img class="post-image" src="${escapeHtml(p.image_url)}" alt="immagine post" onerror="this.style.display='none'">` : ''}
         <div class="post-actions">
           <button class="post-action-btn ${p.liked_by_me ? 'liked' : ''}" onclick="toggleLike(${p.id}, this)">
             <i class="fas fa-heart"></i> <span class="like-count">${p.likes_count || 0}</span>
@@ -781,28 +810,21 @@ async function loadPosts() {
     `;
   }).join('');
 
-  // Disegna avatars post
   data.forEach(p => {
     const canvas = document.getElementById(`postAvatar${p.id}`);
     if (canvas) {
       drawMii({
-        color: p.avatar_color || '#16a34a',
-        skin:  p.avatar_skin  || '#fde68a',
-        eyes:  p.avatar_eyes  || 'normal',
-        mouth: p.avatar_mouth || 'smile',
-        hair:  p.avatar_hair  || 'none'
+        color: p.avatar_color || '#16a34a', skin: p.avatar_skin || '#fde68a',
+        eyes:  p.avatar_eyes  || 'normal',  mouth: p.avatar_mouth || 'smile', hair: p.avatar_hair || 'none'
       }, `postAvatar${p.id}`, 36);
     }
   });
 }
 
-function escapeHtml(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 async function createPost() {
   const content = document.getElementById('postContent')?.value.trim();
   if (!content) { showNotification('Scrivi qualcosa!', 'error'); return; }
+  if (content.length > 1000) { showNotification('Post troppo lungo (max 1000 caratteri)', 'error'); return; }
   const data = await apiRequest('/api/social/posts', 'POST', { content });
   if (data.error) { showNotification(data.error, 'error'); return; }
   document.getElementById('postContent').value = '';
@@ -845,7 +867,7 @@ async function loadComments(postId) {
   if (!data.length) { container.innerHTML = '<p style="color:#94a3b8;font-size:12px;padding:6px 0;">Nessun commento ancora</p>'; return; }
   container.innerHTML = data.map(c => `
     <div class="comment-item">
-      <span class="comment-author">${c.author_name}:</span>
+      <span class="comment-author">${escapeHtml(c.author_name)}:</span>
       <span>${escapeHtml(c.content)}</span>
       ${(myProfile && (c.author_id === myProfile.id || myProfile.is_admin))
         ? `<button class="btn-sm red" style="margin-left:auto;padding:2px 7px;" onclick="deleteComment(${c.id}, ${postId})"><i class="fas fa-times"></i></button>`
@@ -886,7 +908,7 @@ async function loadUsers() {
     <div class="user-card">
       <canvas width="36" height="36" style="border-radius:50%;" id="userAv${u.id}"></canvas>
       <div class="user-card-info">
-        <strong>${u.name || u.username}</strong>
+        <strong>${escapeHtml(u.name || u.username)}</strong>
         <small>⭐ ${u.points || 0} pt · 🌱 ${parseFloat(u.co2_saved || 0).toFixed(1)} kg</small>
       </div>
       <button class="btn-sm ${u.following ? 'red' : 'green'}" onclick="toggleFollow(${u.id}, this)">
@@ -896,7 +918,7 @@ async function loadUsers() {
   `).join('');
 
   data.forEach(u => {
-    drawMii({ color: u.avatar_color || '#16a34a', skin: u.avatar_skin || '#fde68a', eyes: u.avatar_eyes || 'normal', mouth: u.avatar_mouth || 'smile', hair: u.avatar_hair || 'none' }, `userAv${u.id}`, 36);
+    drawMii({ color: u.avatar_color||'#16a34a', skin: u.avatar_skin||'#fde68a', eyes: u.avatar_eyes||'normal', mouth: u.avatar_mouth||'smile', hair: u.avatar_hair||'none' }, `userAv${u.id}`, 36);
   });
 }
 
@@ -910,7 +932,7 @@ async function toggleFollow(userId, btn) {
 window.toggleFollow = toggleFollow;
 
 // ═══════════════════════════════════════════
-// SHOP — FIX ACQUISTO
+// SHOP
 // ═══════════════════════════════════════════
 async function loadShop() {
   const [items, profile] = await Promise.all([
@@ -920,7 +942,7 @@ async function loadShop() {
   if (items.error) return;
   allShopItems = items;
   document.getElementById('shopPoints').textContent = profile.points || 0;
-  if (profile.owned_items) {
+  if (profile.owned_items !== undefined) {
     myProfile = { ...myProfile, ...profile };
   }
   renderShop();
@@ -954,8 +976,8 @@ function renderShop() {
         ${item.is_rare ? '<span class="rare-badge">✨ Raro</span>' : ''}
         ${isOwned    ? '<span class="owned-badge">✅ Posseduto</span>' : ''}
         <div class="shop-item-emoji">${item.emoji || '🎁'}</div>
-        <div class="shop-item-name">${item.name}</div>
-        <div class="shop-item-desc">${item.description || ''}</div>
+        <div class="shop-item-name">${escapeHtml(item.name)}</div>
+        <div class="shop-item-desc">${escapeHtml(item.description || '')}</div>
         <div class="shop-item-cost ${item.cost === 0 ? 'free' : ''}">
           ${item.cost === 0 ? 'Gratis' : `⭐ ${item.cost} pt`}
         </div>
@@ -977,9 +999,7 @@ async function buyItem(itemId) {
     async () => {
       const data = await apiRequest('/api/shop/buy', 'POST', { item_id: itemId });
       if (data.error) { showNotification(data.error, 'error'); return; }
-
       showNotification(`✅ Acquistato: ${item.name}!`, 'success');
-
       if (myProfile) {
         myProfile.points      = data.new_points;
         myProfile.owned_items = data.owned_items;
@@ -993,7 +1013,7 @@ async function buyItem(itemId) {
 window.buyItem = buyItem;
 
 // ═══════════════════════════════════════════
-// AVATAR — FIX CUSTOMIZER
+// AVATAR
 // ═══════════════════════════════════════════
 function syncMiiState(user) {
   if (!user) return;
@@ -1017,13 +1037,11 @@ function drawMii(state, canvasId, size = 120) {
 
   ctx.clearRect(0, 0, size, size);
 
-  // Background circle
   ctx.beginPath();
   ctx.arc(cx, cy, size * 0.48, 0, Math.PI * 2);
   ctx.fillStyle = state.color || '#16a34a';
   ctx.fill();
 
-  // Hair (back) — solo alcuni stili
   ctx.fillStyle = '#1f2937';
   if (state.hair === 'long') {
     ctx.beginPath();
@@ -1035,7 +1053,6 @@ function drawMii(state, canvasId, size = 120) {
     ctx.fill();
   }
 
-  // Head
   ctx.beginPath();
   ctx.arc(cx, cy, hr, 0, Math.PI * 2);
   ctx.fillStyle = state.skin || '#fde68a';
@@ -1044,7 +1061,6 @@ function drawMii(state, canvasId, size = 120) {
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Hair (front)
   ctx.fillStyle = '#1f2937';
   if (state.hair === 'short') {
     ctx.beginPath();
@@ -1067,43 +1083,23 @@ function drawMii(state, canvasId, size = 120) {
     }
   }
 
-  // Eyes
-  const eyeY  = cy - hr * 0.1;
-  const eyeX  = hr * 0.28;
-  const eyeS  = hr * 0.11;
-
+  const eyeY = cy - hr * 0.1;
+  const eyeX = hr * 0.28;
+  const eyeS = hr * 0.11;
   ctx.fillStyle = '#1f2937';
 
   if (state.eyes === 'happy') {
-    [-1, 1].forEach(dir => {
-      ctx.beginPath();
-      ctx.arc(cx + dir * eyeX, eyeY, eyeS, Math.PI, 0);
-      ctx.fill();
-    });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, Math.PI, 0); ctx.fill(); });
   } else if (state.eyes === 'sleepy') {
-    [-1, 1].forEach(dir => {
-      ctx.beginPath();
-      ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI);
-      ctx.fill();
-    });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI); ctx.fill(); });
   } else if (state.eyes === 'surprised') {
-    [-1, 1].forEach(dir => {
-      ctx.beginPath();
-      ctx.arc(cx + dir * eyeX, eyeY, eyeS * 1.4, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS * 1.4, 0, Math.PI * 2); ctx.fill(); });
   } else if (state.eyes === 'wink') {
-    ctx.beginPath();
-    ctx.arc(cx - eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx - eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#1f2937'; ctx.lineWidth = size * 0.025;
     ctx.beginPath(); ctx.moveTo(cx + eyeX - eyeS, eyeY); ctx.lineTo(cx + eyeX + eyeS, eyeY); ctx.stroke();
   } else if (state.eyes === 'cool') {
-    ctx.fillStyle = '#1f2937';
-    [-1, 1].forEach(dir => {
-      ctx.beginPath();
-      ctx.ellipse(cx + dir * eyeX, eyeY, eyeS * 1.5, eyeS * 0.7, 0, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.ellipse(cx + dir * eyeX, eyeY, eyeS * 1.5, eyeS * 0.7, 0, 0, Math.PI * 2); ctx.fill(); });
     ctx.fillStyle = '#64748b';
     ctx.fillRect(cx - eyeX * 1.6, eyeY - eyeS * 1.2, eyeX * 3.2, eyeS * 0.6);
   } else if (state.eyes === 'star') {
@@ -1114,31 +1110,24 @@ function drawMii(state, canvasId, size = 120) {
     [-1, 1].forEach(dir => drawHeart(ctx, cx + dir * eyeX, eyeY, eyeS * 1.1));
   } else {
     [-1, 1].forEach(dir => {
-      ctx.beginPath();
-      ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(cx + dir * eyeX - eyeS * 0.3, eyeY - eyeS * 0.3, eyeS * 0.3, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#1f2937';
+      ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(cx + dir * eyeX - eyeS * 0.3, eyeY - eyeS * 0.3, eyeS * 0.3, 0, Math.PI * 2); ctx.fill();
     });
   }
 
-  // Mouth
-  const mouthY  = cy + hr * 0.35;
-  const mouthR  = hr * 0.22;
+  const mouthY = cy + hr * 0.35;
+  const mouthR = hr * 0.22;
   ctx.strokeStyle = '#1f2937';
   ctx.lineWidth   = size * 0.025;
 
   if (state.mouth === 'grin') {
-    ctx.beginPath();
-    ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
-    ctx.fillStyle = '#ef4444'; ctx.fill();
-    ctx.strokeStyle = '#1f2937'; ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(cx - mouthR + 2, mouthY - 2, mouthR * 2 - 4, 6);
+    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
+    ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.strokeStyle = '#1f2937'; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx - mouthR + 2, mouthY - 2, mouthR * 2 - 4, 6);
   } else if (state.mouth === 'open') {
-    ctx.beginPath();
-    ctx.ellipse(cx, mouthY, mouthR * 0.7, mouthR * 0.5, 0, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.ellipse(cx, mouthY, mouthR * 0.7, mouthR * 0.5, 0, 0, Math.PI * 2);
     ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.stroke();
   } else if (state.mouth === 'smirk') {
     ctx.beginPath();
@@ -1146,29 +1135,21 @@ function drawMii(state, canvasId, size = 120) {
     ctx.quadraticCurveTo(cx + mouthR * 0.3, mouthY - 4, cx + mouthR * 0.7, mouthY - 8);
     ctx.stroke();
   } else if (state.mouth === 'sad') {
-    ctx.beginPath();
-    ctx.arc(cx, mouthY + mouthR * 0.6, mouthR, Math.PI, 0);
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, mouthY + mouthR * 0.6, mouthR, Math.PI, 0); ctx.stroke();
   } else if (state.mouth === 'rainbow') {
-    ['#ef4444','#f59e0b','#22c55e','#3b82f6','#8b5cf6'].forEach((color, i, arr) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = size * 0.018;
-      ctx.beginPath();
-      ctx.arc(cx, mouthY, mouthR + i * 3, 0, Math.PI);
-      ctx.stroke();
+    ['#ef4444','#f59e0b','#22c55e','#3b82f6','#8b5cf6'].forEach((color, i) => {
+      ctx.strokeStyle = color; ctx.lineWidth = size * 0.018;
+      ctx.beginPath(); ctx.arc(cx, mouthY, mouthR + i * 3, 0, Math.PI); ctx.stroke();
     });
   } else {
-    // smile default
-    ctx.beginPath();
-    ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI); ctx.stroke();
   }
 }
 
 function drawStar(ctx, cx, cy, points, r, ir) {
   ctx.beginPath();
   for (let i = 0; i < points * 2; i++) {
-    const a = (i * Math.PI) / points - Math.PI / 2;
+    const a  = (i * Math.PI) / points - Math.PI / 2;
     const rd = i % 2 === 0 ? r : ir;
     i === 0 ? ctx.moveTo(cx + rd * Math.cos(a), cy + rd * Math.sin(a))
             : ctx.lineTo(cx + rd * Math.cos(a), cy + rd * Math.sin(a));
@@ -1188,7 +1169,6 @@ async function loadAvatarSection() {
   const profile = await apiRequest('/api/profile');
   if (!profile.error) { myProfile = { ...myProfile, ...profile }; syncMiiState(profile); }
 
-  // Colori sfondo
   const colorOpts = document.getElementById('colorOptions');
   if (colorOpts) {
     colorOpts.innerHTML = BG_COLORS.map(c => `
@@ -1198,7 +1178,6 @@ async function loadAvatarSection() {
     `).join('');
   }
 
-  // Carnagione
   const skinOpts = document.getElementById('skinOptions');
   if (skinOpts) {
     skinOpts.innerHTML = SKIN_COLORS.map(c => `
@@ -1208,7 +1187,6 @@ async function loadAvatarSection() {
     `).join('');
   }
 
-  // Capelli
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
     hairOpts.innerHTML = HAIR_OPTIONS.map(h => `
@@ -1218,7 +1196,6 @@ async function loadAvatarSection() {
     `).join('');
   }
 
-  // Occhi
   const eyeOpts = document.getElementById('eyeOptions');
   if (eyeOpts) {
     eyeOpts.innerHTML = EYE_OPTIONS.map(e => `
@@ -1228,7 +1205,6 @@ async function loadAvatarSection() {
     `).join('');
   }
 
-  // Bocca
   const mouthOpts = document.getElementById('mouthOptions');
   if (mouthOpts) {
     mouthOpts.innerHTML = MOUTH_OPTIONS.map(m => `
@@ -1245,8 +1221,7 @@ function setAvatarColor(color, el) {
   miiState.color = color;
   document.querySelectorAll('#colorOptions .color-swatch').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200);
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.setAvatarColor = setAvatarColor;
 
@@ -1254,8 +1229,7 @@ function setAvatarSkin(skin, el) {
   miiState.skin = skin;
   document.querySelectorAll('#skinOptions .color-swatch').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200);
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.setAvatarSkin = setAvatarSkin;
 
@@ -1263,8 +1237,7 @@ function setAvatarHair(hair, el) {
   miiState.hair = hair;
   document.querySelectorAll('#hairOptions .option-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200);
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.setAvatarHair = setAvatarHair;
 
@@ -1272,8 +1245,7 @@ function setAvatarEyes(eyes, el) {
   miiState.eyes = eyes;
   document.querySelectorAll('#eyeOptions .option-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200);
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.setAvatarEyes = setAvatarEyes;
 
@@ -1281,8 +1253,7 @@ function setAvatarMouth(mouth, el) {
   miiState.mouth = mouth;
   document.querySelectorAll('#mouthOptions .option-btn').forEach(b => b.classList.remove('selected'));
   el.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200);
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'miiCanvas', 200); drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.setAvatarMouth = setAvatarMouth;
 
@@ -1292,7 +1263,11 @@ async function saveAvatar() {
     eyes:  miiState.eyes,  mouth: miiState.mouth, hair: miiState.hair
   });
   if (data.error) { showNotification(data.error, 'error'); return; }
-  if (myProfile) { myProfile = { ...myProfile, ...miiState.color && { avatar_color: miiState.color, avatar_skin: miiState.skin, avatar_eyes: miiState.eyes, avatar_mouth: miiState.mouth, avatar_hair: miiState.hair } }; }
+  if (myProfile) {
+    myProfile.avatar_color = miiState.color; myProfile.avatar_skin  = miiState.skin;
+    myProfile.avatar_eyes  = miiState.eyes;  myProfile.avatar_mouth = miiState.mouth;
+    myProfile.avatar_hair  = miiState.hair;
+  }
   showNotification('✅ Avatar salvato!', 'success');
   drawMii(miiState, 'sidebarAvatar', 48);
 }
@@ -1317,9 +1292,9 @@ async function loadProfile() {
   const lvl  = Math.floor(pts / 100) + 1;
   const next = lvl * 100;
   const pct  = ((pts % 100) / 100) * 100;
-  document.getElementById('profLevel').textContent  = `Livello ${lvl} 🌱`;
-  document.getElementById('xpText').textContent     = `${pts}/${next} XP`;
-  document.getElementById('xpBar').style.width      = pct + '%';
+  document.getElementById('profLevel').textContent = `Livello ${lvl} 🌱`;
+  document.getElementById('xpText').textContent    = `${pts}/${next} XP`;
+  document.getElementById('xpBar').style.width     = pct + '%';
 
   syncMiiState(profile);
   await loadBadges();
@@ -1331,9 +1306,9 @@ async function loadBadges() {
   const container = document.getElementById('badgeList');
   if (!container || badges.error) return;
   container.innerHTML = badges.map(b => `
-    <div class="badge-item ${b.unlocked ? 'unlocked' : 'locked'}" title="${b.desc}">
+    <div class="badge-item ${b.unlocked ? 'unlocked' : 'locked'}" title="${escapeHtml(b.desc)}">
       <span>${b.icon}</span>
-      <strong>${b.name}</strong>
+      <strong>${escapeHtml(b.name)}</strong>
     </div>
   `).join('');
 }
@@ -1354,6 +1329,7 @@ async function changePassword() {
   const cur = document.getElementById('currentPw')?.value;
   const nw  = document.getElementById('newPw')?.value;
   if (!cur || !nw) { showNotification('Inserisci entrambe le password', 'error'); return; }
+  if (!checkPasswordStrength(nw)) { showNotification('La nuova password non è abbastanza sicura', 'error'); return; }
   const data = await apiRequest('/api/profile/password', 'PUT', { current_password: cur, new_password: nw });
   if (data.error) { showNotification(data.error, 'error'); return; }
   document.getElementById('currentPw').value = '';
@@ -1377,7 +1353,7 @@ async function loadNotifications() {
     <div class="notif-item ${n.is_read ? '' : 'unread'}" onclick="markRead(${n.id}, this)">
       <span class="notif-icon">${n.icon || '🔔'}</span>
       <div class="notif-body">
-        <p>${n.message}</p>
+        <p>${escapeHtml(n.message)}</p>
         <small>${timeAgo(n.created_at)}</small>
       </div>
       ${!n.is_read ? '<div class="notif-dot"></div>' : ''}
@@ -1415,7 +1391,7 @@ async function markAllRead() {
 window.markAllRead = markAllRead;
 
 // ═══════════════════════════════════════════
-// ADMIN — FIX AZIONI COMPLETE
+// ADMIN
 // ═══════════════════════════════════════════
 async function loadAdminPanel() {
   const stats = await apiRequest('/api/admin/stats');
@@ -1448,9 +1424,9 @@ async function loadAdminUsers() {
   tbody.innerHTML = data.map(u => `
     <tr>
       <td>${u.id}</td>
-      <td>${u.name || '-'}</td>
-      <td>@${u.username || '-'}</td>
-      <td style="font-size:12px;">${u.email}</td>
+      <td>${escapeHtml(u.name || '-')}</td>
+      <td>@${escapeHtml(u.username || '-')}</td>
+      <td style="font-size:12px;">${escapeHtml(u.email)}</td>
       <td>${u.points || 0}</td>
       <td>${parseFloat(u.co2_saved || 0).toFixed(1)}</td>
       <td>${u.activity_count || 0}</td>
@@ -1458,12 +1434,12 @@ async function loadAdminUsers() {
       <td><span class="badge-admin ${u.is_banned ? 'banned' : 'active'}">${u.is_banned ? '🔨 Bannato' : '✅ Attivo'}</span></td>
       <td>
         <div class="admin-actions">
-          <button class="btn-sm" onclick="openEditUser(${u.id}, '${(u.name||'').replace(/'/g,"\\'")}', '${(u.username||'').replace(/'/g,"\\'")}', ${u.points||0}, ${u.is_admin||false})">✏️</button>
+          <button class="btn-sm" onclick="openEditUser(${u.id}, ${JSON.stringify(u.name||'')}, ${JSON.stringify(u.username||'')}, ${u.points||0}, ${u.is_admin||false})">✏️</button>
           ${!u.is_banned
             ? `<button class="btn-sm red" onclick="openBanModal(${u.id})">🔨 Ban</button>`
             : `<button class="btn-sm green" onclick="unbanUser(${u.id})">✅ Unban</button>`
           }
-          ${u.id !== myProfile?.id ? `<button class="btn-sm red" onclick="deleteUser(${u.id}, '${(u.name||'').replace(/'/g,"\\'")}')">🗑️</button>` : ''}
+          ${u.id !== myProfile?.id ? `<button class="btn-sm red" onclick="deleteUser(${u.id}, ${JSON.stringify(u.name||'')})">🗑️</button>` : ''}
         </div>
       </td>
     </tr>
@@ -1477,8 +1453,8 @@ async function loadAdminActivities() {
   tbody.innerHTML = data.map(a => `
     <tr>
       <td>${a.id}</td>
-      <td>${a.user_name || '-'}</td>
-      <td>${ACTIVITY_ICONS[a.type] || ''} ${a.type}</td>
+      <td>${escapeHtml(a.user_name || '-')}</td>
+      <td>${ACTIVITY_ICONS[a.type] || ''} ${escapeHtml(a.type)}</td>
       <td>${a.km || 0}</td>
       <td>${a.hours || 0}</td>
       <td>${a.co2_saved || 0}</td>
@@ -1498,7 +1474,7 @@ async function loadAdminPosts() {
     return `
       <tr>
         <td>${p.id}</td>
-        <td>${p.author_name || '-'}</td>
+        <td>${escapeHtml(p.author_name || '-')}</td>
         <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.content)}</td>
         <td>❤️ ${likes.length}</td>
         <td style="font-size:12px;">${new Date(p.created_at).toLocaleDateString('it-IT')}</td>
@@ -1508,7 +1484,6 @@ async function loadAdminPosts() {
   }).join('');
 }
 
-// Edit user modal
 function openEditUser(id, name, username, points, isAdmin) {
   document.getElementById('editUserId').value       = id;
   document.getElementById('editUserName').value     = name;
@@ -1528,6 +1503,7 @@ async function confirmEditUser() {
   const username = document.getElementById('editUserUsername').value.trim();
   const points   = parseInt(document.getElementById('editUserPoints').value) || 0;
   const isAdmin  = document.getElementById('editUserIsAdmin').checked;
+  if (!name || !username) { showNotification('Nome e username obbligatori', 'error'); return; }
   const data = await apiRequest(`/api/admin/users/${id}`, 'PUT', { name, username, points, is_admin: isAdmin });
   if (data.error) { showNotification(data.error, 'error'); return; }
   closeEditUserModal();
@@ -1536,7 +1512,6 @@ async function confirmEditUser() {
 }
 window.confirmEditUser = confirmEditUser;
 
-// Ban modal
 function openBanModal(userId) {
   document.getElementById('banUserId').value = userId;
   document.getElementById('banDays').value   = '';
@@ -1571,7 +1546,7 @@ async function unbanUser(id) {
 window.unbanUser = unbanUser;
 
 async function deleteUser(id, name) {
-  showConfirm('Elimina utente', `Eliminare definitivamente ${name}? Questa azione è irreversibile.`, async () => {
+  showConfirm('Elimina utente', `Eliminare definitivamente ${escapeHtml(name)}? Questa azione è irreversibile.`, async () => {
     const data = await apiRequest(`/api/admin/users/${id}`, 'DELETE');
     if (data.error) { showNotification(data.error, 'error'); return; }
     showNotification('✅ Utente eliminato', 'success');
@@ -1623,8 +1598,8 @@ function renderTutorialStep() {
   document.getElementById('tutorialContent').innerHTML = `
     <div class="tutorial-step">
       <div class="tutorial-emoji">${step.emoji}</div>
-      <h3>${step.title}</h3>
-      <p>${step.text}</p>
+      <h3>${escapeHtml(step.title)}</h3>
+      <p>${escapeHtml(step.text)}</p>
     </div>
   `;
   const dots = document.getElementById('tutorialDots');
@@ -1656,7 +1631,6 @@ window.skipTutorial = skipTutorial;
 // INIT
 // ═══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
-  // Controlla reset password URL
   const params = new URLSearchParams(window.location.search);
   if (params.get('action') === 'reset' && params.get('token')) {
     switchAuthTab('reset');
@@ -1665,7 +1639,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     showNotification('✅ Email verificata! Ora puoi accedere.', 'success');
   }
 
-  // Auto-login se token salvato
   if (token) {
     const data = await apiRequest('/api/profile');
     if (!data.error) {
@@ -1684,12 +1657,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Chiudi modal cliccando fuori
-  ['confirmModal','banModal','editUserModal','tutorialModal'].forEach(id => {
-    const modal = document.getElementById(id);
-    if (modal) {
-      modal.addEventListener('click', e => {
-        if (e.target === modal && id !== 'tutorialModal') closeConfirm();
-      });
-    }
+  document.getElementById('confirmModal')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('confirmModal')) closeConfirm();
+  });
+  document.getElementById('banModal')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('banModal')) closeBanModal();
+  });
+  document.getElementById('editUserModal')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('editUserModal')) closeEditUserModal();
   });
 });
