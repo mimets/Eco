@@ -1256,3 +1256,23 @@ input:focus, textarea:focus {
   z-index: 99999 !important;
   inset: 0 !important;
 }
+/* TEAMS */
+.team-card { background:#fff; border:1px solid var(--gray-100); border-radius:var(--radius-lg); box-shadow:var(--shadow); cursor:pointer; transition:var(--transition); overflow:hidden; margin-bottom:12px; }
+.team-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.team-card-body { padding:14px; }
+.team-card-body strong { font-size:15px; font-weight:600; }
+.team-card-body small { display:block; color:var(--gray-500); font-size:12px; margin:4px 0 8px; }
+.team-card-stats { display:flex; gap:12px; font-size:12px; color:var(--gray-500); flex-wrap:wrap; }
+.team-role-badge { display:inline-block; padding:3px 8px; border-radius:99px; font-size:11px; font-weight:600; margin-top:6px; }
+.team-role-badge.admin { background:var(--yellow-bg); color:#92400e; }
+.team-role-badge.member { background:var(--gray-100); color:var(--gray-500); }
+.team-message { display:flex; gap:8px; align-items:flex-start; }
+.team-message.mine { flex-direction:row-reverse; }
+.team-message-body { max-width:75%; }
+.team-message.mine .team-message-body { align-items:flex-end; display:flex; flex-direction:column; }
+.team-message-author { font-size:11px; font-weight:600; color:var(--gray-500); display:block; margin-bottom:2px; }
+.team-message.mine .team-message-author { display:none; }
+.team-message-text { background:var(--gray-100); border-radius:12px; padding:8px 12px; font-size:13px; display:block; word-break:break-word; }
+.team-message.mine .team-message-text { background:var(--green); color:#fff; }
+.team-message-time { font-size:10px; color:var(--gray-400); margin-top:2px; display:block; }
+#confirmModal, #banModal, #editUserModal, #tutorialModal { position:fixed !important; z-index:99999 !important; inset:0 !important; }

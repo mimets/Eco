@@ -1,4 +1,3 @@
-// EcoTrack Server v2
 'use strict';
 require('dotenv').config();
 const express    = require('express');
@@ -210,7 +209,6 @@ async function initDB() {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS to_addr TEXT DEFAULT ''`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''`,
     `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS data JSONB DEFAULT '{}'`,
-    `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT '🔔'`,
     // Indici per performance
     `CREATE INDEX IF NOT EXISTS idx_activities_user ON activities(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date DESC)`,
@@ -223,6 +221,35 @@ async function initDB() {
     `CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
     `UPDATE users SET owned_items = '[]' WHERE owned_items IS NULL`,
     `UPDATE users SET verified = 1 WHERE verified IS NULL`,
+    // TEAM TABLES
+    `CREATE TABLE IF NOT EXISTS teams (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      invite_code TEXT UNIQUE NOT NULL,
+      owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      avatar_color TEXT DEFAULT '#16a34a',
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS team_members (
+      id SERIAL PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT DEFAULT 'member',
+      joined_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(team_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS team_messages (
+      id SERIAL PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_team_messages_team ON team_messages(team_id)`,
+    `ALTER TABLE challenges ADD COLUMN IF NOT EXISTS team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE`,
   ];
 
   for (const sql of migrations) {
@@ -1012,6 +1039,261 @@ app.post('/api/social/follow/:id', auth, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════
+
+// ═══════════════════════════════════════════
+// TEAMS
+// ═══════════════════════════════════════════
+
+// Crea team
+app.post('/api/teams', auth, async (req, res) => {
+  try {
+    const { name, description, avatar_color } = req.body;
+    if (!name || name.trim().length < 2)
+      return res.status(400).json({ error: 'Nome team troppo corto (min 2 caratteri)' });
+    if (name.length > 50)
+      return res.status(400).json({ error: 'Nome team troppo lungo' });
+    const invite_code = crypto.randomBytes(6).toString('hex');
+    const { rows } = await db.query(
+      'INSERT INTO teams (name,description,invite_code,owner_id,avatar_color) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [name.trim(), (description||'').slice(0,200), invite_code, req.user.id, avatar_color||'#16a34a']
+    );
+    // Owner diventa membro con ruolo admin
+    await db.query(
+      "INSERT INTO team_members (team_id,user_id,role) VALUES ($1,$2,'admin')",
+      [rows[0].id, req.user.id]
+    );
+    return res.json({ ok: true, team: rows[0] });
+  } catch (err) {
+    console.error('Create team error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Lista team dell'utente
+app.get('/api/teams', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT t.*, tm.role,
+        (SELECT COUNT(*) FROM team_members WHERE team_id=t.id) as member_count,
+        (SELECT COALESCE(SUM(u2.co2_saved),0) FROM team_members tm2 JOIN users u2 ON u2.id=tm2.user_id WHERE tm2.team_id=t.id) as total_co2,
+        (SELECT COALESCE(SUM(u2.points),0) FROM team_members tm2 JOIN users u2 ON u2.id=tm2.user_id WHERE tm2.team_id=t.id) as total_points
+      FROM teams t
+      JOIN team_members tm ON tm.team_id=t.id AND tm.user_id=$1
+      ORDER BY t.created_at DESC
+    `, [req.user.id]);
+    return res.json(rows);
+  } catch (err) {
+    console.error('Get teams error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Unisciti a un team tramite codice invito
+app.post('/api/teams/join', auth, async (req, res) => {
+  try {
+    const { invite_code } = req.body;
+    if (!invite_code) return res.status(400).json({ error: 'Codice invito mancante' });
+    const { rows: teamRows } = await db.query('SELECT * FROM teams WHERE invite_code=$1', [invite_code]);
+    if (!teamRows.length) return res.status(404).json({ error: 'Team non trovato' });
+    const team = teamRows[0];
+    const { rows: existing } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2',
+      [team.id, req.user.id]
+    );
+    if (existing.length) return res.status(400).json({ error: 'Sei già membro di questo team' });
+    await db.query(
+      "INSERT INTO team_members (team_id,user_id,role) VALUES ($1,$2,'member')",
+      [team.id, req.user.id]
+    );
+    // Notifica al owner
+    if (team.owner_id !== req.user.id) {
+      const { rows: me } = await db.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
+      await db.query(
+        "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'team',$2,'👥')",
+        [team.owner_id, `${me[0].name} si è unito al team ${team.name}!`]
+      ).catch(() => {});
+    }
+    return res.json({ ok: true, team });
+  } catch (err) {
+    console.error('Join team error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Dettaglio team
+app.get('/api/teams/:id', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    // Verifica che l'utente sia membro
+    const { rows: memberCheck } = await db.query(
+      'SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2',
+      [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro di questo team' });
+
+    const { rows: team } = await db.query('SELECT * FROM teams WHERE id=$1', [teamId]);
+    if (!team.length) return res.status(404).json({ error: 'Team non trovato' });
+
+    const { rows: members } = await db.query(`
+      SELECT u.id, u.name, u.username, u.co2_saved, u.points, u.avatar_color,
+             u.avatar_skin, u.avatar_eyes, u.avatar_mouth, u.avatar_hair, tm.role, tm.joined_at
+      FROM team_members tm JOIN users u ON u.id=tm.user_id
+      WHERE tm.team_id=$1 ORDER BY u.co2_saved DESC
+    `, [teamId]);
+
+    const { rows: stats } = await db.query(`
+      SELECT COALESCE(SUM(u.co2_saved),0) as total_co2,
+             COALESCE(SUM(u.points),0) as total_points,
+             COUNT(u.id) as member_count
+      FROM team_members tm JOIN users u ON u.id=tm.user_id
+      WHERE tm.team_id=$1
+    `, [teamId]);
+
+    return res.json({
+      ...team[0],
+      members,
+      my_role: memberCheck[0].role,
+      stats: stats[0]
+    });
+  } catch (err) {
+    console.error('Get team detail error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Lascia team
+app.delete('/api/teams/:id/leave', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: team } = await db.query('SELECT owner_id FROM teams WHERE id=$1', [teamId]);
+    if (!team.length) return res.status(404).json({ error: 'Team non trovato' });
+    if (team[0].owner_id === req.user.id)
+      return res.status(400).json({ error: 'Il proprietario non può lasciare il team. Elimina il team o trasferisci la proprietà.' });
+    await db.query('DELETE FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Leave team error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Elimina team (solo owner)
+app.delete('/api/teams/:id', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: team } = await db.query('SELECT owner_id FROM teams WHERE id=$1', [teamId]);
+    if (!team.length) return res.status(404).json({ error: 'Team non trovato' });
+    if (team[0].owner_id !== req.user.id)
+      return res.status(403).json({ error: 'Solo il proprietario può eliminare il team' });
+    await db.query('DELETE FROM teams WHERE id=$1', [teamId]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Classifica team globale
+app.get('/api/teams/leaderboard/global', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT t.id, t.name, t.avatar_color, t.description,
+             COUNT(tm.user_id) as member_count,
+             COALESCE(SUM(u.co2_saved),0) as total_co2,
+             COALESCE(SUM(u.points),0) as total_points
+      FROM teams t
+      JOIN team_members tm ON tm.team_id=t.id
+      JOIN users u ON u.id=tm.user_id
+      GROUP BY t.id ORDER BY total_co2 DESC LIMIT 20
+    `);
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Messaggi chat team
+app.get('/api/teams/:id/messages', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { rows } = await db.query(`
+      SELECT m.id, m.content, m.created_at, u.id as user_id, u.name as author_name,
+             u.username as author_username, u.avatar_color, u.avatar_skin,
+             u.avatar_eyes, u.avatar_mouth, u.avatar_hair
+      FROM team_messages m JOIN users u ON u.id=m.user_id
+      WHERE m.team_id=$1 ORDER BY m.created_at ASC LIMIT 100
+    `, [teamId]);
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Invia messaggio chat team
+app.post('/api/teams/:id/messages', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: 'Messaggio vuoto' });
+    if (content.length > 500) return res.status(400).json({ error: 'Messaggio troppo lungo' });
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { rows } = await db.query(
+      'INSERT INTO team_messages (team_id,user_id,content) VALUES ($1,$2,$3) RETURNING *',
+      [teamId, req.user.id, content.trim()]
+    );
+    return res.json({ ok: true, message: rows[0] });
+  } catch (err) {
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Sfide del team
+app.get('/api/teams/:id/challenges', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { rows } = await db.query(`
+      SELECT c.*, u.name as creator_name FROM challenges c
+      LEFT JOIN users u ON u.id=c.user_id
+      WHERE c.team_id=$1 ORDER BY c.created_at DESC
+    `, [teamId]);
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Crea sfida del team
+app.post('/api/teams/:id/challenges', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { title, description, co2_target, points_reward, end_date } = req.body;
+    if (!title) return res.status(400).json({ error: 'Titolo obbligatorio' });
+    if (!end_date) return res.status(400).json({ error: 'Data scadenza obbligatoria' });
+    const { rows } = await db.query(
+      'INSERT INTO challenges (user_id,title,description,co2_target,points_reward,end_date,is_public,team_id) VALUES ($1,$2,$3,$4,$5,$6,false,$7) RETURNING *',
+      [req.user.id, title.trim(), (description||'').slice(0,500), parseFloat(co2_target)||0, parseInt(points_reward)||0, end_date, teamId]
+    );
+    return res.json({ ok: true, challenge: rows[0] });
+  } catch (err) {
+    console.error('Team challenge error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
 // SHOP — con transazione per evitare doppio acquisto
 // ═══════════════════════════════════════════
 app.get('/api/shop', auth, async (req, res) => {

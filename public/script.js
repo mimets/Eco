@@ -324,6 +324,7 @@ async function showSection(section) {
     case 'avatar':      await loadAvatarSection(); break;
     case 'profile':     await loadProfile();       break;
     case 'notifiche':   await loadNotifications(); break;
+    case 'teams':       await loadTeams(); break;
     case 'admin':       if (myProfile?.is_admin) await loadAdminPanel(); break;
   }
 }
@@ -1586,6 +1587,237 @@ async function adminDeletePost(id) {
 }
 window.adminDeletePost = adminDeletePost;
 
+
+// ═══════════════════════════════════════════
+// TEAMS
+// ═══════════════════════════════════════════
+let currentTeamId = null;
+let teamMessagesInterval = null;
+
+async function loadTeams() {
+  const [data, lb] = await Promise.all([
+    apiRequest('/api/teams'),
+    apiRequest('/api/teams/leaderboard/global')
+  ]);
+  const leaderboard = document.getElementById('teamsLeaderboard');
+  if (leaderboard && !lb.error) {
+    leaderboard.innerHTML = lb.length ? lb.map((t, i) => `
+      <div class="leaderboard-item" onclick="openTeam(${t.id})" style="cursor:pointer;">
+        <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${['🥇','🥈','🥉'][i]||i+1}</div>
+        <div class="lb-info"><strong>${escapeHtml(t.name)}</strong><small>${t.member_count} membri</small></div>
+        <div class="lb-stats">
+          <span class="lb-co2">🌱 ${parseFloat(t.total_co2).toFixed(1)} kg</span>
+          <span class="lb-pts">⭐ ${t.total_points} pt</span>
+        </div>
+      </div>`).join('') : '<div class="empty-state"><span>🏆</span><p>Nessun team</p></div>';
+  }
+  const container = document.getElementById('teamsList');
+  if (!container) return;
+  if (data.error || !data.length) {
+    container.innerHTML = `<div class="empty-state"><span>👥</span><p>Non sei in nessun team.<br>Creane uno o unisciti con un codice!</p></div>`;
+    return;
+  }
+  container.innerHTML = data.map(t => `
+    <div class="team-card" onclick="openTeam(${t.id})">
+      <div class="team-card-color" style="background:${escapeHtml(t.avatar_color)};height:8px;border-radius:8px 8px 0 0;"></div>
+      <div class="team-card-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>${escapeHtml(t.name)}</strong>
+          <span class="team-role-badge ${t.role==='admin'?'admin':'member'}">${t.role==='admin'?'👑 Admin':'👤 Membro'}</span>
+        </div>
+        <small style="color:#64748b;">${escapeHtml(t.description||'')}</small>
+        <div class="team-card-stats">
+          <span>👥 ${t.member_count} membri</span>
+          <span>🌱 ${parseFloat(t.total_co2||0).toFixed(1)} kg CO₂</span>
+          <span>⭐ ${t.total_points||0} pt</span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+window.loadTeams = loadTeams;
+
+async function createTeam() {
+  const name  = document.getElementById('teamName')?.value.trim();
+  const desc  = document.getElementById('teamDesc')?.value.trim();
+  const color = document.getElementById('teamColor')?.value || '#16a34a';
+  if (!name) { showNotification('Inserisci un nome per il team', 'error'); return; }
+  const data = await apiRequest('/api/teams', 'POST', { name, description: desc, avatar_color: color });
+  if (data.error) { showNotification(data.error, 'error'); return; }
+  showNotification('✅ Team creato!', 'success');
+  document.getElementById('teamName').value = '';
+  document.getElementById('teamDesc').value = '';
+  await loadTeams();
+}
+window.createTeam = createTeam;
+
+async function joinTeam() {
+  const code = document.getElementById('teamInviteCode')?.value.trim();
+  if (!code) { showNotification('Inserisci il codice invito', 'error'); return; }
+  const data = await apiRequest('/api/teams/join', 'POST', { invite_code: code });
+  if (data.error) { showNotification(data.error, 'error'); return; }
+  showNotification(`✅ Sei entrato nel team ${data.team.name}!`, 'success');
+  document.getElementById('teamInviteCode').value = '';
+  await loadTeams();
+}
+window.joinTeam = joinTeam;
+
+async function openTeam(teamId) {
+  currentTeamId = teamId;
+  const data = await apiRequest(`/api/teams/${teamId}`);
+  if (data.error) { showNotification(data.error, 'error'); return; }
+
+  document.getElementById('teamDetailName').textContent = data.name;
+  document.getElementById('teamDetailDesc').textContent = data.description || '';
+  document.getElementById('teamDetailCo2').textContent  = parseFloat(data.stats.total_co2||0).toFixed(1);
+  document.getElementById('teamDetailPts').textContent  = data.stats.total_points || 0;
+  document.getElementById('teamDetailMembers').textContent = data.stats.member_count || 0;
+
+  const inviteLink = `${window.location.origin}?join=${data.invite_code}`;
+  document.getElementById('teamInviteLink').value = inviteLink;
+
+  const leaveBtn = document.getElementById('teamLeaveBtn');
+  if (data.my_role === 'admin') {
+    leaveBtn.textContent = '🗑️ Elimina team';
+    leaveBtn.onclick = () => deleteTeam(teamId, data.name);
+  } else {
+    leaveBtn.textContent = '🚪 Lascia team';
+    leaveBtn.onclick = () => leaveTeam(teamId);
+  }
+
+  const membersEl = document.getElementById('teamMembersList');
+  membersEl.innerHTML = data.members.map(m => `
+    <div class="user-card">
+      <canvas width="36" height="36" style="border-radius:50%;" id="tmAv${m.id}"></canvas>
+      <div class="user-card-info">
+        <strong>${escapeHtml(m.name)} ${m.role==='admin'?'👑':''}</strong>
+        <small>🌱 ${parseFloat(m.co2_saved||0).toFixed(1)} kg · ⭐ ${m.points||0} pt</small>
+      </div>
+    </div>`).join('');
+  data.members.forEach(m => drawMii({
+    color: m.avatar_color||'#16a34a', skin: m.avatar_skin||'#fde68a',
+    eyes: m.avatar_eyes||'normal', mouth: m.avatar_mouth||'smile', hair: m.avatar_hair||'none'
+  }, `tmAv${m.id}`, 36));
+
+  await loadTeamChallenges(teamId);
+  await loadTeamMessages(teamId);
+  if (teamMessagesInterval) clearInterval(teamMessagesInterval);
+  teamMessagesInterval = setInterval(() => loadTeamMessages(teamId), 5000);
+
+  document.getElementById('teamsListView').style.display = 'none';
+  document.getElementById('teamDetailView').style.display = 'block';
+}
+window.openTeam = openTeam;
+
+function backToTeams() {
+  if (teamMessagesInterval) { clearInterval(teamMessagesInterval); teamMessagesInterval = null; }
+  currentTeamId = null;
+  document.getElementById('teamsListView').style.display = 'block';
+  document.getElementById('teamDetailView').style.display = 'none';
+}
+window.backToTeams = backToTeams;
+
+async function loadTeamMessages(teamId) {
+  const data = await apiRequest(`/api/teams/${teamId}/messages`);
+  const container = document.getElementById('teamChat');
+  if (!container || data.error) return;
+  const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+  container.innerHTML = data.length ? data.map(m => `
+    <div class="team-message ${m.user_id === myProfile?.id ? 'mine' : ''}">
+      <canvas width="28" height="28" style="border-radius:50%;flex-shrink:0;" id="chatAv${m.id}"></canvas>
+      <div class="team-message-body">
+        <span class="team-message-author">${escapeHtml(m.author_name)}</span>
+        <p class="team-message-text">${escapeHtml(m.content)}</p>
+        <span class="team-message-time">${timeAgo(m.created_at)}</span>
+      </div>
+    </div>`).join('') : '<div class="empty-state"><span>💬</span><p>Nessun messaggio</p></div>';
+  data.forEach(m => drawMii({
+    color: m.avatar_color||'#16a34a', skin: m.avatar_skin||'#fde68a',
+    eyes: m.avatar_eyes||'normal', mouth: m.avatar_mouth||'smile', hair: m.avatar_hair||'none'
+  }, `chatAv${m.id}`, 28));
+  if (wasAtBottom) container.scrollTop = container.scrollHeight;
+}
+
+async function sendTeamMessage() {
+  if (!currentTeamId) return;
+  const input = document.getElementById('teamChatInput');
+  const content = input?.value.trim();
+  if (!content) return;
+  const data = await apiRequest(`/api/teams/${currentTeamId}/messages`, 'POST', { content });
+  if (data.error) { showNotification(data.error, 'error'); return; }
+  input.value = '';
+  await loadTeamMessages(currentTeamId);
+}
+window.sendTeamMessage = sendTeamMessage;
+
+async function loadTeamChallenges(teamId) {
+  const data = await apiRequest(`/api/teams/${teamId}/challenges`);
+  const container = document.getElementById('teamChallengesList');
+  if (!container) return;
+  if (data.error || !data.length) {
+    container.innerHTML = '<div class="empty-state"><span>🏆</span><p>Nessuna sfida del team</p></div>'; return;
+  }
+  container.innerHTML = data.map(c => {
+    const expired = c.end_date && new Date(c.end_date) < new Date();
+    return `<div class="challenge-item">
+      <div class="challenge-header">
+        <span class="challenge-title">${escapeHtml(c.title)}</span>
+        ${expired ? '<span style="color:#ef4444;font-size:12px;">⏰ Scaduta</span>' : ''}
+      </div>
+      <p class="challenge-desc">${escapeHtml(c.description||'')}</p>
+      <div class="challenge-meta">
+        <span>🎯 ${c.co2_target} kg CO₂</span>
+        <span>⭐ ${c.points_reward} pt</span>
+        ${c.end_date ? `<span>📅 ${new Date(c.end_date).toLocaleDateString('it-IT')}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function createTeamChallenge() {
+  if (!currentTeamId) return;
+  const title   = document.getElementById('teamChTitle')?.value.trim();
+  const desc    = document.getElementById('teamChDesc')?.value.trim();
+  const co2     = parseFloat(document.getElementById('teamChCo2')?.value) || 0;
+  const pts     = parseInt(document.getElementById('teamChPts')?.value) || 0;
+  const endDate = document.getElementById('teamChDate')?.value;
+  if (!title)   { showNotification('Titolo obbligatorio', 'error'); return; }
+  if (!endDate) { showNotification('Data scadenza obbligatoria', 'error'); return; }
+  const data = await apiRequest(`/api/teams/${currentTeamId}/challenges`, 'POST',
+    { title, description: desc, co2_target: co2, points_reward: pts, end_date: endDate });
+  if (data.error) { showNotification(data.error, 'error'); return; }
+  showNotification('✅ Sfida creata!', 'success');
+  ['teamChTitle','teamChDesc','teamChCo2','teamChPts','teamChDate'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  await loadTeamChallenges(currentTeamId);
+}
+window.createTeamChallenge = createTeamChallenge;
+
+function copyInviteLink() {
+  const link = document.getElementById('teamInviteLink')?.value;
+  if (!link) return;
+  navigator.clipboard.writeText(link).then(() => showNotification('✅ Link copiato!', 'success'));
+}
+window.copyInviteLink = copyInviteLink;
+
+async function leaveTeam(teamId) {
+  showConfirm('Lascia team', 'Sei sicuro di voler lasciare il team?', async () => {
+    const data = await apiRequest(`/api/teams/${teamId}/leave`, 'DELETE');
+    if (data.error) { showNotification(data.error, 'error'); return; }
+    showNotification('Hai lasciato il team', 'info');
+    backToTeams(); await loadTeams();
+  }, '🚪');
+}
+window.leaveTeam = leaveTeam;
+
+async function deleteTeam(teamId, name) {
+  showConfirm('Elimina team', `Eliminare "${escapeHtml(name)}"? Azione irreversibile.`, async () => {
+    const data = await apiRequest(`/api/teams/${teamId}`, 'DELETE');
+    if (data.error) { showNotification(data.error, 'error'); return; }
+    showNotification('Team eliminato', 'success');
+    backToTeams(); await loadTeams();
+  }, '🗑️');
+}
+window.deleteTeam = deleteTeam;
+
 // ═══════════════════════════════════════════
 // TUTORIAL
 // ═══════════════════════════════════════════
@@ -1646,6 +1878,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (params.get('action') === 'reset' && params.get('token')) {
     switchAuthTab('reset');
   }
+  // Auto-join team da link invito
+  const joinCode = params.get('join');
+  if (joinCode && token) {
+    const joinData = await apiRequest('/api/teams/join', 'POST', { invite_code: joinCode });
+    if (!joinData.error) showNotification(`✅ Sei entrato nel team ${joinData.team?.name||''}!`, 'success');
+  }
+
   if (params.get('verified') === '1') {
     showNotification('✅ Email verificata! Ora puoi accedere.', 'success');
   }

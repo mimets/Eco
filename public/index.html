@@ -189,6 +189,9 @@
         <i class="fas fa-bell"></i><span>Notifiche</span>
         <span id="notifBadge" class="notif-badge" style="display:none">0</span>
       </div>
+      <div class="nav-item" onclick="showSection('teams')">
+       <i class="fas fa-users-cog"></i><span>Team</span>
+      </div>
       <div class="nav-item admin-nav" id="adminNavItem" style="display:none" onclick="showSection('admin')">
         <i class="fas fa-crown"></i><span>Admin</span>
       </div>
@@ -593,6 +596,99 @@
         </div>
       </div>
     </section>
+    <!-- ══════════════════════════ TEAMS ══════════════════════════ -->
+<section id="teams" class="tab-pane">
+  <div id="teamsListView">
+    <div class="section-header"><h2>👥 Team</h2></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+      <div class="card">
+        <div class="card-header"><h3>➕ Crea team</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+          <input type="text" id="teamName" placeholder="Nome del team *" maxlength="50" />
+          <textarea id="teamDesc" placeholder="Descrizione..." rows="2" style="resize:none;"></textarea>
+          <div><label class="label-sm">Colore team</label>
+          <input type="color" id="teamColor" value="#16a34a" style="width:60px;height:36px;padding:2px;border-radius:8px;border:1.5px solid #e2e8f0;cursor:pointer;" /></div>
+          <button class="btn-primary" onclick="createTeam()"><i class="fas fa-plus"></i> Crea team</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🔗 Unisciti a un team</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+          <p style="color:#64748b;font-size:13px;">Hai ricevuto un link invito? Incolla il codice qui sotto.</p>
+          <input type="text" id="teamInviteCode" placeholder="Codice invito (es. abc123)" />
+          <button class="btn-primary" onclick="joinTeam()"><i class="fas fa-sign-in-alt"></i> Unisciti</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><h3>👥 I miei team</h3></div>
+      <div class="card-body" id="teamsList"><div class="empty-state"><span>👥</span><p>Nessun team</p></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>🏆 Classifica team globale</h3></div>
+      <div class="card-body" id="teamsLeaderboard"><div class="empty-state"><span>🏆</span><p>Nessun team</p></div></div>
+    </div>
+  </div>
+  <div id="teamDetailView" style="display:none;">
+    <div class="section-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="btn-sm" onclick="backToTeams()"><i class="fas fa-arrow-left"></i> Indietro</button>
+        <div><h2 id="teamDetailName">Team</h2><p id="teamDetailDesc" style="color:#64748b;font-size:13px;margin:0;"></p></div>
+      </div>
+      <button id="teamLeaveBtn" class="btn-sm red">🚪 Lascia</button>
+    </div>
+    <div class="stats-grid" style="margin-bottom:20px;">
+      <div class="stat-card green"><div class="stat-card-icon">🌍</div><div class="stat-card-body"><span class="stat-card-value" id="teamDetailCo2">0</span><span class="stat-card-label">kg CO₂ totali</span></div></div>
+      <div class="stat-card yellow"><div class="stat-card-icon">⭐</div><div class="stat-card-body"><span class="stat-card-value" id="teamDetailPts">0</span><span class="stat-card-label">Punti totali</span></div></div>
+      <div class="stat-card blue"><div class="stat-card-icon">👥</div><div class="stat-card-body"><span class="stat-card-value" id="teamDetailMembers">0</span><span class="stat-card-label">Membri</span></div></div>
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><h3>🔗 Link di invito</h3></div>
+      <div class="card-body">
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="teamInviteLink" readonly style="flex:1;background:#f8fafc;" />
+          <button class="btn-sm green" onclick="copyInviteLink()"><i class="fas fa-copy"></i> Copia</button>
+        </div>
+        <p style="color:#64748b;font-size:12px;margin-top:8px;">Condividi questo link con i tuoi colleghi.</p>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+      <div class="card">
+        <div class="card-header"><h3>👥 Membri</h3></div>
+        <div class="card-body" id="teamMembersList"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>💬 Chat team</h3></div>
+        <div class="card-body" style="padding:0;">
+          <div id="teamChat" style="height:280px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="display:flex;gap:8px;padding:12px;border-top:1px solid #f1f5f9;">
+            <input type="text" id="teamChatInput" placeholder="Scrivi un messaggio..." style="flex:1;" onkeydown="if(event.key==='Enter')sendTeamMessage()" />
+            <button class="btn-sm green" onclick="sendTeamMessage()"><i class="fas fa-paper-plane"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="card">
+        <div class="card-header"><h3>➕ Crea sfida team</h3></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+          <input type="text" id="teamChTitle" placeholder="Titolo sfida *" />
+          <textarea id="teamChDesc" placeholder="Descrizione..." rows="2" style="resize:none;"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><label class="label-sm">Target CO₂ (kg)</label><input type="number" id="teamChCo2" placeholder="es. 100" min="1" /></div>
+            <div><label class="label-sm">Premio (punti)</label><input type="number" id="teamChPts" placeholder="es. 200" min="0" /></div>
+          </div>
+          <div><label class="label-sm">Data scadenza</label><input type="date" id="teamChDate" /></div>
+          <button class="btn-primary" onclick="createTeamChallenge()"><i class="fas fa-plus"></i> Crea sfida</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>🏆 Sfide del team</h3></div>
+        <div class="card-body" id="teamChallengesList"><div class="empty-state"><span>🏆</span><p>Nessuna sfida</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
 
     <!-- ══════════════════════════ ADMIN ══════════════════════════ -->
     <section id="admin" class="tab-pane">
