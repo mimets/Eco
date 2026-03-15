@@ -1020,57 +1020,36 @@ app.get('/api/shop', auth, async (req, res) => {
 });
 
 app.post('/api/shop/buy', auth, async (req, res) => {
-  const client = await db.connect();
   try {
     const { item_id } = req.body;
     if (!item_id) return res.status(400).json({ error: 'item_id mancante' });
 
-    await client.query('BEGIN');
-
-    const { rows: itemRows } = await client.query('SELECT * FROM shop_items WHERE id=$1', [item_id]);
-    if (!itemRows.length) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Oggetto non trovato' });
-    }
+    const { rows: itemRows } = await db.query('SELECT * FROM shop_items WHERE id=$1', [item_id]);
+    if (!itemRows.length) return res.status(404).json({ error: 'Oggetto non trovato' });
     const item = itemRows[0];
 
-    // Lock sulla riga utente per evitare race condition
-    const { rows: uRows } = await client.query(
-      'SELECT points,owned_items FROM users WHERE id=$1 FOR UPDATE',
-      [req.user.id]
-    );
+    const { rows: uRows } = await db.query('SELECT points,owned_items FROM users WHERE id=$1', [req.user.id]);
     const u     = uRows[0];
     const owned = parseOwned(u.owned_items);
 
-    if (owned.includes(item.id)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Oggetto già posseduto' });
-    }
-    if (u.points < item.cost) {
-      await client.query('ROLLBACK');
+    if (owned.includes(item.id)) return res.status(400).json({ error: 'Oggetto già posseduto' });
+    if (u.points < item.cost)
       return res.status(400).json({ error: `Punti insufficienti (hai ${u.points}, servono ${item.cost})` });
-    }
 
     owned.push(item.id);
     const newPoints = u.points - item.cost;
-    await client.query('UPDATE users SET points=$1,owned_items=$2 WHERE id=$3',
+    await db.query('UPDATE users SET points=$1,owned_items=$2 WHERE id=$3',
       [newPoints, JSON.stringify(owned), req.user.id]);
-
-    await client.query(
+    await db.query(
       "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'shop',$2,'🛍️')",
       [req.user.id, `Hai acquistato: ${item.name}!`]
     );
 
-    await client.query('COMMIT');
-
     checkBadges(req.user.id).catch(console.error);
     return res.json({ ok: true, new_points: newPoints, owned_items: owned });
   } catch (err) {
-    await client.query('ROLLBACK');
     console.error('Shop BUY error:', err);
     return res.status(500).json({ error: 'Errore server' });
-  } finally {
-    client.release();
   }
 });
 

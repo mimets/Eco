@@ -9,10 +9,11 @@ let mapInstance = null;
 let mapInitialized = false;
 let routingControl = null;
 let currentActivityType = null;
-let confirmCallback = null;
 let allShopItems = [];
 let currentShopCategory = 'all';
 let tutorialStep = 1;
+
+window.confirmCallback = null;
 
 let miiState = {
   color: '#16a34a',
@@ -69,19 +70,19 @@ function showConfirm(title, message, callback, icon = '❓') {
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmMsg').textContent   = message;
   document.getElementById('confirmModal').style.display = 'flex';
-  confirmCallback = callback;
+  window.confirmCallback = callback;
 }
 window.showConfirm = showConfirm;
 
 function closeConfirm() {
   document.getElementById('confirmModal').style.display = 'none';
-  confirmCallback = null;
+  window.confirmCallback = null;
 }
 window.closeConfirm = closeConfirm;
 
 window.confirmAction = function () {
   closeConfirm();
-  if (confirmCallback) { confirmCallback(); confirmCallback = null; }
+  if (window.confirmCallback) { window.confirmCallback(); window.confirmCallback = null; }
 };
 
 function togglePassword(inputId, btn) {
