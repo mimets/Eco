@@ -66,23 +66,27 @@ function showNotification(message, type = 'success') {
 window.showNotification = showNotification;
 
 function showConfirm(title, message, callback, icon = '❓') {
+  const modal = document.getElementById('confirmModal');
   document.getElementById('confirmIcon').textContent  = icon;
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmMsg').textContent   = message;
-  document.getElementById('confirmModal').style.display = 'flex';
+  document.body.appendChild(modal);
+  modal.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;background:rgba(0,0,0,.5)!important;z-index:999999!important;align-items:center!important;justify-content:center!important;';
   window.confirmCallback = callback;
 }
 window.showConfirm = showConfirm;
 
 function closeConfirm() {
-  document.getElementById('confirmModal').style.display = 'none';
+  const modal = document.getElementById('confirmModal');
+  modal.style.display = 'none';
   window.confirmCallback = null;
 }
 window.closeConfirm = closeConfirm;
 
 window.confirmAction = function () {
+  const cb = window.confirmCallback;
   closeConfirm();
-  if (window.confirmCallback) { window.confirmCallback(); window.confirmCallback = null; }
+  if (cb) cb();
 };
 
 function togglePassword(inputId, btn) {
@@ -1551,7 +1555,7 @@ window.unbanUser = unbanUser;
 
 async function deleteUser(id) {
   const users = await apiRequest('/api/admin/users');
-  const u = Array.isArray(users) ? users.find(x => x.id === parseInt(id)) : null;
+  const u = Array.isArray(users) ? users.find(x => x.id === id) : null;
   const name = u ? u.name : 'questo utente';
   showConfirm('Elimina utente', `Eliminare ${escapeHtml(name)}? Azione irreversibile.`, async () => {
     const data = await apiRequest(`/api/admin/users/${id}`, 'DELETE');
