@@ -1279,7 +1279,7 @@ app.get('/api/debug/users', async (req, res) => {
 //   STATIC FILES
 // ══════════════════════════════════════════
 
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ══════════════════════════════════════════
 //   CATCH ALL
@@ -1289,7 +1289,7 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'API route non trovata' });
   }
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ══════════════════════════════════════════
