@@ -53,6 +53,36 @@ const EYE_OPTIONS   = ['normal','happy','sleepy','surprised','wink','cool','star
 const MOUTH_OPTIONS = ['smile','grin','open','smirk','sad','rainbow'];
 
 // ═══════════════════════════════════════════
+// REAL-TIME POLLING — aggiornamento ogni 5 sec
+// ═══════════════════════════════════════════
+let realtimeIntervals = {};
+
+function startRealtime(section) {
+  stopAllRealtime();
+  const intervals = {
+    dashboard:   () => loadDashboard(),
+    social:      () => loadPosts(),
+    leaderboard: () => loadLeaderboard(),
+    notifiche:   () => loadNotifications(),
+    teams:       () => { if(currentTeamId) loadTeamMessages(currentTeamId); },
+    shop:        () => loadShop(),
+  };
+  if (intervals[section]) {
+    realtimeIntervals[section] = setInterval(intervals[section], 5000);
+  }
+  // Notifiche sempre attive
+  if (section !== 'notifiche') {
+    realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 10000);
+  }
+}
+
+function stopAllRealtime() {
+  Object.values(realtimeIntervals).forEach(clearInterval);
+  realtimeIntervals = {};
+}
+
+
+// ═══════════════════════════════════════════
 // UTILITY
 // ═══════════════════════════════════════════
 function showNotification(message, type = 'success') {
@@ -570,35 +600,40 @@ async function loadActivities() {
 // ═══════════════════════════════════════════
 // MAP — FIX COMPLETO MAPPA BIANCA
 // ═══════════════════════════════════════════
+let currentTileLayer = null;
+
 function initMap() {
-  if (mapInitialized) {
-    mapInstance?.invalidateSize();
-    return;
-  }
+  if (mapInitialized) { mapInstance?.invalidateSize(); return; }
   const mapEl = document.getElementById('map');
   if (!mapEl || typeof L === 'undefined') return;
-
-  // Assicurati che il container abbia dimensioni reali prima di init
   const rect = mapEl.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) {
-    // Riprova dopo un breve delay se il container non è ancora visibile
-    setTimeout(initMap, 100);
-    return;
-  }
-
+  if (rect.width === 0 || rect.height === 0) { setTimeout(initMap, 100); return; }
   mapInstance = L.map('map', { zoomControl: true }).setView([41.9028, 12.4964], 6);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-    maxZoom: 19
+  currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>', maxZoom: 19
   }).addTo(mapInstance);
-
   mapInitialized = true;
-  // Doppio invalidateSize: uno immediato e uno dopo il rendering
   mapInstance.invalidateSize();
   setTimeout(() => mapInstance.invalidateSize(), 250);
 }
 window.initMap = initMap;
+
+function setMapLayer(type, btn) {
+  if (!mapInstance) return;
+  if (currentTileLayer) mapInstance.removeLayer(currentTileLayer);
+  document.querySelectorAll('.map-layer-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (type === 'satellite') {
+    currentTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '© Esri World Imagery', maxZoom: 19
+    }).addTo(mapInstance);
+  } else {
+    currentTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>', maxZoom: 19
+    }).addTo(mapInstance);
+  }
+}
+window.setMapLayer = setMapLayer;
 
 async function searchAddress(fieldId, query) {
   if (query.length < 3) { document.getElementById(fieldId + 'Sugg').innerHTML = ''; return; }
@@ -606,9 +641,14 @@ async function searchAddress(fieldId, query) {
     const res  = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`);
     const data = await res.json();
     const sugg = document.getElementById(fieldId + 'Sugg');
-    sugg.innerHTML = data.map(p => `
-      <div class="addr-item" onclick="selectAddress('${fieldId}', ${JSON.stringify(p.display_name)})">${escapeHtml(p.display_name)}</div>
-    `).join('');
+    sugg.innerHTML = '';
+    data.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'addr-item';
+      div.textContent = p.display_name;
+      div.addEventListener('click', () => selectAddress(fieldId, p.display_name));
+      sugg.appendChild(div);
+    });
   } catch {}
 }
 window.searchAddress = searchAddress;

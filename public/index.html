@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
   <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -341,9 +341,11 @@
                 <div id="toAddrSugg" class="addr-suggestions"></div>
               </div>
               <div class="map-controls">
-                <button class="btn-sm" onclick="getUserLocation()"><i class="fas fa-location-arrow"></i> Posizione</button>
-                <button class="btn-sm green" onclick="calculateRoute()"><i class="fas fa-route"></i> Calcola</button>
-              </div>
+  <button class="btn-sm" onclick="getUserLocation()"><i class="fas fa-location-arrow"></i> Posizione</button>
+  <button class="btn-sm green" onclick="calculateRoute()"><i class="fas fa-route"></i> Calcola</button>
+  <button class="btn-sm map-layer-btn active" onclick="setMapLayer('street', this)"><i class="fas fa-map"></i> Mappa</button>
+  <button class="btn-sm map-layer-btn" onclick="setMapLayer('satellite', this)"><i class="fas fa-satellite"></i> Satellite</button>
+</div>
               <div id="map" style="height:280px;border-radius:12px;margin-top:12px;z-index:1;"></div>
             </div>
 
