@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════════════════════════════════
 //   GLOBALS
 // ══════════════════════════════════════════════════════════════════════════════════════
+
 let token = localStorage.getItem('ecotoken') || null;
 let myProfile = null;
 let mapInstance = null;
@@ -14,6 +15,7 @@ let allShopItems = [];
 let ownedItems = [];
 let currentShopCategory = 'all';
 let tutorialStep = 1;
+
 
 // Avatar state
 let miiState = {
@@ -2398,3 +2400,228 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Default to login tab
     switchAuthTab('login');
 });
+// ==================== FIX MAPPA ====================
+// ATTENZIONE: NON RIDICHIARARE le variabili se già esistono all'inizio del file!
+// Usa solo questo codice, senza le righe "let mapInitialized..." che già hai
+
+function initMap() {
+  // Usa le variabili globali già dichiarate all'inizio del file
+  if (typeof mapInitialized !== 'undefined' && mapInitialized) return;
+  
+  const mapElement = document.getElementById('map');
+  if (!mapElement) return;
+
+  try {
+    // Layer multipli per sicurezza
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19,
+      detectRetina: true
+    });
+
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '© Esri',
+      maxZoom: 19
+    });
+
+    const transportLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenTopoMap',
+      maxZoom: 17
+    });
+
+    // Assegna alla variabile globale già dichiarata
+    mapInstance = L.map('map', {
+      center: [41.9028, 12.4964],
+      zoom: 6,
+      layers: [streetLayer],
+      fadeAnimation: false,
+      zoomAnimation: false
+    });
+
+    // Aggiungi layer al controllo
+    L.control.layers({
+      'Stradale': streetLayer,
+      'Satellite': satelliteLayer,
+      'Trasporti': transportLayer
+    }).addTo(mapInstance);
+
+    // Attiva il layer stradale di default
+    streetLayer.addTo(mapInstance);
+    
+    mapInitialized = true;
+    console.log('✅ Mappa inizializzata con layer multipli');
+
+    // Forza un resize dopo 500ms per sicurezza
+    setTimeout(() => {
+      if (mapInstance) mapInstance.invalidateSize();
+    }, 500);
+
+  } catch (error) {
+    console.error('❌ Errore inizializzazione mappa:', error);
+  }
+}
+
+// Modifica la funzione showSection per inizializzare la mappa
+// Salva il riferimento alla funzione originale se esiste
+const originalShowSection = window.showSection || function(){};
+
+window.showSection = function(section) {
+  // Chiama la funzione originale se esiste
+  if (typeof originalShowSection === 'function') {
+    originalShowSection(section);
+  }
+  
+  // Inizializza la mappa quando si apre la sezione attività
+  if (section === 'activities') {
+    setTimeout(() => {
+      if (typeof mapInitialized !== 'undefined' && !mapInitialized) {
+        initMap();
+      }
+    }, 300);
+  }
+};
+
+// Rendi disponibile globalmente
+window.initMap = initMap;
+
+// ==================== FIX LOGOUT ====================
+window.logout = function() {
+  console.log('🚪 Logout in corso...');
+  
+  // Pulizia completa
+  localStorage.clear();
+  sessionStorage.clear();
+  
+  // Cancella cookie
+  document.cookie.split(";").forEach(function(c) { 
+    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+  });
+  
+  // Nascondi app e mostra auth
+  const appContainer = document.getElementById('appContainer');
+  const authContainer = document.getElementById('authContainer');
+  
+  if (appContainer) appContainer.style.display = 'none';
+  if (authContainer) authContainer.style.display = 'flex';
+  
+  // Reset form
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  if (loginForm) loginForm.reset();
+  if (registerForm) registerForm.reset();
+  
+  // Forza redirect
+  window.location.href = '/';
+  
+  return false;
+};
+
+// ==================== FIX SHOP ====================
+async function buyShopItem(itemId) {
+  try {
+    const token = localStorage.getItem('ecotoken');
+    if (!token) {
+      if (typeof showNotification === 'function') {
+        showNotification('Devi effettuare il login', 'error');
+      } else {
+        alert('Devi effettuare il login');
+      }
+      return;
+    }
+
+    // Usa la funzione showConfirm se esiste, altrimenti usa confirm
+    if (typeof showConfirm === 'function') {
+      showConfirm('Conferma acquisto', 'Acquistare questo oggetto?', async () => {
+        await executePurchase(itemId, token);
+      }, '🛒');
+    } else {
+      if (confirm('Acquistare questo oggetto?')) {
+        await executePurchase(itemId, token);
+      }
+    }
+  } catch (error) {
+    console.error('Errore acquisto:', error);
+    if (typeof showNotification === 'function') {
+      showNotification('Errore durante l\'acquisto', 'error');
+    } else {
+      alert('Errore durante l\'acquisto');
+    }
+  }
+}
+
+async function executePurchase(itemId, token) {
+  try {
+    const response = await fetch('/api/shop/buy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ item_id: itemId })
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      if (typeof showNotification === 'function') {
+        showNotification(data.error, 'error');
+      } else {
+        alert('Errore: ' + data.error);
+      }
+    } else {
+      if (typeof showNotification === 'function') {
+        showNotification('✅ Oggetto acquistato!', 'success');
+      } else {
+        alert('✅ Oggetto acquistato!');
+      }
+      if (typeof closeShopPreview === 'function') closeShopPreview();
+      if (typeof loadShop === 'function') await loadShop();
+      if (typeof loadProfile === 'function') await loadProfile();
+    }
+  } catch (error) {
+    console.error('Errore durante la richiesta:', error);
+    throw error;
+  }
+}
+
+// Assicurati che loadShop sia definita
+if (typeof loadShop !== 'function') {
+  window.loadShop = async function() {
+    try {
+      const token = localStorage.getItem('ecotoken');
+      if (!token) return;
+      
+      const response = await fetch('/api/shop', {
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      const items = await response.json();
+      
+      // Salva gli oggetti globalmente
+      window.allShopItems = items;
+      
+      // Carica anche gli oggetti posseduti
+      const profileResponse = await fetch('/api/profile', {
+        headers: {
+          'Authorization': 'Bearer ' + token
+        }
+      });
+      const profile = await profileResponse.json();
+      window.ownedItems = profile.owned_items || [];
+      
+      // Aggiorna punti
+      const shopPoints = document.getElementById('shopPoints');
+      if (shopPoints) shopPoints.textContent = profile.points + ' pt';
+      
+      if (typeof renderShop === 'function') {
+        renderShop('all');
+      }
+    } catch (error) {
+      console.error('Errore caricamento shop:', error);
+    }
+  };
+}
+
+// Rendi disponibili globalmente
+window.buyShopItem = buyShopItem;
