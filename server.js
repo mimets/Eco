@@ -210,6 +210,7 @@ async function initDB() {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS to_addr TEXT DEFAULT ''`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''`,
     `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS data JSONB DEFAULT '{}'`,
+    `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT '🔔'`,
     // Indici per performance
     `CREATE INDEX IF NOT EXISTS idx_activities_user ON activities(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date DESC)`,
