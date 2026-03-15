@@ -36,11 +36,11 @@ async function initDB() {
         ban_reason   TEXT,
         points       INT DEFAULT 0,
         co2_saved    FLOAT DEFAULT 0,
-        avatar_color TEXT DEFAULT '#16a34a',
+        avatar_color TEXT DEFAULT '#10b981',
+        avatar_skin  TEXT DEFAULT '#fde68a',
         avatar_eyes  TEXT DEFAULT 'normal',
         avatar_mouth TEXT DEFAULT 'smile',
         avatar_hair  TEXT DEFAULT 'none',
-        avatar_skin  TEXT DEFAULT '#fde68a',
         bio          TEXT DEFAULT '',
         owned_items  JSONB DEFAULT '[]',
         tutorial_done BOOLEAN DEFAULT false,
@@ -51,23 +51,17 @@ async function initDB() {
     // Tabella activities
     await pool.query(`
       CREATE TABLE IF NOT EXISTS activities (
-        id              SERIAL PRIMARY KEY,
-        user_id         INT REFERENCES users(id) ON DELETE CASCADE,
-        type            TEXT NOT NULL,
-        km              FLOAT DEFAULT 0,
-        hours           FLOAT DEFAULT 0,
-        co2_saved       FLOAT DEFAULT 0,
-        points          INT DEFAULT 0,
-        note            TEXT,
-        from_addr       TEXT,
-        to_addr         TEXT,
-        from_lat        FLOAT,
-        from_lon        FLOAT,
-        to_lat          FLOAT,
-        to_lon          FLOAT,
-        route_data      JSONB,
-        carsharing_with TEXT,
-        date            TIMESTAMP DEFAULT NOW()
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        type       TEXT NOT NULL,
+        km         FLOAT DEFAULT 0,
+        hours      FLOAT DEFAULT 0,
+        co2_saved  FLOAT DEFAULT 0,
+        points     INTEGER DEFAULT 0,
+        note       TEXT,
+        from_addr  TEXT,
+        to_addr    TEXT,
+        date       TIMESTAMP DEFAULT NOW()
       )
     `);
 
@@ -75,11 +69,11 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS challenges (
         id            SERIAL PRIMARY KEY,
-        user_id       INT REFERENCES users(id) ON DELETE CASCADE,
+        user_id       INTEGER REFERENCES users(id) ON DELETE CASCADE,
         title         TEXT NOT NULL,
         description   TEXT,
         co2_target    FLOAT DEFAULT 0,
-        points_reward INT DEFAULT 0,
+        points_reward INTEGER DEFAULT 0,
         end_date      DATE,
         is_public     BOOLEAN DEFAULT false,
         created_at    TIMESTAMP DEFAULT NOW()
@@ -90,8 +84,8 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS follows (
         id          SERIAL PRIMARY KEY,
-        follower_id INT REFERENCES users(id) ON DELETE CASCADE,
-        following_id INT REFERENCES users(id) ON DELETE CASCADE,
+        follower_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        following_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         created_at  TIMESTAMP DEFAULT NOW(),
         UNIQUE(follower_id, following_id)
       )
@@ -101,7 +95,7 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS posts (
         id         SERIAL PRIMARY KEY,
-        user_id    INT REFERENCES users(id) ON DELETE CASCADE,
+        user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
         content    TEXT NOT NULL,
         image_url  TEXT,
         likes      JSONB DEFAULT '[]',
@@ -113,26 +107,23 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS comments (
         id         SERIAL PRIMARY KEY,
-        post_id    INT REFERENCES posts(id) ON DELETE CASCADE,
-        user_id    INT REFERENCES users(id) ON DELETE CASCADE,
+        post_id    INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+        user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
         content    TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
 
-    // Tabella shop_items (COMPLETA)
+    // Tabella shop_items
     await pool.query(`
       CREATE TABLE IF NOT EXISTS shop_items (
         id          SERIAL PRIMARY KEY,
         name        TEXT NOT NULL,
         category    TEXT NOT NULL,
         emoji       TEXT NOT NULL,
-        cost        INT NOT NULL,
+        cost        INTEGER NOT NULL,
         description TEXT,
-        is_rare     BOOLEAN DEFAULT false,
-        is_limited  BOOLEAN DEFAULT false,
-        season      TEXT,
-        created_at  TIMESTAMP DEFAULT NOW()
+        is_rare     BOOLEAN DEFAULT false
       )
     `);
 
@@ -140,7 +131,7 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
         id         SERIAL PRIMARY KEY,
-        user_id    INT REFERENCES users(id) ON DELETE CASCADE,
+        user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
         type       TEXT NOT NULL,
         message    TEXT NOT NULL,
         is_read    BOOLEAN DEFAULT false,
@@ -149,139 +140,48 @@ async function initDB() {
       )
     `);
 
-    // SHOP ITEMS COMPLETI (tante cose!)
+    // Shop items di default
     const shopCount = await pool.query('SELECT COUNT(*) FROM shop_items');
     if (parseInt(shopCount.rows[0].count) === 0) {
       const items = [
-        // CAPELLI
-        ['Capelli Corti', 'hair', '💇', 50, 'Taglio classico', false, false, null],
-        ['Capelli Lunghi', 'hair', '💁', 80, 'Capelli lunghi e fluidi', false, false, null],
-        ['Capelli Ricci', 'hair', '🦱', 100, 'Ricci morbidi', false, false, null],
-        ['Capelli Afro', 'hair', '🦳', 120, 'Stile afro', false, false, null],
-        ['Capelli Arcobaleno', 'hair', '🌈', 200, 'Tutti i colori!', true, false, null],
-        ['Capelli Oro', 'hair', '✨', 300, 'Brillanti dorati', true, true, 'estate'],
-        ['Capelli Galassia', 'hair', '🌌', 350, 'Stellati come il cielo', true, true, 'inverno'],
-        ['Capelli Fiamma', 'hair', '🔥', 400, 'Fiammeggianti', true, true, 'autunno'],
-        ['Capelli Cristallo', 'hair', '💎', 450, 'Di puro cristallo', true, true, 'inverno'],
-        ['Capelli Neve', 'hair', '❄️', 250, 'Come la neve', false, true, 'inverno'],
-        ['Capelli Foglie', 'hair', '🍃', 220, 'Foglie autunnali', false, true, 'autunno'],
-        ['Capelli Fiori', 'hair', '🌸', 280, 'Fiori di ciliegio', false, true, 'primavera'],
-        ['Capelli Mare', 'hair', '🌊', 260, 'Onde marine', false, true, 'estate'],
-        ['Capelli Tramonto', 'hair', '🌅', 320, 'Colori del tramonto', true, false, null],
-        ['Capelli Alba', 'hair', '🌄', 320, 'Colori dell\'alba', true, false, null],
-        ['Capelli Ghiaccio', 'hair', '🧊', 380, 'Ghiaccio blu', true, true, 'inverno'],
-        ['Capelli Lava', 'hair', '🌋', 420, 'Lava incandescente', true, true, 'estate'],
-        ['Capelli Arcobaleno 2', 'hair', '🌈✨', 500, 'Arcobaleno speciale', true, true, 'estate'],
-        
-        // OCCHI
-        ['Occhi Normali', 'eyes', '👀', 30, 'Occhi classici', false, false, null],
-        ['Occhi Felici', 'eyes', '😊', 50, 'Sorridenti', false, false, null],
-        ['Occhi Assonnati', 'eyes', '😴', 60, 'Mezzi chiusi', false, false, null],
-        ['Occhi Sorpresi', 'eyes', '😲', 70, 'Grandi e stupiti', false, false, null],
-        ['Occhi Occhiolino', 'eyes', '😉', 80, 'Fai l\'occhiolino', false, false, null],
-        ['Occhi Cool', 'eyes', '😎', 100, 'Con gli occhiali', false, false, null],
-        ['Occhi Stella', 'eyes', '⭐', 150, 'A forma di stella', true, false, null],
-        ['Occhi Cuore', 'eyes', '❤️', 180, 'Innamorati', true, false, null],
-        ['Occhi Laser', 'eyes', '🔴', 250, 'Laser rossi', true, true, null],
-        ['Occhi Galaxy', 'eyes', '🌠', 300, 'Galassie negli occhi', true, true, 'inverno'],
-        ['Occhi Drago', 'eyes', '🐉', 350, 'Occhi di drago', true, true, 'autunno'],
-        ['Occhi Fiamma', 'eyes', '🔥', 320, 'Fiamme negli occhi', true, true, 'estate'],
-        ['Occhi Ghiaccio', 'eyes', '❄️', 320, 'Ghiaccio azzurro', true, true, 'inverno'],
-        ['Occhi Magici', 'eyes', '✨', 280, 'Magici brillanti', true, false, null],
-        ['Occhi Alien', 'eyes', '👽', 400, 'Alieni', true, true, null],
-        ['Occhi Mistici', 'eyes', '🔮', 380, 'Mistici viola', true, true, null],
-        
-        // BOCCA
-        ['Bocca Sorriso', 'mouth', '😊', 30, 'Sorriso semplice', false, false, null],
-        ['Bocca Ghigno', 'mouth', '😏', 50, 'Sorridente malizioso', false, false, null],
-        ['Bocca Aperta', 'mouth', '😮', 60, 'Sorpresa', false, false, null],
-        ['Bocca Smorfia', 'mouth', '😜', 70, 'Linguaccia', false, false, null],
-        ['Bocca Triste', 'mouth', '😢', 50, 'Triste', false, false, null],
-        ['Bocca Denti', 'mouth', '😁', 80, 'Sorriso coi denti', false, false, null],
-        ['Bocca Arcobaleno', 'mouth', '🌈', 200, 'Sorriso arcobaleno', true, false, null],
-        ['Bocca Fuoco', 'mouth', '🔥', 250, 'Fiamme dalla bocca', true, true, 'estate'],
-        ['Bocca Oro', 'mouth', '💫', 300, 'Denti d\'oro', true, true, null],
-        ['Bocca Cuore', 'mouth', '❤️', 280, 'A forma di cuore', true, true, 'sanvalentino'],
-        ['Bocca Rosa', 'mouth', '🌹', 220, 'Bocca di rosa', false, true, 'primavera'],
-        ['Bocca Vampiro', 'mouth', '🧛', 350, 'Zanne da vampiro', true, true, 'halloween'],
-        ['Bocca Mostro', 'mouth', '👹', 400, 'Bocca mostruosa', true, true, 'halloween'],
-        
-        // COLORI SFONDO
-        ['Sfondo Verde', 'color', '🟢', 20, 'Verde natura', false, false, null],
-        ['Sfondo Blu', 'color', '🔵', 20, 'Blu cielo', false, false, null],
-        ['Sfondo Viola', 'color', '🟣', 30, 'Viola mistero', false, false, null],
-        ['Sfondo Rosso', 'color', '🔴', 30, 'Rosso passione', false, false, null],
-        ['Sfondo Arancione', 'color', '🟠', 30, 'Arancione', false, false, null],
-        ['Sfondo Giallo', 'color', '🟡', 30, 'Giallo sole', false, false, null],
-        ['Sfondo Rosa', 'color', '💖', 40, 'Rosa romantico', false, false, null],
-        ['Sfondo Arcobaleno', 'color', '🌈', 150, 'Tutti i colori', true, false, null],
-        ['Sfondo Galaxy', 'color', '🌌', 200, 'Galassia', true, true, 'inverno'],
-        ['Sfondo Tramonto', 'color', '🌅', 180, 'Tramonto', true, true, 'estate'],
-        ['Sfondo Oceano', 'color', '🌊', 160, 'Oceano profondo', true, false, null],
-        ['Sfondo Foresta', 'color', '🌳', 140, 'Foresta incantata', true, false, null],
-        
-        // PELLE
-        ['Pelle Chiara', 'skin', '👤', 0, 'Pelle chiara', false, false, null],
-        ['Pelle Media', 'skin', '👤', 0, 'Pelle media', false, false, null],
-        ['Pelle Scura', 'skin', '👤', 0, 'Pelle scura', false, false, null],
-        ['Pelle Oliva', 'skin', '👤', 0, 'Pelle olivastra', false, false, null],
-        ['Pelle Dorata', 'skin', '✨', 50, 'Pelle dorata', true, false, null],
-        ['Pelle Lunare', 'skin', '🌙', 80, 'Pelle argento', true, true, 'inverno'],
-        ['Pelle Solare', 'skin', '☀️', 80, 'Pelle abbronzata', true, true, 'estate'],
-        ['Pelle Alien', 'skin', '👽', 120, 'Pelle aliena verde', true, true, null],
-        ['Pelle Robot', 'skin', '🤖', 150, 'Pelle metallica', true, true, null],
-        
-        // ACCESSORI
-        ['Cappello', 'accessory', '🧢', 80, 'Cappellino', false, false, null],
-        ['Cappello da Chef', 'accessory', '👨‍🍳', 100, 'Cappello da cuoco', false, false, null],
-        ['Corona', 'accessory', '👑', 200, 'Corona reale', true, false, null],
-        ['Occhiali da Sole', 'accessory', '🕶️', 120, 'Occhiali cool', false, false, null],
-        ['Occhiali da Vista', 'accessory', '👓', 90, 'Occhiali da vista', false, false, null],
-        ['Monocolo', 'accessory', '🧐', 110, 'Monocolo elegante', true, false, null],
-        ['Fascia', 'accessory', '🎀', 70, 'Fascia per capelli', false, false, null],
-        ['Fiore', 'accessory', '🌸', 80, 'Fiore tra i capelli', false, true, 'primavera'],
-        ['Foglia', 'accessory', '🍃', 60, 'Foglia', false, true, 'autunno'],
-        ['Stella', 'accessory', '⭐', 100, 'Stella', false, false, null],
-        ['Luna', 'accessory', '🌙', 100, 'Mezzaluna', false, true, 'notte'],
-        ['Sole', 'accessory', '☀️', 100, 'Sole', false, true, 'estate'],
-        ['Nuvola', 'accessory', '☁️', 90, 'Nuvola', false, false, null],
-        ['Arcobaleno', 'accessory', '🌈', 150, 'Arcobaleno', true, false, null],
-        ['Fulmine', 'accessory', '⚡', 130, 'Fulmine', true, false, null],
-        
-        // ANIMALI
-        ['Orecchie Gatto', 'accessory', '🐱', 150, 'Orecchie da gatto', false, false, null],
-        ['Orecchie Cane', 'accessory', '🐶', 150, 'Orecchie da cane', false, false, null],
-        ['Orecchie Coniglio', 'accessory', '🐰', 150, 'Orecchie da coniglio', false, false, null],
-        ['Naso Maiale', 'accessory', '🐷', 120, 'Naso da maialino', false, false, null],
-        ['Baffi Gatto', 'accessory', '🐱', 100, 'Baffi da gatto', false, false, null],
-        ['Coda', 'accessory', '🐒', 180, 'Coda', true, false, null],
-        ['Ali Farfalla', 'accessory', '🦋', 250, 'Ali di farfalla', true, true, 'primavera'],
-        ['Ali Angelo', 'accessory', '👼', 300, 'Ali angeliche', true, false, null],
-        ['Ali Demone', 'accessory', '😈', 300, 'Ali demoniache', true, true, 'halloween'],
-        
-        // EMOJI SPECIALI
-        ['Emoji Cuore', 'accessory', '❤️', 50, 'Cuore volante', false, false, null],
-        ['Emoji Stella', 'accessory', '⭐', 50, 'Stella volante', false, false, null],
-        ['Emoji Fuoco', 'accessory', '🔥', 70, 'Fiammella', false, false, null],
-        ['Emoji Ghiaccio', 'accessory', '❄️', 70, 'Fiocco di neve', false, true, 'inverno'],
-        ['Emoji Fulmine', 'accessory', '⚡', 80, 'Fulmine', false, false, null],
-        ['Emoji Arcobaleno', 'accessory', '🌈', 100, 'Arcobaleno', true, false, null],
-        ['Emoji Unicorno', 'accessory', '🦄', 200, 'Unicorno', true, true, null],
-        ['Emoji Drago', 'accessory', '🐉', 220, 'Drago', true, true, null],
-        ['Emoji Fantasma', 'accessory', '👻', 150, 'Fantasma', false, true, 'halloween'],
-        ['Emoji Teschio', 'accessory', '💀', 180, 'Teschio', false, true, 'halloween'],
-        ['Emoji Alieno', 'accessory', '👽', 200, 'Alieno', true, false, null],
-        ['Emoji Robot', 'accessory', '🤖', 200, 'Robot', true, false, null],
-        ['Emoji Zanna', 'accessory', '🦷', 90, 'Zanna', false, true, 'halloween']
+        ['Capelli Corti', 'hair', '💇', 50, 'Taglio classico', false],
+        ['Capelli Lunghi', 'hair', '💁', 80, 'Capelli lunghi', false],
+        ['Capelli Ricci', 'hair', '🦱', 100, 'Ricci morbidi', false],
+        ['Capelli Arcobaleno', 'hair', '🌈', 200, 'Tutti i colori!', true],
+        ['Capelli Oro', 'hair', '✨', 300, 'Brillanti dorati', true],
+        ['Capelli Galassia', 'hair', '🌌', 350, 'Stellati come il cielo', true],
+        ['Capelli Fiamma', 'hair', '🔥', 400, 'Fiammeggianti', true],
+        ['Occhi Normali', 'eyes', '👀', 30, 'Occhi classici', false],
+        ['Occhi Felici', 'eyes', '😊', 50, 'Sorridenti', false],
+        ['Occhi Assonnati', 'eyes', '😴', 60, 'Mezzi chiusi', false],
+        ['Occhi Sorpresi', 'eyes', '😲', 70, 'Grandi e stupiti', false],
+        ['Occhi Occhiolino', 'eyes', '😉', 80, 'Fai l\'occhiolino', false],
+        ['Occhi Cool', 'eyes', '😎', 100, 'Con gli occhiali', false],
+        ['Occhi Stella', 'eyes', '⭐', 150, 'A forma di stella', true],
+        ['Occhi Cuore', 'eyes', '❤️', 180, 'Innamorati', true],
+        ['Bocca Sorriso', 'mouth', '😊', 30, 'Sorriso semplice', false],
+        ['Bocca Ghigno', 'mouth', '😏', 50, 'Sorridente malizioso', false],
+        ['Bocca Aperta', 'mouth', '😮', 60, 'Sorpresa', false],
+        ['Bocca Smorfia', 'mouth', '😜', 70, 'Linguaccia', false],
+        ['Bocca Triste', 'mouth', '😢', 50, 'Triste', false],
+        ['Bocca Arcobaleno', 'mouth', '🌈', 200, 'Sorriso arcobaleno', true],
+        ['Sfondo Verde', 'color', '🟢', 20, 'Verde natura', false],
+        ['Sfondo Blu', 'color', '🔵', 20, 'Blu cielo', false],
+        ['Sfondo Viola', 'color', '🟣', 30, 'Viola mistero', false],
+        ['Sfondo Arcobaleno', 'color', '🌈', 150, 'Tutti i colori', true],
+        ['Pelle Chiara', 'skin', '👤', 0, 'Pelle chiara', false],
+        ['Pelle Media', 'skin', '👤', 0, 'Pelle media', false],
+        ['Pelle Scura', 'skin', '👤', 0, 'Pelle scura', false],
+        ['Pelle Dorata', 'skin', '✨', 50, 'Pelle dorata', true]
       ];
 
       for (const item of items) {
         await pool.query(
-          'INSERT INTO shop_items (name, category, emoji, cost, description, is_rare, is_limited, season) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+          'INSERT INTO shop_items (name, category, emoji, cost, description, is_rare) VALUES ($1,$2,$3,$4,$5,$6)',
           item
         );
       }
-      console.log('🛍️ Shop items creati (oltre 100 oggetti!)');
+      console.log('🛍️ Shop items creati');
     }
 
     // Crea admin di default
@@ -576,47 +476,84 @@ app.get('/api/stats', auth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════
-//   ACTIVITIES ROUTES
+//   ACTIVITIES ROUTES - FIXATE
 // ══════════════════════════════════════════
 
 const CO2_RATES = {
-  Bici:      { t: 'k', co2: 0,    pts: 5 },
-  Treno:     { t: 'k', co2: 0.04, pts: 2 },
-  Bus:       { t: 'k', co2: 0.08, pts: 1.5 },
-  Carpooling:{ t: 'k', co2: 0.06, pts: 3 },
-  Remoto:    { t: 'h', co2: 0.5,  pts: 10 },
-  Videocall: { t: 'h', co2: 0.1,  pts: 8 }
+  'Bici': { type: 'km', co2: 0, points: 5 },
+  'Treno': { type: 'km', co2: 0.04, points: 2 },
+  'Bus': { type: 'km', co2: 0.08, points: 1.5 },
+  'Carpooling': { type: 'km', co2: 0.06, points: 3 },
+  'Remoto': { type: 'hours', co2: 0.5, points: 10 },
+  'Videocall': { type: 'hours', co2: 0.1, points: 8 }
 };
 
 app.post('/api/activities', auth, async (req, res) => {
-  const { type, km, hours, note, from_addr, to_addr, from_lat, from_lon, to_lat, to_lon, route_data } = req.body;
+  console.log('📝 Tentativo salvataggio attività:', req.body);
+  
+  const { type, km, hours, note, from_addr, to_addr } = req.body;
+  
+  // Validazione input
+  if (!type) {
+    return res.status(400).json({ error: 'Tipo attività mancante' });
+  }
   
   const rate = CO2_RATES[type];
   if (!rate) {
     return res.status(400).json({ error: 'Tipo attività non valido' });
   }
-
-  const value = rate.t === 'k' ? (parseFloat(km) || 0) : (parseFloat(hours) || 0);
-  const co2 = parseFloat((value * rate.co2).toFixed(2));
-  const points = Math.round(value * rate.pts);
-
+  
+  // Calcola valori
+  let value = 0;
+  if (rate.type === 'km') {
+    value = parseFloat(km) || 0;
+  } else {
+    value = parseFloat(hours) || 0;
+  }
+  
+  if (value <= 0) {
+    return res.status(400).json({ error: 'Inserisci un valore valido' });
+  }
+  
+  const co2_saved = parseFloat((value * rate.co2).toFixed(2));
+  const points = Math.round(value * rate.points);
+  
   try {
-    await pool.query(
+    // Inserisci attività
+    const result = await pool.query(
       `INSERT INTO activities 
-       (user_id, type, km, hours, co2_saved, points, note, from_addr, to_addr, from_lat, from_lon, to_lat, to_lon, route_data) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-      [req.user.id, type, km || 0, hours || 0, co2, points, note || '', from_addr || '', to_addr || '', 
-       from_lat || null, from_lon || null, to_lat || null, to_lon || null, route_data || null]
+       (user_id, type, km, hours, co2_saved, points, note, from_addr, to_addr, date) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) 
+       RETURNING *`,
+      [
+        req.user.id, 
+        type, 
+        km || 0, 
+        hours || 0, 
+        co2_saved, 
+        points, 
+        note || '', 
+        from_addr || '', 
+        to_addr || ''
+      ]
     );
-
+    
+    // Aggiorna punti utente
     await pool.query(
       'UPDATE users SET points = points + $1, co2_saved = co2_saved + $2 WHERE id = $3',
-      [points, co2, req.user.id]
+      [points, co2_saved, req.user.id]
     );
-
-    res.json({ success: true, co2_saved: co2, points });
+    
+    console.log('✅ Attività salvata:', result.rows[0]);
+    res.json({ 
+      success: true, 
+      co2_saved, 
+      points,
+      activity: result.rows[0]
+    });
+    
   } catch (err) {
-    console.error('❌ Activity error:', err);
+    console.error('❌ Errore salvataggio attività:', err);
     res.status(500).json({ error: 'Errore nel salvataggio attività' });
   }
 });
@@ -652,14 +589,7 @@ app.get('/api/badges', auth, async (req, res) => {
       { name: 'Green Warrior', icon: '♻️', desc: '10 attività', unlocked: acts >= 10 },
       { name: 'CO₂ Saver', icon: '🌍', desc: '10 kg CO₂', unlocked: co2 >= 10 },
       { name: 'Eco Champion', icon: '🏆', desc: '50 kg CO₂', unlocked: co2 >= 50 },
-      { name: 'Point Master', icon: '⭐', desc: '500 punti', unlocked: pts >= 500 },
-      { name: 'Eco Legend', icon: '👑', desc: '1000 punti', unlocked: pts >= 1000 },
-      { name: 'Green Machine', icon: '⚡', desc: '100 attività', unlocked: acts >= 100 },
-      { name: 'Climate Hero', icon: '🦸', desc: '200 kg CO₂', unlocked: co2 >= 200 },
-      { name: 'Bike Lover', icon: '🚴', desc: '50 km in bici', unlocked: acts >= 50 },
-      { name: 'Train Master', icon: '🚂', desc: '100 km in treno', unlocked: acts >= 100 },
-      { name: 'Carpool King', icon: '🚗', desc: '50 carpooling', unlocked: acts >= 50 },
-      { name: 'Remote Worker', icon: '🏠', desc: '100 ore remote', unlocked: acts >= 100 }
+      { name: 'Point Master', icon: '⭐', desc: '500 punti', unlocked: pts >= 500 }
     ]);
   } catch (err) {
     console.error('❌ Badges error:', err);
@@ -1016,23 +946,17 @@ app.post('/api/notifications/:id/read', auth, async (req, res) => {
 });
 
 // ══════════════════════════════════════════
-//   ADMIN ROUTES (COMPLETE)
+//   ADMIN ROUTES
 // ══════════════════════════════════════════
 
 app.get('/api/admin/users', auth, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.name, u.username, u.email, u.is_admin, u.is_banned,
-             u.ban_until, u.ban_reason, u.points, u.co2_saved,
-             COUNT(DISTINCT a.id) as activity_count,
-             COUNT(DISTINCT p.id) as post_count,
-             COUNT(DISTINCT f1.id) as followers_count,
-             COUNT(DISTINCT f2.id) as following_count
+             u.points, u.co2_saved,
+             COUNT(a.id) as activity_count
       FROM users u
       LEFT JOIN activities a ON a.user_id = u.id
-      LEFT JOIN posts p ON p.user_id = u.id
-      LEFT JOIN follows f1 ON f1.following_id = u.id
-      LEFT JOIN follows f2 ON f2.follower_id = u.id
       GROUP BY u.id
       ORDER BY u.points DESC
     `);
@@ -1049,18 +973,12 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
     const activities = await pool.query('SELECT COUNT(*) FROM activities');
     const co2 = await pool.query('SELECT COALESCE(SUM(co2_saved), 0) as total FROM activities');
     const posts = await pool.query('SELECT COUNT(*) FROM posts');
-    const comments = await pool.query('SELECT COUNT(*) FROM comments');
-    const challenges = await pool.query('SELECT COUNT(*) FROM challenges');
-    const follows = await pool.query('SELECT COUNT(*) FROM follows');
 
     res.json({
       total_users: parseInt(users.rows[0].count),
       total_activities: parseInt(activities.rows[0].count),
       total_co2: co2.rows[0].total,
-      total_posts: parseInt(posts.rows[0].count),
-      total_comments: parseInt(comments.rows[0].count),
-      total_challenges: parseInt(challenges.rows[0].count),
-      total_follows: parseInt(follows.rows[0].count)
+      total_posts: parseInt(posts.rows[0].count)
     });
   } catch (err) {
     console.error('❌ Admin stats error:', err);
@@ -1071,194 +989,16 @@ app.get('/api/admin/stats', auth, requireAdmin, async (req, res) => {
 app.get('/api/admin/activities', auth, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT a.*, u.name as user_name, u.email as user_email
+      SELECT a.*, u.name as user_name
       FROM activities a
       JOIN users u ON u.id = a.user_id
       ORDER BY a.date DESC
-      LIMIT 100
+      LIMIT 50
     `);
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Admin activities error:', err);
     res.status(500).json({ error: 'Errore nel caricamento attività' });
-  }
-});
-
-app.get('/api/admin/posts', auth, requireAdmin, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT p.*, u.name as user_name, u.email as user_email,
-             (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
-      FROM posts p
-      JOIN users u ON u.id = p.user_id
-      ORDER BY p.created_at DESC
-      LIMIT 100
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Admin posts error:', err);
-    res.status(500).json({ error: 'Errore nel caricamento post' });
-  }
-});
-
-app.put('/api/admin/users/:id', auth, requireAdmin, async (req, res) => {
-  const { name, username, email, is_admin, is_banned, points } = req.body;
-  
-  try {
-    await pool.query(
-      `UPDATE users SET 
-        name = COALESCE($1, name),
-        username = COALESCE($2, username),
-        email = COALESCE($3, email),
-        is_admin = COALESCE($4, is_admin),
-        is_banned = COALESCE($5, is_banned),
-        points = COALESCE($6, points)
-      WHERE id = $7`,
-      [name, username, email, is_admin, is_banned, points, req.params.id]
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Admin update error:', err);
-    res.status(500).json({ error: 'Errore nell\'aggiornamento' });
-  }
-});
-
-app.post('/api/admin/users/:id/ban', auth, requireAdmin, async (req, res) => {
-  const { reason, days } = req.body;
-  const banUntil = days ? new Date(Date.now() + days * 24 * 60 * 60 * 1000) : null;
-  
-  try {
-    await pool.query(
-      'UPDATE users SET is_banned = true, ban_until = $1, ban_reason = $2 WHERE id = $3',
-      [banUntil, reason || 'Violazione regole', req.params.id]
-    );
-    
-    await pool.query(
-      'INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)',
-      [req.params.id, 'ban', `Sei stato bannato${days ? ` per ${days} giorni` : ''}. Motivo: ${reason || 'Violazione regole'}`]
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Ban error:', err);
-    res.status(500).json({ error: 'Errore nel ban' });
-  }
-});
-
-app.post('/api/admin/users/:id/unban', auth, requireAdmin, async (req, res) => {
-  try {
-    await pool.query(
-      'UPDATE users SET is_banned = false, ban_until = null, ban_reason = null WHERE id = $1',
-      [req.params.id]
-    );
-    
-    await pool.query(
-      'INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)',
-      [req.params.id, 'unban', 'Il tuo ban è stato rimosso!']
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Unban error:', err);
-    res.status(500).json({ error: 'Errore nell\'unban' });
-  }
-});
-
-app.post('/api/admin/users/:id/warn', auth, requireAdmin, async (req, res) => {
-  const { message } = req.body;
-  
-  try {
-    await pool.query(
-      'INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)',
-      [req.params.id, 'warning', message || 'Avviso dall\'amministratore']
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Warn error:', err);
-    res.status(500).json({ error: 'Errore nell\'invio avviso' });
-  }
-});
-
-app.post('/api/admin/users/:id/reset-points', auth, requireAdmin, async (req, res) => {
-  try {
-    await pool.query(
-      'UPDATE users SET points = 0, co2_saved = 0 WHERE id = $1',
-      [req.params.id]
-    );
-    
-    await pool.query(
-      'INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)',
-      [req.params.id, 'reset', 'I tuoi punti sono stati azzerati']
-    );
-    
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Reset points error:', err);
-    res.status(500).json({ error: 'Errore nell\'azzeramento punti' });
-  }
-});
-
-app.delete('/api/admin/users/:id', auth, requireAdmin, async (req, res) => {
-  const userId = parseInt(req.params.id);
-  
-  if (userId === req.user.id) {
-    return res.status(400).json({ error: 'Non puoi eliminare te stesso' });
-  }
-
-  try {
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Admin delete error:', err);
-    res.status(500).json({ error: 'Errore nell\'eliminazione' });
-  }
-});
-
-app.delete('/api/admin/activities/:id', auth, requireAdmin, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM activities WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Admin delete activity error:', err);
-    res.status(500).json({ error: 'Errore nell\'eliminazione' });
-  }
-});
-
-app.delete('/api/admin/posts/:id', auth, requireAdmin, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM posts WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Admin delete post error:', err);
-    res.status(500).json({ error: 'Errore nell\'eliminazione' });
-  }
-});
-
-app.post('/api/admin/shop/items', auth, requireAdmin, async (req, res) => {
-  const { name, category, emoji, cost, description, is_rare, is_limited, season } = req.body;
-  
-  try {
-    const result = await pool.query(
-      'INSERT INTO shop_items (name, category, emoji, cost, description, is_rare, is_limited, season) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [name, category, emoji, cost, description, is_rare || false, is_limited || false, season || null]
-    );
-    
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('❌ Admin add item error:', err);
-    res.status(500).json({ error: 'Errore nell\'aggiunta oggetto' });
-  }
-});
-
-app.delete('/api/admin/shop/items/:id', auth, requireAdmin, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM shop_items WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('❌ Admin delete item error:', err);
-    res.status(500).json({ error: 'Errore nell\'eliminazione' });
   }
 });
 
