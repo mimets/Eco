@@ -1,737 +1,759 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EcoTrack – La tua impronta green</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EcoTrack 🌱</title>
 
-  <!-- Fonts & Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
-  <!-- Leaflet Maps -->
+  <!-- Leaflet CSS - FIX MAPPA BIANCA -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
-  <!-- CSS -->
-  <link rel="stylesheet" href="style.css">
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-<!-- TUTORIAL OVERLAY -->
-<div id="tutorialOverlay" class="tutorial-overlay" style="display: none;">
-  <div class="tutorial-card">
-    <button class="tutorial-close" onclick="closeTutorial()"><i class="fas fa-times"></i></button>
-    <div class="tutorial-header">
-      <h2>✨ Benvenuto su EcoTrack!</h2>
-      <p>Scopri come rendere green le tue abitudini</p>
-    </div>
-    <div class="tutorial-steps" id="tutorialSteps">
-      <div class="tutorial-step active" data-step="1">
-        <div class="tutorial-step-number">1</div>
-        <div class="tutorial-step-content">
-          <h3>🌱 Traccia le tue attività</h3>
-          <p>Registra i tuoi spostamenti green: bici, treno, bus o carpooling</p>
-        </div>
-        <div class="tutorial-step-icon">🚴</div>
-      </div>
-      <div class="tutorial-step" data-step="2">
-        <div class="tutorial-step-number">2</div>
-        <div class="tutorial-step-content">
-          <h3>🌍 Calcola il tuo impatto</h3>
-          <p>Ogni attività risparmia CO₂ e ti fa guadagnare punti</p>
-        </div>
-        <div class="tutorial-step-icon">📊</div>
-      </div>
-      <div class="tutorial-step" data-step="3">
-        <div class="tutorial-step-number">3</div>
-        <div class="tutorial-step-content">
-          <h3>🏆 Sblocca badge e premi</h3>
-          <p>Più punti ottieni, più oggetti esclusivi puoi comprare</p>
-        </div>
-        <div class="tutorial-step-icon">🎁</div>
-      </div>
-      <div class="tutorial-step" data-step="4">
-        <div class="tutorial-step-number">4</div>
-        <div class="tutorial-step-content">
-          <h3>👥 Social e community</h3>
-          <p>Sfida gli amici, seguili e condividi i tuoi successi</p>
-        </div>
-        <div class="tutorial-step-icon">👥</div>
-      </div>
-      <div class="tutorial-step" data-step="5">
-        <div class="tutorial-step-number">5</div>
-        <div class="tutorial-step-content">
-          <h3>🎨 Personalizza il tuo Mii</h3>
-          <p>Crea un avatar unico con centinaia di combinazioni</p>
-        </div>
-        <div class="tutorial-step-icon">🎨</div>
-      </div>
-    </div>
-    <div class="tutorial-progress" id="tutorialProgress">
-      <div class="tutorial-dot active"></div>
-      <div class="tutorial-dot"></div>
-      <div class="tutorial-dot"></div>
-      <div class="tutorial-dot"></div>
-      <div class="tutorial-dot"></div>
-    </div>
-    <div class="tutorial-actions">
-      <button class="tutorial-btn tutorial-btn-secondary" onclick="prevTutorialStep()" id="tutorialPrevBtn" style="opacity: 0.5; pointer-events: none;">
-        <i class="fas fa-arrow-left"></i> Indietro
-      </button>
-      <button class="tutorial-btn tutorial-btn-primary" onclick="nextTutorialStep()" id="tutorialNextBtn">
-        Avanti <i class="fas fa-arrow-right"></i>
-      </button>
-    </div>
-  </div>
-</div>
-
+<!-- ═══════════════════════════════════════════ -->
 <!-- AUTH CONTAINER -->
-<div id="authContainer" class="auth-container">
+<!-- ═══════════════════════════════════════════ -->
+<div id="authContainer">
+  <div class="auth-bg">
+    <div class="auth-blob blob1"></div>
+    <div class="auth-blob blob2"></div>
+    <div class="auth-blob blob3"></div>
+  </div>
+
   <div class="auth-card">
     <div class="auth-logo">
-      <i class="fas fa-leaf"></i>
+      <span class="auth-logo-icon">🌱</span>
+      <span class="auth-logo-text">EcoTrack</span>
     </div>
-    <div class="auth-header">
-      <h1>EcoTrack</h1>
-      <p>Traccia la tua impronta ecologica</p>
-    </div>
+    <p class="auth-subtitle">Traccia il tuo impatto ambientale</p>
 
+    <!-- Tabs -->
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchAuthTab('login')">Accedi</button>
       <button class="auth-tab" onclick="switchAuthTab('register')">Registrati</button>
     </div>
 
-    <!-- LOGIN FORM -->
-    <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
-      <div class="form-group">
-        <label>Email o Username</label>
-        <div class="input-wrapper">
-          <i class="fas fa-user input-icon"></i>
-          <input type="text" class="input-field" id="loginIdentifier" placeholder="mario.rossi@email.com" required>
-        </div>
+    <!-- LOGIN -->
+    <form id="loginForm" onsubmit="handleLogin(event)" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="input-group">
+        <i class="fas fa-user input-icon"></i>
+        <input id="loginIdentifier" type="text" placeholder="Email o username" autocomplete="username" required />
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <div class="input-wrapper">
-          <i class="fas fa-lock input-icon"></i>
-          <input type="password" class="input-field" id="loginPassword" placeholder="••••••••" required>
-          <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)">
-            <i class="fas fa-eye"></i>
-          </button>
-        </div>
+      <div class="input-group">
+        <i class="fas fa-lock input-icon"></i>
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required />
+        <button type="button" class="toggle-pw" onclick="togglePassword('loginPassword', this)">
+          <i class="fas fa-eye"></i>
+        </button>
       </div>
-      <div id="loginError" class="error-message"></div>
-      <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
-        <i class="fas fa-sign-in-alt"></i> <span>Accedi</span>
+      <button type="button" class="link-btn" onclick="switchAuthTab('forgot')">Password dimenticata?</button>
+      <button type="submit" id="loginBtn" class="btn-primary">
+        <i class="fas fa-sign-in-alt"></i> Accedi
       </button>
-      <button type="button" class="btn btn-secondary btn-full" onclick="switchAuthTab('forgot')">
-        <i class="fas fa-question-circle"></i> Password dimenticata?
-      </button>
+      <p class="auth-switch">Non hai un account? <button type="button" class="link-btn" onclick="switchAuthTab('register')">Registrati</button></p>
     </form>
 
-    <!-- REGISTER FORM -->
-    <form id="registerForm" class="auth-form" style="display: none;" onsubmit="handleRegister(event)">
-      <div class="form-group">
-        <label>Nome completo</label>
-        <div class="input-wrapper">
-          <i class="fas fa-id-card input-icon"></i>
-          <input type="text" class="input-field" id="registerName" placeholder="Mario Rossi" required>
-        </div>
+    <!-- REGISTER -->
+    <form id="registerForm" onsubmit="handleRegister(event)" style="display:none;flex-direction:column;gap:14px;">
+      <div class="input-group">
+        <i class="fas fa-id-card input-icon"></i>
+        <input id="registerName" type="text" placeholder="Nome completo" required />
       </div>
-      <div class="form-group">
-        <label>Username</label>
-        <div class="input-wrapper">
-          <i class="fas fa-at input-icon"></i>
-          <input type="text" class="input-field" id="registerUsername" placeholder="mariorossi" required>
-        </div>
+      <div class="input-group">
+        <i class="fas fa-at input-icon"></i>
+        <input id="registerUsername" type="text" placeholder="Username" required />
       </div>
-      <div class="form-group">
-        <label>Email</label>
-        <div class="input-wrapper">
-          <i class="fas fa-envelope input-icon"></i>
-          <input type="email" class="input-field" id="registerEmail" placeholder="mario@email.com" required>
-        </div>
+      <div class="input-group">
+        <i class="fas fa-envelope input-icon"></i>
+        <input id="registerEmail" type="email" placeholder="Email" required />
       </div>
-      <div class="form-group">
-        <label>Password</label>
-        <div class="input-wrapper">
-          <i class="fas fa-lock input-icon"></i>
-          <input type="password" class="input-field" id="registerPassword" placeholder="••••••••" oninput="checkPasswordStrength(this.value)" required>
-          <button type="button" class="password-toggle" onclick="togglePassword('registerPassword', this)">
-            <i class="fas fa-eye"></i>
-          </button>
-        </div>
-        <div class="password-strength">
-          <span class="strength-item" id="strengthLength"><i class="fas fa-circle"></i> 8+ caratteri</span>
-          <span class="strength-item" id="strengthUpper"><i class="fas fa-circle"></i> Maiuscola</span>
-          <span class="strength-item" id="strengthNumber"><i class="fas fa-circle"></i> Numero</span>
-          <span class="strength-item" id="strengthSymbol"><i class="fas fa-circle"></i> Simbolo</span>
-        </div>
+      <div class="input-group">
+        <i class="fas fa-lock input-icon"></i>
+        <input id="registerPassword" type="password" placeholder="Password" oninput="checkPasswordStrength(this.value)" required />
+        <button type="button" class="toggle-pw" onclick="togglePassword('registerPassword', this)">
+          <i class="fas fa-eye"></i>
+        </button>
       </div>
-      <div id="registerError" class="error-message"></div>
-      <button type="submit" class="btn btn-primary btn-full" id="registerBtn">
-        <i class="fas fa-user-plus"></i> <span>Registrati</span>
+      <div class="password-strength">
+        <span id="strengthLength"><i class="fas fa-check-circle"></i> 8+ caratteri</span>
+        <span id="strengthUpper"><i class="fas fa-check-circle"></i> Maiuscola</span>
+        <span id="strengthNumber"><i class="fas fa-check-circle"></i> Numero</span>
+        <span id="strengthSymbol"><i class="fas fa-check-circle"></i> Simbolo</span>
+      </div>
+      <button type="submit" id="registerBtn" class="btn-primary">
+        <i class="fas fa-user-plus"></i> Registrati
       </button>
+      <p class="auth-switch">Hai già un account? <button type="button" class="link-btn" onclick="switchAuthTab('login')">Accedi</button></p>
     </form>
 
     <!-- FORGOT PASSWORD -->
-    <form id="forgotForm" class="auth-form" style="display: none;" onsubmit="handleForgotPassword(event)">
-      <div class="form-group">
-        <label>Email</label>
-        <div class="input-wrapper">
-          <i class="fas fa-envelope input-icon"></i>
-          <input type="email" class="input-field" id="forgotEmail" placeholder="mario@email.com" required>
-        </div>
+    <form id="forgotForm" onsubmit="handleForgotPassword(event)" style="display:none;flex-direction:column;gap:14px;">
+      <p style="color:#64748b;font-size:14px;margin:0">Inserisci la tua email per ricevere il link di reset.</p>
+      <div class="input-group">
+        <i class="fas fa-envelope input-icon"></i>
+        <input id="forgotEmail" type="email" placeholder="La tua email" required />
       </div>
-      <div id="forgotError" class="error-message"></div>
-      <button type="submit" class="btn btn-primary btn-full">
-        <i class="fas fa-paper-plane"></i> Invia link reset
-      </button>
-      <button type="button" class="btn btn-secondary btn-full" onclick="switchAuthTab('login')">
-        <i class="fas fa-arrow-left"></i> Torna al login
-      </button>
+      <button type="submit" class="btn-primary"><i class="fas fa-paper-plane"></i> Invia link</button>
+      <button type="button" class="link-btn" onclick="switchAuthTab('login')">← Torna al login</button>
     </form>
 
     <!-- RESET PASSWORD -->
-    <form id="resetForm" class="auth-form" style="display: none;" onsubmit="handleResetPassword(event)">
-      <div class="form-group">
-        <label>Nuova password</label>
-        <div class="input-wrapper">
-          <i class="fas fa-lock input-icon"></i>
-          <input type="password" class="input-field" id="resetPassword" placeholder="••••••••" oninput="checkPasswordStrength(this.value)" required>
-          <button type="button" class="password-toggle" onclick="togglePassword('resetPassword', this)">
-            <i class="fas fa-eye"></i>
-          </button>
-        </div>
-        <div class="password-strength">
-          <span class="strength-item" id="resetStrengthLength"><i class="fas fa-circle"></i> 8+ caratteri</span>
-          <span class="strength-item" id="resetStrengthUpper"><i class="fas fa-circle"></i> Maiuscola</span>
-          <span class="strength-item" id="resetStrengthNumber"><i class="fas fa-circle"></i> Numero</span>
-          <span class="strength-item" id="resetStrengthSymbol"><i class="fas fa-circle"></i> Simbolo</span>
-        </div>
+    <form id="resetForm" onsubmit="handleResetPassword(event)" style="display:none;flex-direction:column;gap:14px;">
+      <p style="color:#64748b;font-size:14px;margin:0">Inserisci la nuova password.</p>
+      <div class="input-group">
+        <i class="fas fa-lock input-icon"></i>
+        <input id="resetPassword" type="password" placeholder="Nuova password" oninput="checkPasswordStrength(this.value)" required />
+        <button type="button" class="toggle-pw" onclick="togglePassword('resetPassword', this)">
+          <i class="fas fa-eye"></i>
+        </button>
       </div>
-      <div id="resetError" class="error-message"></div>
-      <button type="submit" class="btn btn-primary btn-full">
-        <i class="fas fa-key"></i> Resetta password
-      </button>
+      <div class="password-strength">
+        <span id="resetStrengthLength"><i class="fas fa-check-circle"></i> 8+ caratteri</span>
+        <span id="resetStrengthUpper"><i class="fas fa-check-circle"></i> Maiuscola</span>
+        <span id="resetStrengthNumber"><i class="fas fa-check-circle"></i> Numero</span>
+        <span id="resetStrengthSymbol"><i class="fas fa-check-circle"></i> Simbolo</span>
+      </div>
+      <button type="submit" class="btn-primary"><i class="fas fa-key"></i> Reimposta</button>
     </form>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════ -->
 <!-- APP CONTAINER -->
-<div id="appContainer" class="app" style="display: none;">
+<!-- ═══════════════════════════════════════════ -->
+<div id="appContainer" style="display:none;">
 
   <!-- SIDEBAR -->
-  <aside class="sidebar" id="sidebar">
+  <aside id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo"><i class="fas fa-leaf"></i></div>
-      <span class="sidebar-logo-text">EcoTrack</span>
+      <div class="sidebar-logo">🌱 <span>EcoTrack</span></div>
     </div>
 
-    <div class="sidebar-user">
-      <div class="user-avatar">
-        <canvas id="sidebarAvatar" width="40" height="40" class="avatar-canvas"></canvas>
-      </div>
-      <div class="user-info">
-        <div class="user-name" id="sidebarName">Caricamento...</div>
-        <div class="user-email" id="sidebarEmail">...</div>
-      </div>
-    </div>
-
-    <div class="user-stats">
-      <div class="user-stat">
-        <div class="user-stat-value" id="sidebarPoints">0</div>
-        <div class="user-stat-label">Punti</div>
-      </div>
-      <div class="user-stat">
-        <div class="user-stat-value" id="sidebarCo2">0.0</div>
-        <div class="user-stat-label">kg CO₂</div>
+    <!-- Avatar + Info -->
+    <div class="sidebar-profile">
+      <canvas id="sidebarAvatar" width="48" height="48"></canvas>
+      <div class="sidebar-profile-info">
+        <span id="sidebarName">Utente</span>
+        <span id="sidebarEmail" class="sidebar-email"></span>
       </div>
     </div>
 
-    <div class="sidebar-nav">
-      <div class="nav-section">
-        <div class="nav-section-title">Principale</div>
-        <button class="nav-item active" onclick="showSection('dashboard')">
-          <span class="nav-icon"><i class="fas fa-home"></i></span><span>Dashboard</span>
-        </button>
-        <button class="nav-item" onclick="showSection('activities')">
-          <span class="nav-icon"><i class="fas fa-leaf"></i></span><span>Attività</span>
-        </button>
-        <button class="nav-item" onclick="showSection('challenges')">
-          <span class="nav-icon"><i class="fas fa-trophy"></i></span><span>Sfide</span>
-        </button>
-        <button class="nav-item" onclick="showSection('leaderboard')">
-          <span class="nav-icon"><i class="fas fa-medal"></i></span><span>Classifica</span>
-        </button>
+    <!-- Stats rapide -->
+    <div class="sidebar-stats">
+      <div class="sidebar-stat">
+        <span class="sidebar-stat-value" id="sidebarPoints">0</span>
+        <span class="sidebar-stat-label">Punti</span>
       </div>
-
-      <div class="nav-section">
-        <div class="nav-section-title">Community</div>
-        <button class="nav-item" onclick="showSection('social')">
-          <span class="nav-icon"><i class="fas fa-users"></i></span><span>Social</span>
-        </button>
-        <button class="nav-item" onclick="showSection('shop')">
-          <span class="nav-icon"><i class="fas fa-store"></i></span><span>Shop</span>
-          <span class="nav-badge">NEW</span>
-        </button>
-        <button class="nav-item" onclick="showSection('notifiche')" id="notificationsNavItem">
-          <span class="nav-icon"><i class="fas fa-bell"></i></span><span>Notifiche</span>
-          <span class="nav-badge" id="notificationsBadge" style="display: none;">0</span>
-        </button>
-      </div>
-
-      <div class="nav-section">
-        <div class="nav-section-title">Profilo</div>
-        <button class="nav-item" onclick="showSection('profile')">
-          <span class="nav-icon"><i class="fas fa-user"></i></span><span>Il mio profilo</span>
-        </button>
-        <button class="nav-item" onclick="showSection('avatar')">
-          <span class="nav-icon"><i class="fas fa-paint-brush"></i></span><span>Avatar Builder</span>
-        </button>
-        <button class="nav-item" id="adminNavItem" style="display: none;" onclick="showSection('admin')">
-          <span class="nav-icon"><i class="fas fa-crown"></i></span><span>Admin Panel</span>
-        </button>
+      <div class="sidebar-stat">
+        <span class="sidebar-stat-value" id="sidebarCo2">0</span>
+        <span class="sidebar-stat-label">kg CO₂</span>
       </div>
     </div>
 
-    <button class="sidebar-logout" onclick="window.logout(); return false;">
-      <i class="fas fa-sign-out-alt"></i> <span>Esci</span>
-    </button>
+    <!-- Navigation -->
+    <nav class="sidebar-nav">
+      <div class="nav-item active" onclick="showSection('dashboard')">
+        <i class="fas fa-home"></i><span>Dashboard</span>
+      </div>
+      <div class="nav-item" onclick="showSection('activities')">
+        <i class="fas fa-leaf"></i><span>Attività</span>
+      </div>
+      <div class="nav-item" onclick="showSection('challenges')">
+        <i class="fas fa-trophy"></i><span>Sfide</span>
+      </div>
+      <div class="nav-item" onclick="showSection('leaderboard')">
+        <i class="fas fa-medal"></i><span>Classifica</span>
+      </div>
+      <div class="nav-item" onclick="showSection('social')">
+        <i class="fas fa-users"></i><span>Social</span>
+      </div>
+      <div class="nav-item" onclick="showSection('shop')">
+        <i class="fas fa-store"></i><span>Negozio</span>
+      </div>
+      <div class="nav-item" onclick="showSection('avatar')">
+        <i class="fas fa-palette"></i><span>Avatar</span>
+      </div>
+      <div class="nav-item" onclick="showSection('profile')">
+        <i class="fas fa-user-cog"></i><span>Profilo</span>
+      </div>
+      <div class="nav-item" onclick="showSection('notifiche')">
+        <i class="fas fa-bell"></i><span>Notifiche</span>
+        <span id="notifBadge" class="notif-badge" style="display:none">0</span>
+      </div>
+      <div class="nav-item admin-nav" id="adminNavItem" style="display:none" onclick="showSection('admin')">
+        <i class="fas fa-crown"></i><span>Admin</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-logout" onclick="logout()">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
+    </div>
   </aside>
 
-  <!-- MAIN CONTENT -->
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-left">
-        <h1 id="pageTitle">Dashboard</h1>
-        <p id="pageSubtitle">Il tuo riepilogo personale</p>
+  <!-- Sidebar overlay mobile -->
+  <div id="sidebarOverlay" onclick="toggleMobileNav()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99;"></div>
+
+  <!-- MAIN -->
+  <main id="mainContent">
+
+    <!-- Topbar mobile -->
+    <div class="topbar">
+      <button class="topbar-menu" onclick="toggleMobileNav()"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">🌱 EcoTrack</span>
+      <div class="topbar-info">
+        <span>🌍 <b id="topbarCo2">0 kg</b></span>
+        <span>⭐ <b id="topbarPoints">0 pt</b></span>
       </div>
-      <div class="topbar-right">
-        <div class="topbar-stat"><i class="fas fa-leaf"></i><span id="topbarCo2">0 kg</span></div>
-        <div class="topbar-stat"><i class="fas fa-star"></i><span id="topbarPoints">0 pt</span></div>
-        <button class="topbar-btn" onclick="showSection('notifiche')"><i class="fas fa-bell"></i><span class="notif-badge" id="topbarNotifBadge" style="display: none;"></span></button>
-        <button class="topbar-btn" onclick="showSection('profile')"><i class="fas fa-user"></i></button>
+    </div>
+
+    <!-- ══════════════════════════ DASHBOARD ══════════════════════════ -->
+    <section id="dashboard" class="tab-pane active">
+      <div class="section-header">
+        <h2>🏠 Dashboard</h2>
+        <p id="dashGreeting">Bentornato! Continua così 💪</p>
       </div>
-    </header>
 
-    <div class="content" id="contentArea">
-
-      <!-- DASHBOARD -->
-      <div id="dashboard" class="tab-pane active">
-        
-        <!-- Welcome Card -->
-        <div class="welcome-card">
-          <div class="welcome-content">
-            <h2>Bentornato, <span id="welcomeName">Utente</span>! 👋</h2>
-            <p>Continua così, stai facendo la differenza per il pianeta. Ogni piccolo gesto conta.</p>
-          </div>
-          <div class="welcome-stats">
-            <div class="welcome-stat">
-              <div class="value" id="welcomePoints">0</div>
-              <div class="label">Punti</div>
-            </div>
-            <div class="welcome-stat">
-              <div class="value" id="welcomeCo2">0</div>
-              <div class="label">kg CO₂</div>
-            </div>
-            <div class="welcome-stat">
-              <div class="value" id="welcomeActivities">0</div>
-              <div class="label">Attività</div>
-            </div>
+      <!-- Stats Cards -->
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <div class="stat-card-icon">🌍</div>
+          <div class="stat-card-body">
+            <span class="stat-card-value" id="dashboardTotalCo2">0</span>
+            <span class="stat-card-label">kg CO₂ totali</span>
           </div>
         </div>
-
-        <!-- Stat Cards -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-header">
-              <div class="stat-icon"><i class="fas fa-cloud"></i></div>
-              <span class="stat-badge">Totale</span>
-            </div>
-            <div class="stat-value" id="dashboardTotalCo2">0</div>
-            <div class="stat-label">kg CO₂ risparmiati</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-header">
-              <div class="stat-icon"><i class="fas fa-calendar-week"></i></div>
-              <span class="stat-badge">Settimana</span>
-            </div>
-            <div class="stat-value" id="dashboardWeekCo2">0</div>
-            <div class="stat-label">kg CO₂ questa settimana</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-header">
-              <div class="stat-icon"><i class="fas fa-calendar-month"></i></div>
-              <span class="stat-badge">Mese</span>
-            </div>
-            <div class="stat-value" id="dashboardMonthCo2">0</div>
-            <div class="stat-label">kg CO₂ questo mese</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-header">
-              <div class="stat-icon"><i class="fas fa-star"></i></div>
-              <span class="stat-badge">Punti</span>
-            </div>
-            <div class="stat-value" id="dashboardPoints">0</div>
-            <div class="stat-label">punti totali</div>
+        <div class="stat-card blue">
+          <div class="stat-card-icon">📅</div>
+          <div class="stat-card-body">
+            <span class="stat-card-value" id="dashboardWeekCo2">0</span>
+            <span class="stat-card-label">kg CO₂ settimana</span>
           </div>
         </div>
-
-        <!-- Two Column Layout -->
-        <div class="two-col">
-          <div class="chart-card">
-            <h3>Andamento annuale CO₂</h3>
-            <canvas id="yearlyChart" width="400" height="200" style="width: 100%; height: 200px;"></canvas>
-          </div>
-          <div class="recent-activities-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h3>Badge recenti</h3>
-              <button class="btn btn-secondary btn-sm" onclick="showSection('profile')">Vedi tutti</button>
-            </div>
-            <div id="recentBadges" class="badge-grid" style="grid-template-columns: repeat(2,1fr);"></div>
+        <div class="stat-card purple">
+          <div class="stat-card-icon">🗓️</div>
+          <div class="stat-card-body">
+            <span class="stat-card-value" id="dashboardMonthCo2">0</span>
+            <span class="stat-card-label">kg CO₂ mese</span>
           </div>
         </div>
-
-        <!-- Attività recenti -->
-        <div class="recent-activities-card" style="margin-top: 1.5rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3>Attività recenti</h3>
-            <button class="btn btn-secondary btn-sm" onclick="showSection('activities')">Vedi tutte</button>
+        <div class="stat-card yellow">
+          <div class="stat-card-icon">⭐</div>
+          <div class="stat-card-body">
+            <span class="stat-card-value" id="dashboardPoints">0</span>
+            <span class="stat-card-label">Punti totali</span>
           </div>
-          <div id="recentActivities" class="activity-list"></div>
         </div>
       </div>
-            <!-- ACTIVITIES -->
-      <div id="activities" class="tab-pane">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-          <div class="stat-card">
-            <h3 style="font-size: 1rem; margin-bottom: 1.5rem;">Registra nuova attività</h3>
 
-            <div class="activity-types" id="activityTypes">
-              <button class="activity-type-btn" onclick="selectActivityType('Bici', this)"><span>🚴</span><span>Bici</span></button>
-              <button class="activity-type-btn" onclick="selectActivityType('Treno', this)"><span>🚂</span><span>Treno</span></button>
-              <button class="activity-type-btn" onclick="selectActivityType('Bus', this)"><span>🚌</span><span>Bus</span></button>
-              <button class="activity-type-btn" onclick="selectActivityType('Carpooling', this)"><span>🚗</span><span>Carpooling</span></button>
-              <button class="activity-type-btn" onclick="selectActivityType('Remoto', this)"><span>🏠</span><span>Remoto</span></button>
-              <button class="activity-type-btn" onclick="selectActivityType('Videocall', this)"><span>💻</span><span>Videocall</span></button>
-            </div>
-            <input type="hidden" id="actType">
+      <!-- Chart + Badge -->
+      <div class="dashboard-row">
+        <div class="card flex-2">
+          <div class="card-header"><h3>📊 Andamento CO₂ annuale</h3></div>
+          <div class="card-body">
+            <canvas id="yearlyChart" style="width:100%;height:200px;"></canvas>
+          </div>
+        </div>
+        <div class="card flex-1">
+          <div class="card-header"><h3>🎖️ Badge recenti</h3></div>
+          <div class="card-body" id="recentBadges">
+            <div class="empty-state"><span>🔒</span><p>Nessun badge ancora</p></div>
+          </div>
+        </div>
+      </div>
 
-            <div id="mapSection" style="display: none;">
-              <div class="map-container" id="mapContainer">
-                <div id="map" style="height: 100%; width: 100%;"></div>
-                <div class="map-controls">
-                  <button class="map-layer-btn active" onclick="setMapLayer('street')" id="mapLayerStreet"><i class="fas fa-road"></i></button>
-                  <button class="map-layer-btn" onclick="setMapLayer('satellite')" id="mapLayerSatellite"><i class="fas fa-satellite"></i></button>
-                  <button class="map-layer-btn" onclick="setMapLayer('transport')" id="mapLayerTransport"><i class="fas fa-train"></i></button>
-                </div>
-                <button class="map-location-btn" onclick="getUserLocation()"><i class="fas fa-location-dot"></i></button>
-              </div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
-                <input type="text" class="input-field" id="fromAddr" placeholder="Partenza" oninput="searchAddress('fromAddr', this.value)">
-                <input type="text" class="input-field" id="toAddr" placeholder="Destinazione" oninput="searchAddress('toAddr', this.value)">
-              </div>
-              <div id="fromAddrSugg" class="addr-sugg"></div>
-              <div id="toAddrSugg" class="addr-sugg"></div>
-              <button class="btn btn-secondary btn-full" onclick="calculateRoute()" style="margin-top: 0.5rem;">
-                <i class="fas fa-route"></i> Calcola percorso
-              </button>
-            </div>
+      <!-- Attività recenti -->
+      <div class="card">
+        <div class="card-header">
+          <h3>⚡ Attività recenti</h3>
+          <button class="btn-sm" onclick="showSection('activities')">Vedi tutte →</button>
+        </div>
+        <div class="card-body" id="recentActivities">
+          <div class="empty-state"><span>🌱</span><p>Nessuna attività ancora</p></div>
+        </div>
+      </div>
+    </section>
 
-            <div id="activityFields" style="margin-top: 1rem;">
-              <div id="kmGroup" style="display: none;">
-                <label style="font-size:0.875rem; font-weight:600;">Distanza (km)</label>
-                <input type="number" class="input-field" id="actKm" placeholder="0.0" step="0.1" min="0" oninput="updateActivityPreview()">
-              </div>
-              <div id="hoursGroup" style="display: none;">
-                <label style="font-size:0.875rem; font-weight:600;">Ore</label>
-                <input type="number" class="input-field" id="actHours" placeholder="0" step="0.5" min="0" oninput="updateActivityPreview()">
-              </div>
-              <div style="margin-top:0.5rem;">
-                <label style="font-size:0.875rem; font-weight:600;">Note (opzionale)</label>
-                <input type="text" class="input-field" id="actNote" placeholder="Aggiungi una nota...">
-              </div>
+    <!-- ══════════════════════════ ATTIVITÀ ══════════════════════════ -->
+    <section id="activities" class="tab-pane">
+      <div class="section-header"><h2>🌿 Attività</h2></div>
+
+      <div class="activities-layout">
+        <!-- Form -->
+        <div class="card">
+          <div class="card-header"><h3>➕ Registra attività</h3></div>
+          <div class="card-body">
+            <input type="hidden" id="actType" />
+
+            <p class="label-sm">Tipo di attività</p>
+            <div class="activity-types">
+              <button class="activity-type-btn" onclick="selectActivityType('Bici', this)">🚴 Bici</button>
+              <button class="activity-type-btn" onclick="selectActivityType('Treno', this)">🚂 Treno</button>
+              <button class="activity-type-btn" onclick="selectActivityType('Bus', this)">🚌 Bus</button>
+              <button class="activity-type-btn" onclick="selectActivityType('Carpooling', this)">🚗 Carpooling</button>
+              <button class="activity-type-btn" onclick="selectActivityType('Remoto', this)">🏠 Remoto</button>
+              <button class="activity-type-btn" onclick="selectActivityType('Videocall', this)">💻 Videocall</button>
             </div>
 
-            <div id="activitySummary" style="background: var(--primary-soft); padding: 1rem; border-radius: var(--radius); margin-top: 1rem; display: none;">
-              <div style="display: flex; justify-content: space-between;"><span>CO₂ risparmiata:</span><span style="font-weight:700; color:var(--primary);" id="pCO2">0 kg</span></div>
-              <div style="display: flex; justify-content: space-between; margin-top:0.25rem;"><span>Punti guadagnati:</span><span style="font-weight:700; color:var(--warning);" id="pPts">0 pt</span></div>
+            <div id="kmGroup" style="display:none;margin-top:14px;">
+              <label class="label-sm">Distanza (km)</label>
+              <input type="number" id="actKm" placeholder="es. 15" min="0" step="0.1" oninput="updateActivityPreview()" />
             </div>
 
-            <button class="btn btn-primary btn-full" onclick="saveActivity()" style="margin-top:1rem;" id="saveActivityBtn" disabled>
+            <div id="hoursGroup" style="display:none;margin-top:14px;">
+              <label class="label-sm">Ore di lavoro</label>
+              <input type="number" id="actHours" placeholder="es. 8" min="0" step="0.5" oninput="updateActivityPreview()" />
+            </div>
+
+            <div id="activitySummary" class="activity-preview" style="display:none;">
+              <div class="preview-item green">🌿 CO₂ risparmiata: <strong id="pCO2">0 kg</strong></div>
+              <div class="preview-item yellow">⭐ Punti guadagnati: <strong id="pPts">0</strong></div>
+            </div>
+
+            <div style="margin-top:14px;">
+              <label class="label-sm">Note (opzionale)</label>
+              <input type="text" id="actNote" placeholder="Descrizione breve..." />
+            </div>
+
+            <!-- Mappa -->
+            <div id="mapSection" style="display:none;margin-top:18px;">
+              <label class="label-sm">📍 Partenza</label>
+              <div class="addr-wrap">
+                <input type="text" id="fromAddr" placeholder="Indirizzo di partenza" oninput="searchAddress('fromAddr', this.value)" autocomplete="off" />
+                <div id="fromAddrSugg" class="addr-suggestions"></div>
+              </div>
+              <label class="label-sm" style="margin-top:10px;">📍 Destinazione</label>
+              <div class="addr-wrap">
+                <input type="text" id="toAddr" placeholder="Indirizzo di destinazione" oninput="searchAddress('toAddr', this.value)" autocomplete="off" />
+                <div id="toAddrSugg" class="addr-suggestions"></div>
+              </div>
+              <div class="map-controls">
+                <button class="btn-sm" onclick="getUserLocation()"><i class="fas fa-location-arrow"></i> Posizione</button>
+                <button class="btn-sm green" onclick="calculateRoute()"><i class="fas fa-route"></i> Calcola</button>
+              </div>
+              <div id="map" style="height:280px;border-radius:12px;margin-top:12px;z-index:1;"></div>
+            </div>
+
+            <button id="saveActivityBtn" class="btn-primary" style="margin-top:18px;width:100%;" onclick="saveActivity()" disabled>
               <i class="fas fa-save"></i> Salva attività
             </button>
           </div>
+        </div>
 
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Le tue attività</h3>
-            <div id="actList" class="activity-list"></div>
+        <!-- Lista attività -->
+        <div class="card">
+          <div class="card-header"><h3>📋 Le tue attività</h3></div>
+          <div class="card-body" id="actList">
+            <div class="empty-state"><span>🌱</span><p>Nessuna attività</p></div>
           </div>
         </div>
       </div>
+    </section>
 
-      <!-- CHALLENGES -->
-      <div id="challenges" class="tab-pane">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Crea nuova sfida</h3>
-            <div class="form-group"><label>Titolo</label><input type="text" class="input-field" id="chTitle" placeholder="Es: 30 giorni in bici"></div>
-            <div class="form-group"><label>Descrizione</label><input type="text" class="input-field" id="chDesc" placeholder="Descrivi la sfida..."></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
-              <div class="form-group"><label>Target CO₂ (kg)</label><input type="number" class="input-field" id="chCo2" placeholder="50"></div>
-              <div class="form-group"><label>Punti premio</label><input type="number" class="input-field" id="chPts" placeholder="200"></div>
-            </div>
-            <div class="form-group"><label>Data scadenza</label><input type="date" class="input-field" id="chDate"></div>
-            <label style="display:flex; align-items:center; gap:0.5rem; margin:1rem 0;"><input type="checkbox" id="chPublic" checked> <span>Sfida pubblica</span></label>
-            <button class="btn btn-primary btn-full" onclick="createChallenge()"><i class="fas fa-plus"></i> Crea sfida</button>
-          </div>
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Sfide attive</h3>
-            <div id="chList" class="challenges-list"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- LEADERBOARD -->
-      <div id="leaderboard" class="tab-pane">
-        <div class="stat-card">
-          <h3 style="font-size:1rem; margin-bottom:1.5rem;">🏆 Classifica globale</h3>
-          <div id="lbList" class="leaderboard-list"></div>
-        </div>
-      </div>
-
-      <!-- SOCIAL -->
-      <div id="social" class="tab-pane">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Feed</h3>
-            <div style="margin-bottom:1.5rem;">
-              <textarea class="input-field" id="postContent" rows="3" placeholder="Cosa vuoi condividere?"></textarea>
-              <input type="text" class="input-field" id="postImage" placeholder="URL immagine (opzionale)" style="margin-top:0.5rem;">
-              <button class="btn btn-primary btn-full" onclick="createPost()" style="margin-top:0.5rem;"><i class="fas fa-paper-plane"></i> Pubblica</button>
-            </div>
-            <div id="socialFeed" class="posts-feed"></div>
-          </div>
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Utenti da seguire</h3>
-            <div id="userList" class="users-list"></div>
-          </div>
-        </div>
-      </div>
-            <!-- SHOP -->
-      <div id="shop" class="tab-pane">
-        <div class="stat-card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-            <h3 style="font-size:1rem;">🛍️ Negozio avatar</h3>
-            <div class="topbar-stat"><i class="fas fa-star"></i><span id="shopPoints">0 pt</span></div>
-          </div>
-          <div class="shop-categories" id="shopCategories">
-            <button class="shop-category-btn active" onclick="filterShop('all')">Tutti</button>
-            <button class="shop-category-btn" onclick="filterShop('hair')">💇 Capelli</button>
-            <button class="shop-category-btn" onclick="filterShop('eyes')">👀 Occhi</button>
-            <button class="shop-category-btn" onclick="filterShop('mouth')">👄 Bocca</button>
-            <button class="shop-category-btn" onclick="filterShop('color')">🎨 Colori</button>
-            <button class="shop-category-btn" onclick="filterShop('skin')">👤 Pelle</button>
-            <button class="shop-category-btn" onclick="filterShop('accessory')">✨ Accessori</button>
-          </div>
-          <div id="shopGrid" class="shop-grid"></div>
-        </div>
-      </div>
-
-      <!-- PROFILE -->
-      <div id="profile" class="tab-pane">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Informazioni profilo</h3>
-            <div class="form-group"><label>Nome</label><input type="text" class="input-field" id="editName" placeholder="Il tuo nome"></div>
-            <div class="form-group"><label>Username</label><input type="text" class="input-field" id="editUsername" placeholder="username"></div>
-            <div class="form-group"><label>Bio</label><input type="text" class="input-field" id="editBio" placeholder="Parlaci di te..."></div>
-            <button class="btn btn-primary btn-full" onclick="saveProfile()"><i class="fas fa-save"></i> Salva profilo</button>
-          </div>
-          <div class="stat-card">
-            <h3 style="font-size:1rem; margin-bottom:1.5rem;">Statistiche</h3>
-            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem;">
-              <div style="text-align:center;"><div style="font-size:1.5rem; font-weight:700;" id="profPoints">0</div><div style="font-size:0.75rem; color:var(--text-tertiary);">Punti</div></div>
-              <div style="text-align:center;"><div style="font-size:1.5rem; font-weight:700;" id="profCo2">0</div><div style="font-size:0.75rem; color:var(--text-tertiary);">kg CO₂</div></div>
-              <div style="text-align:center;"><div style="font-size:1.5rem; font-weight:700;" id="profActs">0</div><div style="font-size:0.75rem; color:var(--text-tertiary);">Attività</div></div>
-            </div>
-            <div style="margin-bottom:1rem;">
-              <div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;"><span style="font-weight:600;" id="profLevel">🌱 Principiante</span><span style="font-size:0.75rem; color:var(--text-tertiary);" id="xpText">0/100 XP</span></div>
-              <div style="height:0.5rem; background:var(--border-light); border-radius:99px; overflow:hidden;"><div id="xpBar" style="height:100%; width:0%; background:linear-gradient(90deg, var(--primary), var(--secondary));"></div></div>
-            </div>
-            <h4 style="font-size:0.875rem; margin:1.5rem 0 1rem;">Badge sbloccati</h4>
-            <div id="badgeList" class="badge-grid" style="grid-template-columns: repeat(2,1fr);"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- AVATAR BUILDER -->
-      <div id="avatar" class="tab-pane">
-        <div class="avatar-builder">
-          <div class="avatar-preview"><canvas id="miiCanvas" width="220" height="220" class="preview-canvas"></canvas></div>
-          <div class="avatar-customizer">
-            <div class="customizer-section">
-              <div class="customizer-title">🎨 Colore sfondo</div>
-              <div class="color-grid" id="bgColors">
-                <div class="color-option" style="background:#10b981;" onclick="selectBgColor('#10b981',this)"></div>
-                <div class="color-option" style="background:#3b82f6;" onclick="selectBgColor('#3b82f6',this)"></div>
-                <div class="color-option" style="background:#8b5cf6;" onclick="selectBgColor('#8b5cf6',this)"></div>
-                <div class="color-option" style="background:#ec4899;" onclick="selectBgColor('#ec4899',this)"></div>
-                <div class="color-option" style="background:#f59e0b;" onclick="selectBgColor('#f59e0b',this)"></div>
-                <div class="color-option" style="background:#ef4444;" onclick="selectBgColor('#ef4444',this)"></div>
-                <div class="color-option" style="background:#14b8a6;" onclick="selectBgColor('#14b8a6',this)"></div>
-                <div class="color-option" style="background:#f97316;" onclick="selectBgColor('#f97316',this)"></div>
+    <!-- ══════════════════════════ SFIDE ══════════════════════════ -->
+    <section id="challenges" class="tab-pane">
+      <div class="section-header"><h2>🏆 Sfide</h2></div>
+      <div class="activities-layout">
+        <div class="card">
+          <div class="card-header"><h3>➕ Crea sfida</h3></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+            <input type="text" id="chTitle" placeholder="Titolo sfida *" />
+            <textarea id="chDesc" placeholder="Descrizione..." rows="3" style="resize:vertical;"></textarea>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label class="label-sm">Target CO₂ (kg)</label>
+                <input type="number" id="chCo2" placeholder="es. 50" min="1" />
+              </div>
+              <div>
+                <label class="label-sm">Premio (punti)</label>
+                <input type="number" id="chPts" placeholder="es. 100" min="1" />
               </div>
             </div>
-            <div class="customizer-section">
-              <div class="customizer-title">👤 Carnagione</div>
-              <div class="color-grid" id="skinColors">
-                <div class="color-option" style="background:#fde68a;" onclick="selectSkinColor('#fde68a',this)"></div>
-                <div class="color-option" style="background:#fcd34d;" onclick="selectSkinColor('#fcd34d',this)"></div>
-                <div class="color-option" style="background:#fbbf24;" onclick="selectSkinColor('#fbbf24',this)"></div>
-                <div class="color-option" style="background:#f59e0b;" onclick="selectSkinColor('#f59e0b',this)"></div>
-                <div class="color-option" style="background:#d97706;" onclick="selectSkinColor('#d97706',this)"></div>
-                <div class="color-option" style="background:#f8fafc;" onclick="selectSkinColor('#f8fafc',this)"></div>
-              </div>
+            <div>
+              <label class="label-sm">Data scadenza</label>
+              <input type="date" id="chDate" />
             </div>
-            <div class="customizer-section">
-              <div class="customizer-title">💇 Capelli</div>
-              <div class="style-grid" id="hairStyles">
-                <button class="style-option selected" onclick="selectHairStyle('none')">🚫 Nessuno</button>
-                <button class="style-option" onclick="selectHairStyle('short')">✂️ Corti</button>
-                <button class="style-option" onclick="selectHairStyle('long')">💁 Lunghi</button>
-                <button class="style-option" onclick="selectHairStyle('curly')">🦱 Ricci</button>
-                <button class="style-option" onclick="selectHairStyle('bun')">🎀 Chignon</button>
-                <button class="style-option" onclick="selectHairStyle('mohawk')">⚡ Mohawk</button>
-                <button class="style-option" onclick="selectHairStyle('wavy')">🌊 Ondulati</button>
-                <button class="style-option" onclick="selectHairStyle('cap')">🧢 Cappello</button>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="chPublic" checked /> Sfida pubblica
+            </label>
+            <button class="btn-primary" onclick="createChallenge()">
+              <i class="fas fa-plus"></i> Crea sfida
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>📋 Sfide attive</h3></div>
+          <div class="card-body" id="chList">
+            <div class="empty-state"><span>🏆</span><p>Nessuna sfida</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ LEADERBOARD ══════════════════════════ -->
+    <section id="leaderboard" class="tab-pane">
+      <div class="section-header"><h2>🏆 Classifica globale</h2></div>
+      <div class="card">
+        <div class="card-body" id="lbList">
+          <div class="empty-state"><span>🏆</span><p>Nessun utente</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ SOCIAL ══════════════════════════ -->
+    <section id="social" class="tab-pane">
+      <div class="section-header"><h2>👥 Social</h2></div>
+      <div class="social-layout">
+        <!-- Feed -->
+        <div>
+          <!-- Nuovo post -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-body">
+              <div style="display:flex;gap:10px;align-items:flex-start;">
+                <canvas id="socialAvatar" width="36" height="36" style="border-radius:50%;flex-shrink:0;"></canvas>
+                <textarea id="postContent" placeholder="Condividi la tua esperienza green... 🌱" rows="3" style="flex:1;resize:none;"></textarea>
               </div>
-            </div>
-            <div class="customizer-section">
-              <div class="customizer-title">👀 Occhi</div>
-              <div class="style-grid" id="eyesStyles">
-                <button class="style-option selected" onclick="selectEyesStyle('normal')">👀 Normali</button>
-                <button class="style-option" onclick="selectEyesStyle('happy')">😊 Felici</button>
-                <button class="style-option" onclick="selectEyesStyle('sleepy')">😴 Assonnati</button>
-                <button class="style-option" onclick="selectEyesStyle('surprised')">😲 Sorpresi</button>
-                <button class="style-option" onclick="selectEyesStyle('wink')">😉 Occhiolino</button>
-                <button class="style-option" onclick="selectEyesStyle('cool')">😎 Cool</button>
-              </div>
-            </div>
-            <div class="customizer-section">
-              <div class="customizer-title">👄 Bocca</div>
-              <div class="style-grid" id="mouthStyles">
-                <button class="style-option selected" onclick="selectMouthStyle('smile')">😊 Sorriso</button>
-                <button class="style-option" onclick="selectMouthStyle('grin')">😁 Ghigno</button>
-                <button class="style-option" onclick="selectMouthStyle('open')">😮 Aperta</button>
-                <button class="style-option" onclick="selectMouthStyle('smirk')">😏 Smorfia</button>
-                <button class="style-option" onclick="selectMouthStyle('tongue')">😛 Linguaccia</button>
-                <button class="style-option" onclick="selectMouthStyle('sad')">😢 Triste</button>
+              <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+                <button class="btn-primary btn-sm" onclick="createPost()">
+                  <i class="fas fa-paper-plane"></i> Pubblica
+                </button>
               </div>
             </div>
           </div>
-          <button class="btn btn-primary btn-full" onclick="saveAvatar()" style="margin-top:2rem;"><i class="fas fa-save"></i> Salva avatar</button>
+          <div id="postsList"></div>
+        </div>
+        <!-- Utenti -->
+        <div class="card" style="align-self:flex-start;">
+          <div class="card-header"><h3>👥 Utenti</h3></div>
+          <div class="card-body" id="usersList"></div>
         </div>
       </div>
+    </section>
 
-      <!-- NOTIFICHE -->
-      <div id="notifiche" class="tab-pane">
-        <div class="stat-card"><h3 style="font-size:1rem; margin-bottom:1.5rem;">Notifiche</h3><div id="notifList" class="notifications-list"></div></div>
+    <!-- ══════════════════════════ SHOP ══════════════════════════ -->
+    <section id="shop" class="tab-pane">
+      <div class="section-header">
+        <h2>🛍️ Negozio avatar</h2>
+        <span class="points-badge">⭐ <span id="shopPoints">0</span> pt</span>
       </div>
-            <!-- ADMIN -->
-      <div id="admin" class="tab-pane">
-        <div class="stat-card">
-          <h3 style="font-size:1rem; margin-bottom:1.5rem;">👑 Pannello amministrazione</h3>
-          <div class="admin-stats" id="adminStats"></div>
-          <div class="admin-tabs">
-            <button class="admin-tab active" onclick="switchAdminTab('users')">Utenti</button>
-            <button class="admin-tab" onclick="switchAdminTab('activities')">Attività</button>
-            <button class="admin-tab" onclick="switchAdminTab('posts')">Post</button>
-            <button class="admin-tab" onclick="switchAdminTab('shop')">Shop</button>
+
+      <!-- Categorie -->
+      <div class="shop-categories">
+        <button class="shop-cat-btn active" onclick="filterShop('all', this)">Tutti</button>
+        <button class="shop-cat-btn" onclick="filterShop('hair', this)">💇 Capelli</button>
+        <button class="shop-cat-btn" onclick="filterShop('eyes', this)">👀 Occhi</button>
+        <button class="shop-cat-btn" onclick="filterShop('mouth', this)">👄 Bocca</button>
+        <button class="shop-cat-btn" onclick="filterShop('color', this)">🎨 Colori</button>
+        <button class="shop-cat-btn" onclick="filterShop('accessory', this)">👑 Accessori</button>
+      </div>
+
+      <div class="shop-grid" id="shopGrid"></div>
+    </section>
+
+    <!-- ══════════════════════════ AVATAR ══════════════════════════ -->
+    <section id="avatar" class="tab-pane">
+      <div class="section-header"><h2>🎨 Personalizza Avatar</h2></div>
+      <div class="avatar-layout">
+        <!-- Preview -->
+        <div class="card avatar-preview-card">
+          <div class="card-body" style="text-align:center;">
+            <canvas id="miiCanvas" width="200" height="200" style="border-radius:50%;border:4px solid #e5e7eb;"></canvas>
+            <p style="margin:12px 0 0;color:#64748b;font-size:14px;">Anteprima avatar</p>
+            <button class="btn-primary" style="margin-top:16px;width:100%;" onclick="saveAvatar()">
+              <i class="fas fa-save"></i> Salva avatar
+            </button>
           </div>
-          <div id="adminUsersTab" class="admin-tab-content">
-            <div class="admin-table-container">
-              <table class="admin-table">
-                <thead><tr><th>Utente</th><th>Email</th><th>Punti</th><th>CO₂</th><th>Ruolo</th><th>Azioni</th></tr></thead>
-                <tbody id="adminTbody"></tbody>
+        </div>
+
+        <!-- Customizer -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:14px;">
+          <div class="card">
+            <div class="card-header"><h3>🎨 Colore sfondo</h3></div>
+            <div class="card-body">
+              <div class="color-grid" id="colorOptions"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>👤 Carnagione</h3></div>
+            <div class="card-body">
+              <div class="color-grid" id="skinOptions"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>💇 Capelli</h3></div>
+            <div class="card-body">
+              <div class="option-grid" id="hairOptions"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>👀 Occhi</h3></div>
+            <div class="card-body">
+              <div class="option-grid" id="eyeOptions"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>👄 Bocca</h3></div>
+            <div class="card-body">
+              <div class="option-grid" id="mouthOptions"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ PROFILO ══════════════════════════ -->
+    <section id="profile" class="tab-pane">
+      <div class="section-header"><h2>👤 Profilo</h2></div>
+      <div class="profile-layout">
+        <!-- Info card -->
+        <div class="card">
+          <div class="card-header"><h3>✏️ Informazioni</h3></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label class="label-sm">Nome</label>
+              <input type="text" id="editName" placeholder="Il tuo nome" />
+            </div>
+            <div>
+              <label class="label-sm">Username</label>
+              <input type="text" id="editUsername" placeholder="username" />
+            </div>
+            <div>
+              <label class="label-sm">Bio</label>
+              <textarea id="editBio" placeholder="Raccontati in poche parole..." rows="3" style="resize:vertical;"></textarea>
+            </div>
+            <button class="btn-primary" onclick="saveProfile()">
+              <i class="fas fa-save"></i> Salva modifiche
+            </button>
+          </div>
+        </div>
+
+        <!-- Stats card -->
+        <div class="card">
+          <div class="card-header"><h3>📊 Statistiche</h3></div>
+          <div class="card-body">
+            <div class="profile-stats">
+              <div class="pstat"><span id="profPoints">0</span><label>Punti</label></div>
+              <div class="pstat"><span id="profCo2">0</span><label>kg CO₂</label></div>
+              <div class="pstat"><span id="profActs">0</span><label>Attività</label></div>
+            </div>
+            <div class="xp-bar-wrap" style="margin-top:16px;">
+              <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;">
+                <span id="profLevel">🌱 Principiante</span>
+                <span id="xpText">0/100 XP</span>
+              </div>
+              <div class="xp-bar-bg"><div class="xp-bar-fill" id="xpBar" style="width:0%"></div></div>
+            </div>
+            <!-- Badge -->
+            <div style="margin-top:20px;">
+              <h4 style="font-size:14px;font-weight:600;margin-bottom:10px;">🎖️ Badge sbloccati</h4>
+              <div id="badgeList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Password card -->
+        <div class="card">
+          <div class="card-header"><h3>🔒 Cambia password</h3></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px;">
+            <div class="input-group">
+              <i class="fas fa-lock input-icon"></i>
+              <input type="password" id="currentPw" placeholder="Password attuale" />
+            </div>
+            <div class="input-group">
+              <i class="fas fa-lock input-icon"></i>
+              <input type="password" id="newPw" placeholder="Nuova password" />
+            </div>
+            <button class="btn-primary" onclick="changePassword()">
+              <i class="fas fa-key"></i> Aggiorna password
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ NOTIFICHE ══════════════════════════ -->
+    <section id="notifiche" class="tab-pane">
+      <div class="section-header">
+        <h2>🔔 Notifiche</h2>
+        <button class="btn-sm" onclick="markAllRead()"><i class="fas fa-check-double"></i> Segna tutte lette</button>
+      </div>
+      <div class="card">
+        <div class="card-body" id="notifList">
+          <div class="empty-state"><span>🔔</span><p>Nessuna notifica</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ ADMIN ══════════════════════════ -->
+    <section id="admin" class="tab-pane">
+      <div class="section-header"><h2>👑 Pannello Admin</h2></div>
+
+      <!-- Stats Admin -->
+      <div class="stats-grid" id="adminStats" style="margin-bottom:20px;"></div>
+
+      <!-- Admin Tabs -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchAdminTab('users')"><i class="fas fa-users"></i> Utenti</button>
+        <button class="admin-tab" onclick="switchAdminTab('activities')"><i class="fas fa-leaf"></i> Attività</button>
+        <button class="admin-tab" onclick="switchAdminTab('posts')"><i class="fas fa-newspaper"></i> Post</button>
+      </div>
+
+      <!-- Utenti -->
+      <div id="adminTabUsers" class="admin-tab-content active">
+        <div class="card">
+          <div class="card-body">
+            <div class="table-wrap">
+              <table class="admin-table" id="adminUsersTable">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Nome</th><th>Username</th><th>Email</th>
+                    <th>Punti</th><th>CO₂</th><th>Attività</th><th>Ruolo</th><th>Stato</th><th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersList"></tbody>
               </table>
             </div>
           </div>
-          <div id="adminActivitiesTab" class="admin-tab-content" style="display:none;">
-            <div class="admin-table-container">
+        </div>
+      </div>
+
+      <!-- Attività -->
+      <div id="adminTabActivities" class="admin-tab-content">
+        <div class="card">
+          <div class="card-body">
+            <div class="table-wrap">
               <table class="admin-table">
-                <thead><tr><th>Utente</th><th>Tipo</th><th>Distanza</th><th>CO₂</th><th>Punti</th><th>Data</th><th>Azioni</th></tr></thead>
-                <tbody id="adminActivitiesTable"></tbody>
-              </table>
-            </div>
-          </div>
-          <div id="adminPostsTab" class="admin-tab-content" style="display:none;">
-            <div class="admin-table-container">
-              <table class="admin-table">
-                <thead><tr><th>Utente</th><th>Contenuto</th><th>Like</th><th>Commenti</th><th>Data</th><th>Azioni</th></tr></thead>
-                <tbody id="adminPostsTable"></tbody>
-              </table>
-            </div>
-          </div>
-          <div id="adminShopTab" class="admin-tab-content" style="display:none;">
-            <div class="admin-table-container">
-              <table class="admin-table">
-                <thead><tr><th>Oggetto</th><th>Categoria</th><th>Costo</th><th>Raro</th><th>Azioni</th></tr></thead>
-                <tbody id="adminShopTable"></tbody>
+                <thead>
+                  <tr><th>ID</th><th>Utente</th><th>Tipo</th><th>KM</th><th>Ore</th><th>CO₂</th><th>Punti</th><th>Data</th><th>Azioni</th></tr>
+                </thead>
+                <tbody id="adminActivitiesList"></tbody>
               </table>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- Post -->
+      <div id="adminTabPosts" class="admin-tab-content">
+        <div class="card">
+          <div class="card-body">
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr><th>ID</th><th>Autore</th><th>Contenuto</th><th>Like</th><th>Data</th><th>Azioni</th></tr>
+                </thead>
+                <tbody id="adminPostsList"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
-
-  <!-- MOBILE MENU BUTTON & OVERLAY -->
-  <button class="mobile-menu-btn" onclick="toggleMobileNav()"><i class="fas fa-bars"></i></button>
-  <div id="sidebarOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49" onclick="toggleMobileNav()"></div>
 </div>
 
-<!-- MODAL E TOAST -->
-<div id="shopPreviewModal" class="modal-overlay" style="display: none;">
-  <div class="modal-content"><button class="modal-close" onclick="closeShopPreview()"><i class="fas fa-times"></i></button><div id="shopPreviewContent"></div></div>
-</div>
+<!-- ═══════════════════════════════════════════ -->
+<!-- MODALS -->
+<!-- ═══════════════════════════════════════════ -->
 
-<div id="confirmModal" class="modal-overlay" style="display: none;">
-  <div class="modal-content" style="max-width:400px; text-align:center;">
-    <div class="modal-icon" id="confirmIcon">❓</div>
-    <h3 id="confirmTitle">Conferma</h3>
-    <p id="confirmMsg" style="margin:1rem 0;">Sei sicuro?</p>
-    <div style="display:flex; gap:0.5rem;">
-      <button class="btn btn-secondary" style="flex:1;" onclick="closeConfirm()">Annulla</button>
-      <button class="btn btn-danger" style="flex:1;" onclick="confirmAction()">Conferma</button>
+<!-- Confirm modal -->
+<div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="modal-card">
+    <div style="font-size:40px;text-align:center;" id="confirmIcon">❓</div>
+    <h3 id="confirmTitle" style="text-align:center;margin:10px 0 6px;">Conferma</h3>
+    <p id="confirmMsg" style="text-align:center;color:#64748b;font-size:14px;"></p>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn-secondary flex-1" onclick="closeConfirm()">Annulla</button>
+      <button class="btn-danger flex-1" onclick="confirmAction()">Conferma</button>
     </div>
   </div>
 </div>
 
+<!-- Ban modal -->
+<div id="banModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="modal-card">
+    <h3 style="margin-bottom:16px;">🔨 Banna utente</h3>
+    <input type="hidden" id="banUserId" />
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label class="label-sm">Giorni (0 = permanente)</label>
+        <input type="number" id="banDays" placeholder="es. 7" min="0" />
+      </div>
+      <div>
+        <label class="label-sm">Motivo</label>
+        <input type="text" id="banReason" placeholder="Motivo del ban..." />
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn-secondary flex-1" onclick="closeBanModal()">Annulla</button>
+      <button class="btn-danger flex-1" onclick="confirmBan()">Banna</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit user modal -->
+<div id="editUserModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="modal-card">
+    <h3 style="margin-bottom:16px;">✏️ Modifica utente</h3>
+    <input type="hidden" id="editUserId" />
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label class="label-sm">Nome</label>
+        <input type="text" id="editUserName" />
+      </div>
+      <div>
+        <label class="label-sm">Username</label>
+        <input type="text" id="editUserUsername" />
+      </div>
+      <div>
+        <label class="label-sm">Punti</label>
+        <input type="number" id="editUserPoints" min="0" />
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="editUserIsAdmin" /> Admin
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn-secondary flex-1" onclick="closeEditUserModal()">Annulla</button>
+      <button class="btn-primary flex-1" onclick="confirmEditUser()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tutorial modal -->
+<div id="tutorialModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;">
+  <div class="modal-card tutorial-card">
+    <div id="tutorialContent"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;">
+      <div id="tutorialDots" style="display:flex;gap:6px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-secondary" id="tutorialSkip" onclick="skipTutorial()">Salta</button>
+        <button class="btn-primary" id="tutorialNext" onclick="nextTutorialStep()">Avanti →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
 <div id="notifToast" class="notification-toast"></div>
 
+<!-- ═══════════════════════════════════════════ -->
+<!-- SCRIPTS -->
+<!-- ═══════════════════════════════════════════ -->
+<!-- Leaflet JS - PRIMA dello script principale -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 <script src="script.js"></script>
-
-<!-- LOGOUT GLOBALE DI SICUREZZA -->
-<script>
-  window.logout = function() {
-    console.log('🚪 Logout in corso...');
-    localStorage.clear();
-    sessionStorage.clear();
-    document.cookie.split(";").forEach(function(c) { 
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
-    });
-    document.getElementById('appContainer').style.display = 'none';
-    document.getElementById('authContainer').style.display = 'flex';
-    window.location.href = '/';
-    return false;
-  };
-</script>
-
 </body>
 </html>
