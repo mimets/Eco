@@ -1245,12 +1245,14 @@ input:focus, textarea:focus {
   .shop-grid { grid-template-columns: repeat(2, 1fr); }
   .modal-card { padding: 20px 16px; }
 }
-#confirmModal, #banModal, #editUserModal, #tutorialModal {
-  display: none;
+/* ═══════════════════════════════════════════
+   MODAL FIX — z-index sopra tutto
+═══════════════════════════════════════════ */
+#confirmModal,
+#banModal,
+#editUserModal,
+#tutorialModal {
   position: fixed !important;
+  z-index: 99999 !important;
   inset: 0 !important;
-  z-index: 10000 !important;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,.5);
 }
