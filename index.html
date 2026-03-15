@@ -110,12 +110,12 @@
     </div>
     
     <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchTab('login')">Accedi</button>
-      <button class="auth-tab" onclick="switchTab('register')">Registrati</button>
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Accedi</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Registrati</button>
     </div>
     
     <!-- LOGIN FORM -->
-    <form id="loginForm" class="auth-form" onsubmit="doLogin(event)">
+    <form id="loginForm" class="auth-form" onsubmit="handleLogin(event)">
       <div class="form-group">
         <label>Email o Username</label>
         <div class="input-wrapper">
@@ -129,7 +129,7 @@
         <div class="input-wrapper">
           <i class="fas fa-lock input-icon"></i>
           <input type="password" class="input-field" id="loginPassword" placeholder="••••••••" required>
-          <button type="button" class="password-toggle" onclick="togglePwd('loginPassword', this)">
+          <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', this)">
             <i class="fas fa-eye"></i>
           </button>
         </div>
@@ -142,14 +142,14 @@
         <span>Accedi</span>
       </button>
       
-      <button type="button" class="btn btn-secondary btn-full" onclick="switchTab('forgot')">
+      <button type="button" class="btn btn-secondary btn-full" onclick="switchAuthTab('forgot')">
         <i class="fas fa-question-circle"></i>
         Password dimenticata?
       </button>
     </form>
     
     <!-- REGISTER FORM -->
-    <form id="registerForm" class="auth-form" style="display: none;" onsubmit="doRegister(event)">
+    <form id="registerForm" class="auth-form" style="display: none;" onsubmit="handleRegister(event)">
       <div class="form-group">
         <label>Nome completo</label>
         <div class="input-wrapper">
@@ -178,8 +178,8 @@
         <label>Password</label>
         <div class="input-wrapper">
           <i class="fas fa-lock input-icon"></i>
-          <input type="password" class="input-field" id="registerPassword" placeholder="••••••••" oninput="checkPwdStrength(this.value)" required>
-          <button type="button" class="password-toggle" onclick="togglePwd('registerPassword', this)">
+          <input type="password" class="input-field" id="registerPassword" placeholder="••••••••" oninput="checkPasswordStrength(this.value)" required>
+          <button type="button" class="password-toggle" onclick="togglePassword('registerPassword', this)">
             <i class="fas fa-eye"></i>
           </button>
         </div>
@@ -209,7 +209,7 @@
     </form>
     
     <!-- FORGOT PASSWORD FORM -->
-    <form id="forgotForm" class="auth-form" style="display: none;" onsubmit="doForgotPassword(event)">
+    <form id="forgotForm" class="auth-form" style="display: none;" onsubmit="handleForgotPassword(event)">
       <div class="form-group">
         <label>Email</label>
         <div class="input-wrapper">
@@ -225,20 +225,20 @@
         <span>Invia link reset</span>
       </button>
       
-      <button type="button" class="btn btn-secondary btn-full" onclick="switchTab('login')">
+      <button type="button" class="btn btn-secondary btn-full" onclick="switchAuthTab('login')">
         <i class="fas fa-arrow-left"></i>
         Torna al login
       </button>
     </form>
     
     <!-- RESET PASSWORD FORM -->
-    <form id="resetForm" class="auth-form" style="display: none;" onsubmit="doResetPassword(event)">
+    <form id="resetForm" class="auth-form" style="display: none;" onsubmit="handleResetPassword(event)">
       <div class="form-group">
         <label>Nuova password</label>
         <div class="input-wrapper">
           <i class="fas fa-lock input-icon"></i>
-          <input type="password" class="input-field" id="resetPassword" placeholder="••••••••" oninput="checkPwdStrength(this.value)" required>
-          <button type="button" class="password-toggle" onclick="togglePwd('resetPassword', this)">
+          <input type="password" class="input-field" id="resetPassword" placeholder="••••••••" oninput="checkPasswordStrength(this.value)" required>
+          <button type="button" class="password-toggle" onclick="togglePassword('resetPassword', this)">
             <i class="fas fa-eye"></i>
           </button>
         </div>
@@ -462,27 +462,27 @@
             <h3 style="font-size: 1rem; margin-bottom: 1.5rem;">Registra nuova attività</h3>
             
             <div class="activity-types" id="activityTypes">
-              <button class="activity-type-btn" onclick="selectType('Bici', this)">
+              <button class="activity-type-btn" onclick="selectActivityType('Bici', this)">
                 <span>🚴</span>
                 <span>Bici</span>
               </button>
-              <button class="activity-type-btn" onclick="selectType('Treno', this)">
+              <button class="activity-type-btn" onclick="selectActivityType('Treno', this)">
                 <span>🚂</span>
                 <span>Treno</span>
               </button>
-              <button class="activity-type-btn" onclick="selectType('Bus', this)">
+              <button class="activity-type-btn" onclick="selectActivityType('Bus', this)">
                 <span>🚌</span>
                 <span>Bus</span>
               </button>
-              <button class="activity-type-btn" onclick="selectType('Carpooling', this)">
+              <button class="activity-type-btn" onclick="selectActivityType('Carpooling', this)">
                 <span>🚗</span>
                 <span>Carpooling</span>
               </button>
-              <button class="activity-type-btn" onclick="selectType('Remoto', this)">
+              <button class="activity-type-btn" onclick="selectActivityType('Remoto', this)">
                 <span>🏠</span>
                 <span>Remoto</span>
               </button>
-              <button class="activity-type-btn" onclick="selectType('Videocall', this)">
+              <button class="activity-type-btn" onclick="selectActivityType('Videocall', this)">
                 <span>💻</span>
                 <span>Videocall</span>
               </button>
@@ -512,13 +512,13 @@
               </div>
               
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
-                <input type="text" class="input-field" id="fromAddr" placeholder="Partenza" oninput="getSuggestions('fromAddr', this.value)">
-                <input type="text" class="input-field" id="toAddr" placeholder="Destinazione" oninput="getSuggestions('toAddr', this.value)">
+                <input type="text" class="input-field" id="fromAddr" placeholder="Partenza" oninput="searchAddress('fromAddr', this.value)">
+                <input type="text" class="input-field" id="toAddr" placeholder="Destinazione" oninput="searchAddress('toAddr', this.value)">
               </div>
               <div id="fromAddrSugg" class="addr-sugg"></div>
               <div id="toAddrSugg" class="addr-sugg"></div>
               
-              <button class="btn btn-secondary btn-full" onclick="searchRoute()" style="margin-top: 0.5rem;">
+              <button class="btn btn-secondary btn-full" onclick="calculateRoute()" style="margin-top: 0.5rem;">
                 <i class="fas fa-route"></i> Calcola percorso
               </button>
             </div>
@@ -526,12 +526,12 @@
             <div id="activityFields" style="margin-top: 1rem;">
               <div id="kmGroup" style="display: none;">
                 <label style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; display: block;">Distanza (km)</label>
-                <input type="number" class="input-field" id="actKm" placeholder="0.0" step="0.1" min="0" oninput="updPreview()">
+                <input type="number" class="input-field" id="actKm" placeholder="0.0" step="0.1" min="0" oninput="updateActivityPreview()">
               </div>
               
               <div id="hoursGroup" style="display: none;">
                 <label style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; display: block;">Ore</label>
-                <input type="number" class="input-field" id="actHours" placeholder="0" step="0.5" min="0" oninput="updPreview()">
+                <input type="number" class="input-field" id="actHours" placeholder="0" step="0.5" min="0" oninput="updateActivityPreview()">
               </div>
               
               <div style="margin-top: 0.5rem;">
@@ -551,7 +551,7 @@
               </div>
             </div>
             
-            <button class="btn btn-primary btn-full" onclick="saveAct()" style="margin-top: 1rem;" id="saveActivityBtn" disabled>
+            <button class="btn btn-primary btn-full" onclick="saveActivity()" style="margin-top: 1rem;" id="saveActivityBtn" disabled>
               <i class="fas fa-save"></i> Salva attività
             </button>
           </div>
@@ -740,73 +740,64 @@
             <div class="customizer-section">
               <div class="customizer-title">🎨 Colore sfondo</div>
               <div class="color-grid" id="bgColors">
-                <div class="color-option" style="background: #10b981;" onclick="pickColor('#10b981', this)"></div>
-                <div class="color-option" style="background: #3b82f6;" onclick="pickColor('#3b82f6', this)"></div>
-                <div class="color-option" style="background: #8b5cf6;" onclick="pickColor('#8b5cf6', this)"></div>
-                <div class="color-option" style="background: #ec4899;" onclick="pickColor('#ec4899', this)"></div>
-                <div class="color-option" style="background: #f59e0b;" onclick="pickColor('#f59e0b', this)"></div>
-                <div class="color-option" style="background: #ef4444;" onclick="pickColor('#ef4444', this)"></div>
-                <div class="color-option" style="background: #14b8a6;" onclick="pickColor('#14b8a6', this)"></div>
-                <div class="color-option" style="background: #f97316;" onclick="pickColor('#f97316', this)"></div>
+                <div class="color-option" style="background: #10b981;" onclick="selectBgColor('#10b981', this)"></div>
+                <div class="color-option" style="background: #3b82f6;" onclick="selectBgColor('#3b82f6', this)"></div>
+                <div class="color-option" style="background: #8b5cf6;" onclick="selectBgColor('#8b5cf6', this)"></div>
+                <div class="color-option" style="background: #ec4899;" onclick="selectBgColor('#ec4899', this)"></div>
+                <div class="color-option" style="background: #f59e0b;" onclick="selectBgColor('#f59e0b', this)"></div>
+                <div class="color-option" style="background: #ef4444;" onclick="selectBgColor('#ef4444', this)"></div>
+                <div class="color-option" style="background: #14b8a6;" onclick="selectBgColor('#14b8a6', this)"></div>
+                <div class="color-option" style="background: #f97316;" onclick="selectBgColor('#f97316', this)"></div>
               </div>
             </div>
             
             <div class="customizer-section">
               <div class="customizer-title">👤 Carnagione</div>
               <div class="color-grid" id="skinColors">
-                <div class="color-option" style="background: #fde68a;" onclick="pickSkin('#fde68a', this)"></div>
-                <div class="color-option" style="background: #fcd34d;" onclick="pickSkin('#fcd34d', this)"></div>
-                <div class="color-option" style="background: #fbbf24;" onclick="pickSkin('#fbbf24', this)"></div>
-                <div class="color-option" style="background: #f59e0b;" onclick="pickSkin('#f59e0b', this)"></div>
-                <div class="color-option" style="background: #d97706;" onclick="pickSkin('#d97706', this)"></div>
-                <div class="color-option" style="background: #f8fafc;" onclick="pickSkin('#f8fafc', this)"></div>
+                <div class="color-option" style="background: #fde68a;" onclick="selectSkinColor('#fde68a', this)"></div>
+                <div class="color-option" style="background: #fcd34d;" onclick="selectSkinColor('#fcd34d', this)"></div>
+                <div class="color-option" style="background: #fbbf24;" onclick="selectSkinColor('#fbbf24', this)"></div>
+                <div class="color-option" style="background: #f59e0b;" onclick="selectSkinColor('#f59e0b', this)"></div>
+                <div class="color-option" style="background: #d97706;" onclick="selectSkinColor('#d97706', this)"></div>
+                <div class="color-option" style="background: #f8fafc;" onclick="selectSkinColor('#f8fafc', this)"></div>
               </div>
             </div>
             
             <div class="customizer-section">
               <div class="customizer-title">💇 Capelli</div>
               <div class="style-grid" id="hairStyles">
-                <button class="style-option selected" onclick="pickMii('hair', 'none', this)">🚫 Nessuno</button>
-                <button class="style-option" onclick="pickMii('hair', 'short', this)">✂️ Corti</button>
-                <button class="style-option" onclick="pickMii('hair', 'long', this)">💁 Lunghi</button>
-                <button class="style-option" onclick="pickMii('hair', 'curly', this)">🦱 Ricci</button>
-                <button class="style-option" onclick="pickMii('hair', 'bun', this)">🎀 Chignon</button>
-                <button class="style-option" onclick="pickMii('hair', 'mohawk', this)">⚡ Mohawk</button>
-                <button class="style-option" onclick="pickMii('hair', 'wavy', this)">🌊 Ondulati</button>
-                <button class="style-option" onclick="pickMii('hair', 'cap', this)">🧢 Cappello</button>
-                <button class="style-option locked" onclick="buyItem(1)" id="hairRainbow">🌈 Rainbow</button>
-                <button class="style-option locked" onclick="buyItem(2)" id="hairGold">✨ Gold</button>
-                <button class="style-option locked" onclick="buyItem(3)" id="hairGalaxy">🌌 Galaxy</button>
-                <button class="style-option locked" onclick="buyItem(4)" id="hairFlame">🔥 Flame</button>
+                <button class="style-option selected" onclick="selectHairStyle('none')">🚫 Nessuno</button>
+                <button class="style-option" onclick="selectHairStyle('short')">✂️ Corti</button>
+                <button class="style-option" onclick="selectHairStyle('long')">💁 Lunghi</button>
+                <button class="style-option" onclick="selectHairStyle('curly')">🦱 Ricci</button>
+                <button class="style-option" onclick="selectHairStyle('bun')">🎀 Chignon</button>
+                <button class="style-option" onclick="selectHairStyle('mohawk')">⚡ Mohawk</button>
+                <button class="style-option" onclick="selectHairStyle('wavy')">🌊 Ondulati</button>
+                <button class="style-option" onclick="selectHairStyle('cap')">🧢 Cappello</button>
               </div>
             </div>
             
             <div class="customizer-section">
               <div class="customizer-title">👀 Occhi</div>
               <div class="style-grid" id="eyesStyles">
-                <button class="style-option selected" onclick="pickMii('eyes', 'normal', this)">👀 Normali</button>
-                <button class="style-option" onclick="pickMii('eyes', 'happy', this)">😊 Felici</button>
-                <button class="style-option" onclick="pickMii('eyes', 'sleepy', this)">😴 Assonnati</button>
-                <button class="style-option" onclick="pickMii('eyes', 'surprised', this)">😲 Sorpresi</button>
-                <button class="style-option" onclick="pickMii('eyes', 'wink', this)">😉 Occhiolino</button>
-                <button class="style-option" onclick="pickMii('eyes', 'cool', this)">😎 Cool</button>
-                <button class="style-option locked" onclick="buyItem(5)" id="eyesStar">⭐ Star</button>
-                <button class="style-option locked" onclick="buyItem(6)" id="eyesHeart">❤️ Heart</button>
-                <button class="style-option locked" onclick="buyItem(7)" id="eyesLaser">🔴 Laser</button>
+                <button class="style-option selected" onclick="selectEyesStyle('normal')">👀 Normali</button>
+                <button class="style-option" onclick="selectEyesStyle('happy')">😊 Felici</button>
+                <button class="style-option" onclick="selectEyesStyle('sleepy')">😴 Assonnati</button>
+                <button class="style-option" onclick="selectEyesStyle('surprised')">😲 Sorpresi</button>
+                <button class="style-option" onclick="selectEyesStyle('wink')">😉 Occhiolino</button>
+                <button class="style-option" onclick="selectEyesStyle('cool')">😎 Cool</button>
               </div>
             </div>
             
             <div class="customizer-section">
               <div class="customizer-title">👄 Bocca</div>
               <div class="style-grid" id="mouthStyles">
-                <button class="style-option selected" onclick="pickMii('mouth', 'smile', this)">😊 Sorriso</button>
-                <button class="style-option" onclick="pickMii('mouth', 'grin', this)">😁 Ghigno</button>
-                <button class="style-option" onclick="pickMii('mouth', 'open', this)">😮 Aperta</button>
-                <button class="style-option" onclick="pickMii('mouth', 'smirk', this)">😏 Smorfia</button>
-                <button class="style-option" onclick="pickMii('mouth', 'tongue', this)">😛 Linguaccia</button>
-                <button class="style-option" onclick="pickMii('mouth', 'sad', this)">😢 Triste</button>
-                <button class="style-option locked" onclick="buyItem(8)" id="mouthRainbow">🌈 Rainbow</button>
-                <button class="style-option locked" onclick="buyItem(9)" id="mouthFire">🔥 Fire</button>
+                <button class="style-option selected" onclick="selectMouthStyle('smile')">😊 Sorriso</button>
+                <button class="style-option" onclick="selectMouthStyle('grin')">😁 Ghigno</button>
+                <button class="style-option" onclick="selectMouthStyle('open')">😮 Aperta</button>
+                <button class="style-option" onclick="selectMouthStyle('smirk')">😏 Smorfia</button>
+                <button class="style-option" onclick="selectMouthStyle('tongue')">😛 Linguaccia</button>
+                <button class="style-option" onclick="selectMouthStyle('sad')">😢 Triste</button>
               </div>
             </div>
           </div>
@@ -896,7 +887,7 @@
           
           <div id="adminShopTab" class="admin-tab-content" style="display: none;">
             <div style="margin-bottom: 1rem;">
-              <button class="btn btn-primary" onclick="showAddItemModal()">
+              <button class="btn btn-primary" onclick="alert('Funzione in sviluppo')">
                 <i class="fas fa-plus"></i> Aggiungi oggetto
               </button>
             </div>
@@ -922,12 +913,12 @@
   </main>
   
   <!-- MOBILE MENU BUTTON -->
-  <button class="mobile-menu-btn" onclick="toggleMobNav()">
+  <button class="mobile-menu-btn" onclick="toggleMobileNav()">
     <i class="fas fa-bars"></i>
   </button>
   
   <!-- SIDEBAR OVERLAY (mobile) -->
-  <div id="sidebarOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49" onclick="toggleMobNav()"></div>
+  <div id="sidebarOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:49" onclick="toggleMobileNav()"></div>
 </div>
 
 <!-- SHOP PREVIEW MODAL -->
@@ -946,16 +937,13 @@
     <p id="confirmMsg" style="margin: 1rem 0;">Sei sicuro di voler procedere?</p>
     <div style="display: flex; gap: 0.5rem;">
       <button class="btn btn-secondary" style="flex: 1;" onclick="closeConfirm()">Annulla</button>
-      <button class="btn btn-danger" style="flex: 1;" id="confirmYes">Conferma</button>
+      <button class="btn btn-danger" style="flex: 1;" onclick="confirmAction()">Conferma</button>
     </div>
   </div>
 </div>
 
 <!-- NOTIFICATION TOAST -->
 <div id="notifToast" class="notification-toast"></div>
-
-<!-- OVERLAY -->
-<div id="overlay" style="display: none;"></div>
 
 <script src="script.js"></script>
 </body>
