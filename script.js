@@ -1,6 +1,21 @@
 'use strict';
 document.addEventListener('DOMContentLoaded', () => {
 
+// Funzioni di compatibilità
+function switchAuthTab(tab) {
+    switchTab(tab);
+}
+
+function checkPasswordStrength() {
+    const pwd = document.getElementById('registerPassword')?.value || '';
+    checkPwdStrength(pwd);
+}
+
+function checkResetPasswordStrength() {
+    const pwd = document.getElementById('resetPassword')?.value || '';
+    checkPwdStrength(pwd);
+}
+
 // ══════════════════════════════════════════
 //   CONFIG & STATE
 // ══════════════════════════════════════════

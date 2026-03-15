@@ -72,9 +72,6 @@
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* ══════════════════════════════════════════
-   STILI BASE
-══════════════════════════════════════════ */
 body {
   font-family: var(--font-sans);
   background: var(--gray-50);
@@ -146,21 +143,6 @@ button {
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
-}
-
-@keyframes shimmer {
-  0% { background-position: -1000px 0; }
-  100% { background-position: 1000px 0; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* ══════════════════════════════════════════
@@ -298,7 +280,6 @@ button {
 
 .tutorial-step-icon {
   font-size: 2rem;
-  animation: float 3s ease-in-out infinite;
 }
 
 .tutorial-progress {
@@ -410,7 +391,6 @@ button {
   margin: 0 auto 1.5rem;
   color: white;
   font-size: 2rem;
-  animation: float 3s ease-in-out infinite;
   box-shadow: var(--shadow-lg);
 }
 
@@ -711,7 +691,6 @@ button {
   justify-content: center;
   color: white;
   font-size: 1.25rem;
-  animation: float 3s ease-in-out infinite;
 }
 
 .sidebar-logo-text {
@@ -1382,6 +1361,28 @@ button {
   transform: scale(1.1);
 }
 
+.addr-sugg {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  margin-top: 0.25rem;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+
+.addr-item {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 0.875rem;
+}
+
+.addr-item:hover {
+  background: var(--primary-50);
+  color: var(--primary-600);
+}
+
 /* ══════════════════════════════════════════
    ACTIVITY TYPES
 ══════════════════════════════════════════ */
@@ -1697,17 +1698,6 @@ button {
   color: white;
 }
 
-.season-badge {
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.5rem;
-  font-size: 0.5rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 9999px;
-  background: var(--gray-200);
-  color: var(--gray-600);
-}
-
 /* ══════════════════════════════════════════
    AVATAR BUILDER
 ══════════════════════════════════════════ */
@@ -1859,12 +1849,6 @@ button {
   top: 0.25rem;
   right: 0.25rem;
   font-size: 0.5rem;
-}
-
-.style-option.locked:hover {
-  transform: none;
-  border-color: var(--gray-200);
-  box-shadow: none;
 }
 
 /* ══════════════════════════════════════════
@@ -2115,7 +2099,6 @@ button {
   font-size: 3rem;
   text-align: center;
   margin-bottom: 1rem;
-  animation: float 3s ease-in-out infinite;
 }
 
 /* ══════════════════════════════════════════
@@ -2139,7 +2122,6 @@ button {
   align-items: center;
   gap: 0.75rem;
   max-width: 400px;
-  animation: slideInRight 0.3s ease;
 }
 
 .notification-toast.show {
@@ -2156,10 +2138,6 @@ button {
 
 .notification-toast.info {
   background: linear-gradient(135deg, var(--secondary-500), var(--secondary-600));
-}
-
-.notification-toast.warning {
-  background: linear-gradient(135deg, var(--warning-500), #d97706);
 }
 
 /* ══════════════════════════════════════════
