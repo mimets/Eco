@@ -1,13 +1,13 @@
 'use strict';
 require('dotenv').config();
-const express    = require('express');
-const cors       = require('cors');
-const bcrypt     = require('bcryptjs');
-const jwt        = require('jsonwebtoken');
-const crypto     = require('crypto');
-const { Resend } = require('resend');
-const { Pool }   = require('pg');
-const path       = require('path');
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const { Pool } = require('pg');
+const path = require('path');
 
 // ═══════════════════════════════════════════
 // VALIDAZIONE VARIABILI D'AMBIENTE
@@ -21,7 +21,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3000;
 
 const db = new Pool({
@@ -62,7 +62,7 @@ function rateLimit(windowMs, max) {
   };
 }
 
-const authLimiter     = rateLimit(15 * 60 * 1000, 20);
+const authLimiter = rateLimit(15 * 60 * 1000, 20);
 const passwordLimiter = rateLimit(60 * 60 * 1000, 5);
 
 // Cleanup rate limit store ogni 10 min
@@ -278,22 +278,22 @@ async function initDB() {
 
 async function seedShop() {
   const items = [
-    ['Capelli Corti',  'Taglio classico',           'hair',      '💇', 50,  false],
-    ['Capelli Lunghi', 'Capelli lunghi fluenti',    'hair',      '💁', 80,  false],
-    ['Rainbow Hair',   'Capelli arcobaleno magici', 'hair',      '🌈', 300, true ],
-    ['Gold Hair',      'Capelli dorati brillanti',  'hair',      '✨', 500, true ],
-    ['Galaxy Hair',    'Capelli galassia cosmica',  'hair',      '🌌', 800, true ],
-    ['Flame Hair',     'Capelli di fuoco',          'hair',      '🔥', 600, true ],
-    ['Star Eyes',      'Occhi stella scintillante', 'eyes',      '⭐', 200, false],
-    ['Heart Eyes',     'Occhi cuore innamorati',    'eyes',      '❤️', 200, false],
-    ['Laser Eyes',     'Occhi laser potenti',       'eyes',      '😎', 400, true ],
-    ['Rainbow Mouth',  'Sorriso arcobaleno',        'mouth',     '🌈', 250, false],
-    ['Fire Mouth',     'Bocca di fuoco',            'mouth',     '🔥', 350, true ],
-    ['Viola Reale',    'Colore viola maestoso',     'color',     '🟣', 150, false],
-    ['Rosso Fuoco',    'Colore rosso ardente',      'color',     '🔴', 150, false],
-    ['Oro Puro',       'Colore oro lussuoso',       'color',     '🟡', 400, true ],
-    ['Corona',         'Corona reale dorata',       'accessory', '👑', 250, true ],
-    ['Cappello',       'Cappellino sportivo',       'accessory', '🧢', 100, false],
+    ['Capelli Corti', 'Taglio classico', 'hair', '💇', 50, false],
+    ['Capelli Lunghi', 'Capelli lunghi fluenti', 'hair', '💁', 80, false],
+    ['Rainbow Hair', 'Capelli arcobaleno magici', 'hair', '🌈', 300, true],
+    ['Gold Hair', 'Capelli dorati brillanti', 'hair', '✨', 500, true],
+    ['Galaxy Hair', 'Capelli galassia cosmica', 'hair', '🌌', 800, true],
+    ['Flame Hair', 'Capelli di fuoco', 'hair', '🔥', 600, true],
+    ['Star Eyes', 'Occhi stella scintillante', 'eyes', '⭐', 200, false],
+    ['Heart Eyes', 'Occhi cuore innamorati', 'eyes', '❤️', 200, false],
+    ['Laser Eyes', 'Occhi laser potenti', 'eyes', '😎', 400, true],
+    ['Rainbow Mouth', 'Sorriso arcobaleno', 'mouth', '🌈', 250, false],
+    ['Fire Mouth', 'Bocca di fuoco', 'mouth', '🔥', 350, true],
+    ['Viola Reale', 'Colore viola maestoso', 'color', '🟣', 150, false],
+    ['Rosso Fuoco', 'Colore rosso ardente', 'color', '🔴', 150, false],
+    ['Oro Puro', 'Colore oro lussuoso', 'color', '🟡', 400, true],
+    ['Corona', 'Corona reale dorata', 'accessory', '👑', 250, true],
+    ['Cappello', 'Cappellino sportivo', 'accessory', '🧢', 100, false],
   ];
   for (const item of items) {
     await db.query(
@@ -307,17 +307,26 @@ async function seedShop() {
 // ═══════════════════════════════════════════
 // EMAIL
 // ═══════════════════════════════════════════
-function getResend() {
-  if (!process.env.RESEND_API_KEY) return null;
-  return new Resend(process.env.RESEND_API_KEY);
+function getMailer() {
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) return null;
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS
+    },
+    tls: { rejectUnauthorized: false }
+  });
 }
 
 async function sendVerifyEmail(email, token) {
-  const resend = getResend();
-  if (!resend) { console.log('DEV verify token:', token); return; }
+  const mailer = getMailer();
+  if (!mailer) { console.log('DEV verify token:', token); return; }
   const url = `${process.env.BASE_URL || 'http://localhost:3000'}/api/verify?token=${token}`;
-  const { error } = await resend.emails.send({
-    from: 'EcoTrack <onboarding@resend.dev>',
+  await mailer.sendMail({
+    from: `EcoTrack <${process.env.MAIL_USER}>`,
     to: email,
     subject: 'Verifica il tuo account EcoTrack 🌱',
     html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;padding:40px;background:#f0fdf4;border-radius:16px">
@@ -328,15 +337,14 @@ async function sendVerifyEmail(email, token) {
       <p style="color:#64748b;font-size:13px">Se non ti sei registrato, ignora questa email.</p>
     </div>`
   });
-  if (error) throw new Error(error.message);
 }
 
 async function sendResetEmail(email, token) {
-  const resend = getResend();
-  if (!resend) { console.log('DEV reset token:', token); return; }
+  const mailer = getMailer();
+  if (!mailer) { console.log('DEV reset token:', token); return; }
   const url = `${process.env.BASE_URL || 'http://localhost:3000'}?action=reset&token=${token}`;
-  const { error } = await resend.emails.send({
-    from: 'EcoTrack <onboarding@resend.dev>',
+  await mailer.sendMail({
+    from: `EcoTrack <${process.env.MAIL_USER}>`,
     to: email,
     subject: 'Reset password EcoTrack 🔑',
     html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;padding:40px;background:#f0fdf4;border-radius:16px">
@@ -346,7 +354,6 @@ async function sendResetEmail(email, token) {
       <p style="color:#64748b;font-size:13px">Il link scade tra 1 ora.</p>
     </div>`
   });
-  if (error) throw new Error(error.message);
 }
 
 // ═══════════════════════════════════════════
@@ -378,12 +385,12 @@ async function adminAuth(req, res, next) {
 // HELPERS
 // ═══════════════════════════════════════════
 const CO2_RATES = {
-  'Bici':       { type: 'km',    co2: 0,    pts: 5   },
-  'Treno':      { type: 'km',    co2: 0.04, pts: 2   },
-  'Bus':        { type: 'km',    co2: 0.08, pts: 1.5 },
-  'Carpooling': { type: 'km',    co2: 0.06, pts: 3   },
-  'Remoto':     { type: 'hours', co2: 0.5,  pts: 10  },
-  'Videocall':  { type: 'hours', co2: 0.1,  pts: 8   }
+  'Bici': { type: 'km', co2: 0, pts: 5 },
+  'Treno': { type: 'km', co2: 0.04, pts: 2 },
+  'Bus': { type: 'km', co2: 0.08, pts: 1.5 },
+  'Carpooling': { type: 'km', co2: 0.06, pts: 3 },
+  'Remoto': { type: 'hours', co2: 0.5, pts: 10 },
+  'Videocall': { type: 'hours', co2: 0.1, pts: 8 }
 };
 
 function calcCo2(type, km, hours) {
@@ -561,7 +568,7 @@ app.post('/api/forgot-password', passwordLimiter, async (req, res) => {
       return res.json({ ok: true }); // Non rivelare se l'email esiste
     const { rows } = await db.query('SELECT id FROM users WHERE email=$1', [email.toLowerCase()]);
     if (rows.length) {
-      const rTok   = crypto.randomBytes(32).toString('hex');
+      const rTok = crypto.randomBytes(32).toString('hex');
       const expiry = Date.now() + 3600000;
       await db.query('UPDATE users SET reset_token=$1,reset_expiry=$2 WHERE id=$3', [rTok, expiry, rows[0].id]);
       sendResetEmail(email.toLowerCase(), rTok).catch(console.error);
@@ -632,20 +639,20 @@ app.put('/api/profile', auth, async (req, res) => {
 app.put('/api/profile/avatar', auth, async (req, res) => {
   try {
     const { color, skin, eyes, mouth, hair } = req.body;
-    const validEyes   = ['normal','happy','sleepy','surprised','wink','cool','star','heart'];
-    const validMouth  = ['smile','grin','open','smirk','sad','rainbow'];
-    const validHair   = ['none','short','long','curly','spiky','bun'];
-    const colorRegex  = /^#[0-9a-fA-F]{6}$/;
+    const validEyes = ['normal', 'happy', 'sleepy', 'surprised', 'wink', 'cool', 'star', 'heart'];
+    const validMouth = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow'];
+    const validHair = ['none', 'short', 'long', 'curly', 'spiky', 'bun'];
+    const colorRegex = /^#[0-9a-fA-F]{6}$/;
 
     if (color && !colorRegex.test(color)) return res.status(400).json({ error: 'Colore non valido' });
-    if (skin  && !colorRegex.test(skin))  return res.status(400).json({ error: 'Carnagione non valida' });
-    if (eyes  && !validEyes.includes(eyes))   return res.status(400).json({ error: 'Occhi non validi' });
+    if (skin && !colorRegex.test(skin)) return res.status(400).json({ error: 'Carnagione non valida' });
+    if (eyes && !validEyes.includes(eyes)) return res.status(400).json({ error: 'Occhi non validi' });
     if (mouth && !validMouth.includes(mouth)) return res.status(400).json({ error: 'Bocca non valida' });
-    if (hair  && !validHair.includes(hair))   return res.status(400).json({ error: 'Capelli non validi' });
+    if (hair && !validHair.includes(hair)) return res.status(400).json({ error: 'Capelli non validi' });
 
     await db.query(
       'UPDATE users SET avatar_color=$1,avatar_skin=$2,avatar_eyes=$3,avatar_mouth=$4,avatar_hair=$5 WHERE id=$6',
-      [color||'#16a34a', skin||'#fde68a', eyes||'normal', mouth||'smile', hair||'none', req.user.id]
+      [color || '#16a34a', skin || '#fde68a', eyes || 'normal', mouth || 'smile', hair || 'none', req.user.id]
     );
     return res.json({ ok: true });
   } catch (err) {
@@ -690,7 +697,7 @@ app.get('/api/stats', auth, async (req, res) => {
     const u = uRes.rows[0];
     return res.json({
       co2_saved: u.co2_saved || 0,
-      co2_week:  parseFloat(wRes.rows[0].total) || 0,
+      co2_week: parseFloat(wRes.rows[0].total) || 0,
       co2_month: parseFloat(mRes.rows[0].total) || 0,
       total_activities: u.total_activities || 0,
       points: u.points || 0
@@ -711,9 +718,9 @@ app.get('/api/yearly', auth, async (req, res) => {
       WHERE user_id=$1 AND EXTRACT(YEAR FROM date)=EXTRACT(YEAR FROM NOW())
       GROUP BY month ORDER BY month
     `, [req.user.id]);
-    const months = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+    const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
     return res.json(months.map((m, i) => {
-      const mm  = String(i + 1).padStart(2, '0');
+      const mm = String(i + 1).padStart(2, '0');
       const row = rows.find(r => r.month === mm);
       return { month: m, co2: row ? parseFloat(row.co2).toFixed(1) : '0.0', pts: row ? row.pts : 0 };
     }));
@@ -742,18 +749,18 @@ app.post('/api/activities', auth, async (req, res) => {
     if (!type || !CO2_RATES[type])
       return res.status(400).json({ error: 'Tipo attività non valido' });
 
-    const kmVal    = Math.min(parseFloat(km)    || 0, 10000); // max 10000 km
+    const kmVal = Math.min(parseFloat(km) || 0, 10000); // max 10000 km
     const hoursVal = Math.min(parseFloat(hours) || 0, 24);    // max 24 ore
-    const rate     = CO2_RATES[type];
+    const rate = CO2_RATES[type];
 
-    if (rate.type === 'km'    && kmVal    <= 0) return res.status(400).json({ error: 'Distanza non valida' });
+    if (rate.type === 'km' && kmVal <= 0) return res.status(400).json({ error: 'Distanza non valida' });
     if (rate.type === 'hours' && hoursVal <= 0) return res.status(400).json({ error: 'Ore non valide' });
 
-    const noteClean     = (note      || '').slice(0, 200);
+    const noteClean = (note || '').slice(0, 200);
     const fromAddrClean = (from_addr || '').slice(0, 300);
-    const toAddrClean   = (to_addr   || '').slice(0, 300);
+    const toAddrClean = (to_addr || '').slice(0, 300);
 
-    const co2    = calcCo2(type, kmVal, hoursVal);
+    const co2 = calcCo2(type, kmVal, hoursVal);
     const points = calcPoints(type, kmVal, hoursVal);
 
     await db.query(
@@ -777,18 +784,18 @@ app.post('/api/activities', auth, async (req, res) => {
 // BADGES
 // ═══════════════════════════════════════════
 const BADGES = [
-  { id: 'first',   name: 'Prima Volta',  icon: '🌱', desc: 'Prima attività',        check: (u,a)     => a >= 1    },
-  { id: 'eco5',    name: 'Eco x5',       icon: '♻️', desc: '5 attività',             check: (u,a)     => a >= 5    },
-  { id: 'eco10',   name: 'Eco x10',      icon: '🌿', desc: '10 attività',            check: (u,a)     => a >= 10   },
-  { id: 'eco50',   name: 'Eco x50',      icon: '🌳', desc: '50 attività',            check: (u,a)     => a >= 50   },
-  { id: 'co210',   name: '10kg CO₂',     icon: '🌍', desc: '10kg CO₂ risparmiati',  check: (u)       => u.co2_saved >= 10  },
-  { id: 'co250',   name: '50kg CO₂',     icon: '🌏', desc: '50kg CO₂ risparmiati',  check: (u)       => u.co2_saved >= 50  },
-  { id: 'co2100',  name: '100kg CO₂',    icon: '🏆', desc: '100kg CO₂ risparmiati', check: (u)       => u.co2_saved >= 100 },
-  { id: 'pts100',  name: '100 Punti',    icon: '⭐', desc: '100 punti raggiunti',    check: (u)       => u.points >= 100   },
-  { id: 'pts500',  name: '500 Punti',    icon: '🌟', desc: '500 punti raggiunti',    check: (u)       => u.points >= 500   },
-  { id: 'pts1000', name: '1000 Punti',   icon: '💫', desc: '1000 punti raggiunti',   check: (u)       => u.points >= 1000  },
-  { id: 'social1', name: 'Social Start', icon: '📣', desc: 'Primo post pubblicato',  check: (u,a,p)   => p >= 1    },
-  { id: 'shopper', name: 'Shopper',      icon: '🛍️', desc: 'Primo acquisto shop',   check: (u,a,p,s) => s >= 1    },
+  { id: 'first', name: 'Prima Volta', icon: '🌱', desc: 'Prima attività', check: (u, a) => a >= 1 },
+  { id: 'eco5', name: 'Eco x5', icon: '♻️', desc: '5 attività', check: (u, a) => a >= 5 },
+  { id: 'eco10', name: 'Eco x10', icon: '🌿', desc: '10 attività', check: (u, a) => a >= 10 },
+  { id: 'eco50', name: 'Eco x50', icon: '🌳', desc: '50 attività', check: (u, a) => a >= 50 },
+  { id: 'co210', name: '10kg CO₂', icon: '🌍', desc: '10kg CO₂ risparmiati', check: (u) => u.co2_saved >= 10 },
+  { id: 'co250', name: '50kg CO₂', icon: '🌏', desc: '50kg CO₂ risparmiati', check: (u) => u.co2_saved >= 50 },
+  { id: 'co2100', name: '100kg CO₂', icon: '🏆', desc: '100kg CO₂ risparmiati', check: (u) => u.co2_saved >= 100 },
+  { id: 'pts100', name: '100 Punti', icon: '⭐', desc: '100 punti raggiunti', check: (u) => u.points >= 100 },
+  { id: 'pts500', name: '500 Punti', icon: '🌟', desc: '500 punti raggiunti', check: (u) => u.points >= 500 },
+  { id: 'pts1000', name: '1000 Punti', icon: '💫', desc: '1000 punti raggiunti', check: (u) => u.points >= 1000 },
+  { id: 'social1', name: 'Social Start', icon: '📣', desc: 'Primo post pubblicato', check: (u, a, p) => p >= 1 },
+  { id: 'shopper', name: 'Shopper', icon: '🛍️', desc: 'Primo acquisto shop', check: (u, a, p, s) => s >= 1 },
 ];
 
 async function checkBadges(userId) {
@@ -798,10 +805,10 @@ async function checkBadges(userId) {
       db.query('SELECT COUNT(*) as c FROM posts WHERE user_id=$1', [userId]),
       db.query("SELECT message FROM notifications WHERE user_id=$1 AND type='badge'", [userId])
     ]);
-    const u       = uRes.rows[0];
-    const acts    = u.total_activities || 0;
-    const posts   = parseInt(pRes.rows[0].c);
-    const owned   = parseOwned(u.owned_items);
+    const u = uRes.rows[0];
+    const acts = u.total_activities || 0;
+    const posts = parseInt(pRes.rows[0].c);
+    const owned = parseOwned(u.owned_items);
     const notified = nRes.rows.map(n => n.message);
 
     for (const b of BADGES) {
@@ -821,7 +828,7 @@ app.get('/api/badges', auth, async (req, res) => {
       db.query('SELECT co2_saved,points,total_activities,owned_items FROM users WHERE id=$1', [req.user.id]),
       db.query('SELECT COUNT(*) as c FROM posts WHERE user_id=$1', [req.user.id])
     ]);
-    const u     = uRes.rows[0];
+    const u = uRes.rows[0];
     const posts = parseInt(pRes.rows[0].c);
     const owned = parseOwned(u.owned_items);
     return res.json(BADGES.map(b => ({
@@ -861,7 +868,7 @@ app.post('/api/challenges', auth, async (req, res) => {
 
     const { rows } = await db.query(
       'INSERT INTO challenges (user_id,title,description,co2_target,points_reward,end_date,is_public) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [req.user.id, title.trim(), (description||'').slice(0,500), co2, parseInt(points_reward)||0, end_date, is_public !== false]
+      [req.user.id, title.trim(), (description || '').slice(0, 500), co2, parseInt(points_reward) || 0, end_date, is_public !== false]
     );
     return res.json({ ok: true, challenge: rows[0] });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
@@ -910,7 +917,7 @@ app.post('/api/social/posts', auth, async (req, res) => {
     if (content.length > 1000) return res.status(400).json({ error: 'Post troppo lungo (max 1000 caratteri)' });
     const { rows } = await db.query(
       "INSERT INTO posts (user_id,content,image_url,likes) VALUES ($1,$2,$3,'[]') RETURNING *",
-      [req.user.id, content.trim(), (image_url||'').slice(0,500)]
+      [req.user.id, content.trim(), (image_url || '').slice(0, 500)]
     );
     checkBadges(req.user.id).catch(console.error);
     return res.json({ ok: true, post: rows[0] });
@@ -1054,7 +1061,7 @@ app.post('/api/teams', auth, async (req, res) => {
     const invite_code = crypto.randomBytes(6).toString('hex');
     const { rows } = await db.query(
       'INSERT INTO teams (name,description,invite_code,owner_id,avatar_color) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-      [name.trim(), (description||'').slice(0,200), invite_code, req.user.id, avatar_color||'#16a34a']
+      [name.trim(), (description || '').slice(0, 200), invite_code, req.user.id, avatar_color || '#16a34a']
     );
     // Owner diventa membro con ruolo admin
     await db.query(
@@ -1110,7 +1117,7 @@ app.post('/api/teams/join', auth, async (req, res) => {
       await db.query(
         "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'team',$2,'👥')",
         [team.owner_id, `${me[0].name} si è unito al team ${team.name}!`]
-      ).catch(() => {});
+      ).catch(() => { });
     }
     return res.json({ ok: true, team });
   } catch (err) {
@@ -1284,7 +1291,7 @@ app.post('/api/teams/:id/challenges', auth, async (req, res) => {
     if (!end_date) return res.status(400).json({ error: 'Data scadenza obbligatoria' });
     const { rows } = await db.query(
       'INSERT INTO challenges (user_id,title,description,co2_target,points_reward,end_date,is_public,team_id) VALUES ($1,$2,$3,$4,$5,$6,false,$7) RETURNING *',
-      [req.user.id, title.trim(), (description||'').slice(0,500), parseFloat(co2_target)||0, parseInt(points_reward)||0, end_date, teamId]
+      [req.user.id, title.trim(), (description || '').slice(0, 500), parseFloat(co2_target) || 0, parseInt(points_reward) || 0, end_date, teamId]
     );
     return res.json({ ok: true, challenge: rows[0] });
   } catch (err) {
@@ -1312,7 +1319,7 @@ app.post('/api/shop/buy', auth, async (req, res) => {
     const item = itemRows[0];
 
     const { rows: uRows } = await db.query('SELECT points,owned_items FROM users WHERE id=$1', [req.user.id]);
-    const u     = uRows[0];
+    const u = uRows[0];
     const owned = parseOwned(u.owned_items);
 
     if (owned.includes(item.id)) return res.status(400).json({ error: 'Oggetto già posseduto' });
@@ -1386,10 +1393,10 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
       db.query('SELECT COUNT(*) as c FROM posts')
     ]);
     return res.json({
-      total_users:      parseInt(u.rows[0].c),
+      total_users: parseInt(u.rows[0].c),
       total_activities: parseInt(a.rows[0].c),
-      total_co2:        parseFloat(co2.rows[0].total),
-      total_posts:      parseInt(p.rows[0].c)
+      total_co2: parseFloat(co2.rows[0].total),
+      total_posts: parseInt(p.rows[0].c)
     });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
 });
@@ -1421,7 +1428,7 @@ app.put('/api/admin/users/:id', adminAuth, async (req, res) => {
     if (ex.length) return res.status(400).json({ error: 'Username già in uso' });
     await db.query(
       'UPDATE users SET name=$1,username=$2,points=$3,is_admin=$4 WHERE id=$5',
-      [name.trim(), username.toLowerCase(), Math.max(0, parseInt(points)||0), is_admin||false, userId]
+      [name.trim(), username.toLowerCase(), Math.max(0, parseInt(points) || 0), is_admin || false, userId]
     );
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
@@ -1443,7 +1450,7 @@ app.post('/api/admin/users/:id/ban', adminAuth, async (req, res) => {
     if (userId === req.user.id)
       return res.status(400).json({ error: 'Non puoi bannare te stesso' });
     const { days, reason } = req.body;
-    const daysNum  = parseInt(days) || 0;
+    const daysNum = parseInt(days) || 0;
     const banUntil = daysNum > 0 ? new Date(Date.now() + daysNum * 86400000) : null;
     const safeReason = (reason || 'Violazione regole').slice(0, 200);
     await db.query(
