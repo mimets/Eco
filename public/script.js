@@ -3,8 +3,8 @@
 // ═══════════════════════════════════════════
 // GLOBALS
 // ═══════════════════════════════════════════
-let token       = localStorage.getItem('ecotoken') || null;
-let myProfile   = null;
+let token = localStorage.getItem('ecotoken') || null;
+let myProfile = null;
 let mapInstance = null;
 let mapInitialized = false;
 let routingControl = null;
@@ -17,19 +17,19 @@ window.confirmCallback = null;
 
 let miiState = {
   color: '#16a34a',
-  skin:  '#fde68a',
-  eyes:  'normal',
+  skin: '#fde68a',
+  eyes: 'normal',
   mouth: 'smile',
-  hair:  'none'
+  hair: 'none'
 };
 
 const CO2_RATES = {
-  'Bici':       { type: 'km',    co2: 0,    points: 5   },
-  'Treno':      { type: 'km',    co2: 0.04, points: 2   },
-  'Bus':        { type: 'km',    co2: 0.08, points: 1.5 },
-  'Carpooling': { type: 'km',    co2: 0.06, points: 3   },
-  'Remoto':     { type: 'hours', co2: 0.5,  points: 10  },
-  'Videocall':  { type: 'hours', co2: 0.1,  points: 8   }
+  'Bici': { type: 'km', co2: 0, points: 5 },
+  'Treno': { type: 'km', co2: 0.04, points: 2 },
+  'Bus': { type: 'km', co2: 0.08, points: 1.5 },
+  'Carpooling': { type: 'km', co2: 0.06, points: 3 },
+  'Remoto': { type: 'hours', co2: 0.5, points: 10 },
+  'Videocall': { type: 'hours', co2: 0.1, points: 8 }
 };
 
 const ACTIVITY_ICONS = {
@@ -38,41 +38,45 @@ const ACTIVITY_ICONS = {
 };
 
 const BG_COLORS = [
-  '#16a34a','#22c55e','#3b82f6','#6366f1','#8b5cf6',
-  '#ec4899','#ef4444','#f59e0b','#06b6d4','#14b8a6',
-  '#84cc16','#f97316','#1e293b','#64748b','#ffffff'
+  '#16a34a', '#22c55e', '#3b82f6', '#6366f1', '#8b5cf6',
+  '#ec4899', '#ef4444', '#f59e0b', '#06b6d4', '#14b8a6',
+  '#84cc16', '#f97316', '#1e293b', '#64748b', '#ffffff'
 ];
 
 const SKIN_COLORS = [
-  '#fde68a','#fcd34d','#f6ad55','#ed8936',
-  '#c05621','#7b341e','#fef3c7','#ffe4e6'
+  '#fde68a', '#fcd34d', '#f6ad55', '#ed8936',
+  '#c05621', '#7b341e', '#fef3c7', '#ffe4e6'
 ];
 
-const HAIR_OPTIONS  = ['none','short','long','curly','spiky','bun'];
-const EYE_OPTIONS   = ['normal','happy','sleepy','surprised','wink','cool','star','heart'];
-const MOUTH_OPTIONS = ['smile','grin','open','smirk','sad','rainbow'];
+const HAIR_OPTIONS = ['none', 'short', 'long', 'curly', 'spiky', 'bun'];
+const EYE_OPTIONS = ['normal', 'happy', 'sleepy', 'surprised', 'wink', 'cool', 'star', 'heart'];
+const MOUTH_OPTIONS = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow'];
 
 // ═══════════════════════════════════════════
-// REAL-TIME POLLING — aggiornamento ogni 5 sec
+// REAL-TIME POLLING — aggiornamento più lento per evitare sovraccarico server aziendale
 // ═══════════════════════════════════════════
 let realtimeIntervals = {};
 
 function startRealtime(section) {
   stopAllRealtime();
   const intervals = {
-    dashboard:   () => loadDashboard(),
-    social:      () => loadPosts(),
+    dashboard: () => loadDashboard(),
+    social: () => loadPosts(),
     leaderboard: () => loadLeaderboard(),
-    notifiche:   () => loadNotifications(),
-    teams:       () => { if(currentTeamId) loadTeamMessages(currentTeamId); },
-    shop:        () => loadShop(),
+    notifiche: () => loadNotifications(),
+    teams: () => { if (currentTeamId) loadTeamMessages(currentTeamId); },
+    shop: () => loadShop(),
   };
+  
+  // Differenti intervalli: Chat team più veloce, resto più lento
+  const intervalTime = section === 'teams' ? 10000 : 30000;
+  
   if (intervals[section]) {
-    realtimeIntervals[section] = setInterval(intervals[section], 5000);
+    realtimeIntervals[section] = setInterval(intervals[section], intervalTime);
   }
-  // Notifiche sempre attive
+  // Notifiche sempre attive ma con polling a 1 minuto
   if (section !== 'notifiche') {
-    realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 10000);
+    realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 60000);
   }
 }
 
@@ -97,9 +101,9 @@ window.showNotification = showNotification;
 
 function showConfirm(title, message, callback, icon = '❓') {
   const modal = document.getElementById('confirmModal');
-  document.getElementById('confirmIcon').textContent  = icon;
+  document.getElementById('confirmIcon').textContent = icon;
   document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMsg').textContent   = message;
+  document.getElementById('confirmMsg').textContent = message;
   document.body.appendChild(modal);
   modal.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;background:rgba(0,0,0,.5)!important;z-index:999999!important;align-items:center!important;justify-content:center!important;';
   window.confirmCallback = callback;
@@ -131,7 +135,7 @@ window.togglePassword = togglePassword;
 function checkPasswordStrength(pw) {
   const ok = {
     length: pw.length >= 8,
-    upper:  /[A-Z]/.test(pw),
+    upper: /[A-Z]/.test(pw),
     number: /[0-9]/.test(pw),
     symbol: /[^a-zA-Z0-9]/.test(pw)
   };
@@ -156,13 +160,13 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const opts = { method, headers };
     if (body) opts.body = JSON.stringify(body);
-    const res  = await fetch(endpoint, opts);
+    const res = await fetch(endpoint, opts);
     const data = await res.json();
     if (res.status === 401) {
       token = null;
       localStorage.removeItem('ecotoken');
       document.getElementById('authContainer').style.display = 'flex';
-      document.getElementById('appContainer').style.display  = 'none';
+      document.getElementById('appContainer').style.display = 'none';
       showNotification('Sessione scaduta, effettua di nuovo il login', 'error');
     }
     return data;
@@ -175,7 +179,7 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
 function timeAgo(dateStr) {
   const diff = Date.now() - new Date(dateStr).getTime();
   const m = Math.floor(diff / 60000);
-  if (m < 1)  return 'adesso';
+  if (m < 1) return 'adesso';
   if (m < 60) return `${m} min fa`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h fa`;
@@ -183,14 +187,14 @@ function timeAgo(dateStr) {
 }
 
 function escapeHtml(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ═══════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════
 function switchAuthTab(tab) {
-  ['loginForm','registerForm','forgotForm','resetForm'].forEach(id => {
+  ['loginForm', 'registerForm', 'forgotForm', 'resetForm'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   const map = { login: 'loginForm', register: 'registerForm', forgot: 'forgotForm', reset: 'resetForm' };
@@ -198,7 +202,7 @@ function switchAuthTab(tab) {
 
   document.querySelectorAll('.auth-tab').forEach(t => {
     t.classList.toggle('active',
-      (tab === 'login'    && t.textContent.toLowerCase().includes('acced')) ||
+      (tab === 'login' && t.textContent.toLowerCase().includes('acced')) ||
       (tab === 'register' && t.textContent.toLowerCase().includes('regist'))
     );
   });
@@ -208,7 +212,7 @@ window.switchAuthTab = switchAuthTab;
 async function handleLogin(e) {
   e.preventDefault();
   const identifier = document.getElementById('loginIdentifier')?.value.trim();
-  const password   = document.getElementById('loginPassword')?.value;
+  const password = document.getElementById('loginPassword')?.value;
   if (!identifier || !password) { showNotification('Inserisci email/username e password', 'error'); return; }
 
   const btn = document.getElementById('loginBtn');
@@ -222,12 +226,12 @@ async function handleLogin(e) {
 
   if (data.error) { showNotification(data.error, 'error'); return; }
 
-  token     = data.token;
+  token = data.token;
   myProfile = data.user;
   localStorage.setItem('ecotoken', token);
 
   document.getElementById('authContainer').style.display = 'none';
-  document.getElementById('appContainer').style.display  = 'flex';
+  document.getElementById('appContainer').style.display = 'flex';
 
   updateSidebar(data.user);
   syncMiiState(data.user);
@@ -243,9 +247,9 @@ window.handleLogin = handleLogin;
 
 async function handleRegister(e) {
   e.preventDefault();
-  const name     = document.getElementById('registerName')?.value.trim();
+  const name = document.getElementById('registerName')?.value.trim();
   const username = document.getElementById('registerUsername')?.value.trim();
-  const email    = document.getElementById('registerEmail')?.value.trim();
+  const email = document.getElementById('registerEmail')?.value.trim();
   const password = document.getElementById('registerPassword')?.value;
 
   if (!name || !username || !email || !password) {
@@ -283,10 +287,10 @@ window.handleForgotPassword = handleForgotPassword;
 
 async function handleResetPassword(e) {
   e.preventDefault();
-  const params   = new URLSearchParams(window.location.search);
-  const tok      = params.get('token');
-  const newPw    = document.getElementById('resetPassword')?.value;
-  if (!tok)  { showNotification('Token non valido', 'error'); return; }
+  const params = new URLSearchParams(window.location.search);
+  const tok = params.get('token');
+  const newPw = document.getElementById('resetPassword')?.value;
+  if (!tok) { showNotification('Token non valido', 'error'); return; }
   if (!newPw) { showNotification('Inserisci la nuova password', 'error'); return; }
   if (!checkPasswordStrength(newPw)) { showNotification('Password non abbastanza sicura', 'error'); return; }
 
@@ -302,7 +306,7 @@ function logout() {
     token = null; myProfile = null;
     localStorage.removeItem('ecotoken');
     document.getElementById('authContainer').style.display = 'flex';
-    document.getElementById('appContainer').style.display  = 'none';
+    document.getElementById('appContainer').style.display = 'none';
     switchAuthTab('login');
     showNotification('Arrivederci! 👋', 'info');
   }, '👋');
@@ -313,12 +317,12 @@ window.logout = logout;
 // SIDEBAR
 // ═══════════════════════════════════════════
 function updateSidebar(user) {
-  document.getElementById('sidebarName').textContent   = user.name || user.username || 'Utente';
-  document.getElementById('sidebarEmail').textContent  = user.email || '';
+  document.getElementById('sidebarName').textContent = user.name || user.username || 'Utente';
+  document.getElementById('sidebarEmail').textContent = user.email || '';
   document.getElementById('sidebarPoints').textContent = user.points || 0;
-  document.getElementById('sidebarCo2').textContent    = parseFloat(user.co2_saved || 0).toFixed(1);
-  document.getElementById('topbarCo2').textContent     = parseFloat(user.co2_saved || 0).toFixed(1) + ' kg';
-  document.getElementById('topbarPoints').textContent  = (user.points || 0) + ' pt';
+  document.getElementById('sidebarCo2').textContent = parseFloat(user.co2_saved || 0).toFixed(1);
+  document.getElementById('topbarCo2').textContent = parseFloat(user.co2_saved || 0).toFixed(1) + ' kg';
+  document.getElementById('topbarPoints').textContent = (user.points || 0) + ' pt';
 
   const adminNav = document.getElementById('adminNavItem');
   if (adminNav) adminNav.style.display = user.is_admin ? 'flex' : 'none';
@@ -345,24 +349,24 @@ async function showSection(section) {
   document.getElementById('sidebarOverlay').style.display = 'none';
 
   switch (section) {
-    case 'dashboard':   await loadDashboard();    break;
-    case 'activities':  await loadActivities(); break;
-    case 'challenges':  await loadChallenges();   break;
-    case 'leaderboard': await loadLeaderboard();  break;
-    case 'social':      await loadSocial();        break;
-    case 'shop':        await loadShop();          break;
-    case 'avatar':      await loadAvatarSection(); break;
-    case 'profile':     await loadProfile();       break;
-    case 'notifiche':   await loadNotifications(); break;
-    case 'teams':       await loadTeams(); break;
-    case 'admin':       if (myProfile?.is_admin) await loadAdminPanel(); break;
+    case 'dashboard': await loadDashboard(); break;
+    case 'activities': await loadActivities(); break;
+    case 'challenges': await loadChallenges(); break;
+    case 'leaderboard': await loadLeaderboard(); break;
+    case 'social': await loadSocial(); break;
+    case 'shop': await loadShop(); break;
+    case 'avatar': await loadAvatarSection(); break;
+    case 'profile': await loadProfile(); break;
+    case 'notifiche': await loadNotifications(); break;
+    case 'teams': await loadTeams(); break;
+    case 'admin': if (myProfile?.is_admin) await loadAdminPanel(); break;
   }
 }
 window.showSection = showSection;
 
 function toggleMobileNav() {
-  const sidebar  = document.getElementById('sidebar');
-  const overlay  = document.getElementById('sidebarOverlay');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
   sidebar.classList.toggle('open');
   overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
 }
@@ -386,10 +390,10 @@ async function loadDashboard() {
   ]);
 
   if (!stats.error) {
-    document.getElementById('dashboardTotalCo2').textContent  = parseFloat(stats.co2_saved || 0).toFixed(1);
-    document.getElementById('dashboardWeekCo2').textContent   = parseFloat(stats.co2_week  || 0).toFixed(1);
-    document.getElementById('dashboardMonthCo2').textContent  = parseFloat(stats.co2_month || 0).toFixed(1);
-    document.getElementById('dashboardPoints').textContent    = stats.points || 0;
+    document.getElementById('dashboardTotalCo2').textContent = parseFloat(stats.co2_saved || 0).toFixed(1);
+    document.getElementById('dashboardWeekCo2').textContent = parseFloat(stats.co2_week || 0).toFixed(1);
+    document.getElementById('dashboardMonthCo2').textContent = parseFloat(stats.co2_month || 0).toFixed(1);
+    document.getElementById('dashboardPoints').textContent = stats.points || 0;
   }
 
   const rc = document.getElementById('recentActivities');
@@ -430,12 +434,12 @@ function renderYearlyChart(data) {
   const canvas = document.getElementById('yearlyChart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  canvas.width  = canvas.offsetWidth  || 600;
+  canvas.width = canvas.offsetWidth || 600;
   canvas.height = canvas.offsetHeight || 200;
 
   const values = new Array(12).fill(0);
   data.forEach(item => {
-    const months = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+    const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
     const idx = months.indexOf(item.month);
     if (idx >= 0) values[idx] = parseFloat(item.co2) || 0;
   });
@@ -443,7 +447,7 @@ function renderYearlyChart(data) {
   const max = Math.max(...values, 1);
   const W = canvas.width, H = canvas.height;
   const bw = (W - 60) / 12;
-  const months = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
 
   ctx.clearRect(0, 0, W, H);
   ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
@@ -451,9 +455,9 @@ function renderYearlyChart(data) {
 
   values.forEach((v, i) => {
     const bh = (v / max) * (H - 70);
-    const x  = 45 + i * bw;
-    const y  = H - 35 - bh;
-    const g  = ctx.createLinearGradient(0, y, 0, H - 35);
+    const x = 45 + i * bw;
+    const y = H - 35 - bh;
+    const g = ctx.createLinearGradient(0, y, 0, H - 35);
     g.addColorStop(0, '#16a34a'); g.addColorStop(1, '#86efac');
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -493,7 +497,7 @@ function selectActivityType(type, btn) {
   btn.classList.add('active');
 
   const rate = CO2_RATES[type];
-  document.getElementById('kmGroup').style.display    = rate.type === 'km'    ? 'block' : 'none';
+  document.getElementById('kmGroup').style.display = rate.type === 'km' ? 'block' : 'none';
   document.getElementById('hoursGroup').style.display = rate.type === 'hours' ? 'block' : 'none';
   document.getElementById('saveActivityBtn').disabled = false;
   updateActivityPreview();
@@ -518,12 +522,12 @@ window.selectActivityType = selectActivityType;
 
 function updateActivityPreview() {
   if (!currentActivityType) return;
-  const rate  = CO2_RATES[currentActivityType];
-  const km    = parseFloat(document.getElementById('actKm')?.value)    || 0;
+  const rate = CO2_RATES[currentActivityType];
+  const km = parseFloat(document.getElementById('actKm')?.value) || 0;
   const hours = parseFloat(document.getElementById('actHours')?.value) || 0;
   const value = rate.type === 'km' ? km : hours;
-  const co2   = (value * rate.co2).toFixed(2);
-  const pts   = Math.round(value * rate.points);
+  const co2 = (value * rate.co2).toFixed(2);
+  const pts = Math.round(value * rate.points);
   document.getElementById('pCO2').textContent = co2 + ' kg';
   document.getElementById('pPts').textContent = pts + ' pt';
   document.getElementById('activitySummary').style.display = 'flex';
@@ -532,11 +536,11 @@ window.updateActivityPreview = updateActivityPreview;
 
 async function saveActivity() {
   if (!currentActivityType) { showNotification('Seleziona un tipo di attività', 'error'); return; }
-  const rate  = CO2_RATES[currentActivityType];
-  const km    = parseFloat(document.getElementById('actKm')?.value)    || 0;
+  const rate = CO2_RATES[currentActivityType];
+  const km = parseFloat(document.getElementById('actKm')?.value) || 0;
   const hours = parseFloat(document.getElementById('actHours')?.value) || 0;
 
-  if (rate.type === 'km'    && km    <= 0) { showNotification('Inserisci la distanza', 'error'); return; }
+  if (rate.type === 'km' && km <= 0) { showNotification('Inserisci la distanza', 'error'); return; }
   if (rate.type === 'hours' && hours <= 0) { showNotification('Inserisci le ore', 'error'); return; }
 
   const btn = document.getElementById('saveActivityBtn');
@@ -545,9 +549,9 @@ async function saveActivity() {
 
   const data = await apiRequest('/api/activities', 'POST', {
     type: currentActivityType, km, hours,
-    note:      document.getElementById('actNote')?.value    || '',
-    from_addr: document.getElementById('fromAddr')?.value   || '',
-    to_addr:   document.getElementById('toAddr')?.value     || ''
+    note: document.getElementById('actNote')?.value || '',
+    from_addr: document.getElementById('fromAddr')?.value || '',
+    to_addr: document.getElementById('toAddr')?.value || ''
   });
 
   btn.disabled = false;
@@ -557,7 +561,7 @@ async function saveActivity() {
 
   showNotification(`✅ Attività salvata! +${data.co2_saved} kg CO₂, +${data.points} pt`, 'success');
 
-  ['actKm','actHours','actNote','fromAddr','toAddr'].forEach(id => {
+  ['actKm', 'actHours', 'actNote', 'fromAddr', 'toAddr'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('activitySummary').style.display = 'none';
@@ -566,7 +570,7 @@ async function saveActivity() {
   currentActivityType = null;
 
   if (myProfile) {
-    myProfile.points    = (myProfile.points    || 0) + data.points;
+    myProfile.points = (myProfile.points || 0) + data.points;
     myProfile.co2_saved = (myProfile.co2_saved || 0) + data.co2_saved;
     updateSidebar(myProfile);
   }
@@ -635,21 +639,28 @@ function setMapLayer(type, btn) {
 }
 window.setMapLayer = setMapLayer;
 
+let searchTimeouts = {};
+
 async function searchAddress(fieldId, query) {
   if (query.length < 3) { document.getElementById(fieldId + 'Sugg').innerHTML = ''; return; }
-  try {
-    const res  = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`);
-    const data = await res.json();
-    const sugg = document.getElementById(fieldId + 'Sugg');
-    sugg.innerHTML = '';
-    data.forEach(p => {
-      const div = document.createElement('div');
-      div.className = 'addr-item';
-      div.textContent = p.display_name;
-      div.addEventListener('click', () => selectAddress(fieldId, p.display_name));
-      sugg.appendChild(div);
-    });
-  } catch {}
+  
+  if (searchTimeouts[fieldId]) clearTimeout(searchTimeouts[fieldId]);
+  
+  searchTimeouts[fieldId] = setTimeout(async () => {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`);
+      const data = await res.json();
+      const sugg = document.getElementById(fieldId + 'Sugg');
+      sugg.innerHTML = '';
+      data.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'addr-item';
+        div.textContent = p.display_name;
+        div.addEventListener('click', () => selectAddress(fieldId, p.display_name));
+        sugg.appendChild(div);
+      });
+    } catch { }
+  }, 800); // 800ms debounce per evitare il ban IP da Nominatim
 }
 window.searchAddress = searchAddress;
 
@@ -658,7 +669,7 @@ function selectAddress(fieldId, address) {
   document.getElementById(fieldId + 'Sugg').innerHTML = '';
   // Auto-calcola il percorso quando entrambi i campi sono compilati
   const from = document.getElementById('fromAddr')?.value.trim();
-  const to   = document.getElementById('toAddr')?.value.trim();
+  const to = document.getElementById('toAddr')?.value.trim();
   if (from && to) calculateRoute();
 }
 window.selectAddress = selectAddress;
@@ -672,7 +683,7 @@ function getUserLocation() {
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
       .then(r => r.json())
       .then(d => { if (d.display_name) document.getElementById('fromAddr').value = d.display_name; })
-      .catch(() => {});
+      .catch(() => { });
     showNotification('Posizione rilevata!', 'success');
   }, err => {
     const msgs = { 1: 'Permesso negato', 2: 'Posizione non disponibile', 3: 'Timeout' };
@@ -683,7 +694,7 @@ window.getUserLocation = getUserLocation;
 
 async function calculateRoute() {
   const from = document.getElementById('fromAddr')?.value.trim();
-  const to   = document.getElementById('toAddr')?.value.trim();
+  const to = document.getElementById('toAddr')?.value.trim();
   if (!from || !to) { showNotification('Inserisci partenza e destinazione', 'error'); return; }
   showNotification('Calcolo percorso...', 'info');
   try {
@@ -744,7 +755,7 @@ async function loadLeaderboard() {
   }
   container.innerHTML = data.map((u, i) => {
     const rankClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
-    const medals = ['🥇','🥈','🥉'];
+    const medals = ['🥇', '🥈', '🥉'];
     return `
       <div class="leaderboard-item">
         <div class="lb-rank ${rankClass}">${medals[i] || i + 1}</div>
@@ -796,14 +807,14 @@ async function loadChallenges() {
 window.loadChallenges = loadChallenges;
 
 async function createChallenge() {
-  const title    = document.getElementById('chTitle')?.value.trim();
-  const desc     = document.getElementById('chDesc')?.value.trim();
-  const co2      = parseFloat(document.getElementById('chCo2')?.value)  || 0;
-  const pts      = parseInt(document.getElementById('chPts')?.value)    || 0;
-  const endDate  = document.getElementById('chDate')?.value;
+  const title = document.getElementById('chTitle')?.value.trim();
+  const desc = document.getElementById('chDesc')?.value.trim();
+  const co2 = parseFloat(document.getElementById('chCo2')?.value) || 0;
+  const pts = parseInt(document.getElementById('chPts')?.value) || 0;
+  const endDate = document.getElementById('chDate')?.value;
   const isPublic = document.getElementById('chPublic')?.checked ?? true;
 
-  if (!title)   { showNotification('Inserisci un titolo', 'error'); return; }
+  if (!title) { showNotification('Inserisci un titolo', 'error'); return; }
   if (co2 <= 0) { showNotification('Inserisci un target CO₂ valido', 'error'); return; }
   if (!endDate) { showNotification('Seleziona una data di scadenza', 'error'); return; }
 
@@ -813,7 +824,7 @@ async function createChallenge() {
   if (data.error) { showNotification(data.error, 'error'); return; }
 
   showNotification('✅ Sfida creata!', 'success');
-  ['chTitle','chDesc','chCo2','chPts','chDate'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['chTitle', 'chDesc', 'chCo2', 'chPts', 'chDate'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('chPublic').checked = true;
   await loadChallenges();
 }
@@ -872,7 +883,7 @@ async function loadPosts() {
     if (canvas) {
       drawMii({
         color: p.avatar_color || '#16a34a', skin: p.avatar_skin || '#fde68a',
-        eyes:  p.avatar_eyes  || 'normal',  mouth: p.avatar_mouth || 'smile', hair: p.avatar_hair || 'none'
+        eyes: p.avatar_eyes || 'normal', mouth: p.avatar_mouth || 'smile', hair: p.avatar_hair || 'none'
       }, `postAvatar${p.id}`, 36);
     }
   });
@@ -927,14 +938,14 @@ async function loadComments(postId) {
       <span class="comment-author">${escapeHtml(c.author_name)}:</span>
       <span>${escapeHtml(c.content)}</span>
       ${(myProfile && (c.author_id === myProfile.id || myProfile.is_admin))
-        ? `<button class="btn-sm red" style="margin-left:auto;padding:2px 7px;" onclick="deleteComment(${c.id}, ${postId})"><i class="fas fa-times"></i></button>`
-        : ''}
+      ? `<button class="btn-sm red" style="margin-left:auto;padding:2px 7px;" onclick="deleteComment(${c.id}, ${postId})"><i class="fas fa-times"></i></button>`
+      : ''}
     </div>
   `).join('');
 }
 
 async function addComment(postId) {
-  const input   = document.getElementById(`commentInput-${postId}`);
+  const input = document.getElementById(`commentInput-${postId}`);
   const content = input?.value.trim();
   if (!content) return;
   const data = await apiRequest(`/api/social/posts/${postId}/comments`, 'POST', { content });
@@ -975,7 +986,7 @@ async function loadUsers() {
   `).join('');
 
   data.forEach(u => {
-    drawMii({ color: u.avatar_color||'#16a34a', skin: u.avatar_skin||'#fde68a', eyes: u.avatar_eyes||'normal', mouth: u.avatar_mouth||'smile', hair: u.avatar_hair||'none' }, `userAv${u.id}`, 36);
+    drawMii({ color: u.avatar_color || '#16a34a', skin: u.avatar_skin || '#fde68a', eyes: u.avatar_eyes || 'normal', mouth: u.avatar_mouth || 'smile', hair: u.avatar_hair || 'none' }, `userAv${u.id}`, 36);
   });
 }
 
@@ -1031,7 +1042,7 @@ function renderShop() {
     return `
       <div class="shop-item ${isOwned ? 'owned' : ''} ${item.is_rare ? 'rare' : ''}" onclick="buyItem(${item.id})">
         ${item.is_rare ? '<span class="rare-badge">✨ Raro</span>' : ''}
-        ${isOwned    ? '<span class="owned-badge">✅ Posseduto</span>' : ''}
+        ${isOwned ? '<span class="owned-badge">✅ Posseduto</span>' : ''}
         <div class="shop-item-emoji">${item.emoji || '🎁'}</div>
         <div class="shop-item-name">${escapeHtml(item.name)}</div>
         <div class="shop-item-desc">${escapeHtml(item.description || '')}</div>
@@ -1058,7 +1069,7 @@ async function buyItem(itemId) {
       if (data.error) { showNotification(data.error, 'error'); return; }
       showNotification(`✅ Acquistato: ${item.name}!`, 'success');
       if (myProfile) {
-        myProfile.points      = data.new_points;
+        myProfile.points = data.new_points;
         myProfile.owned_items = data.owned_items;
         updateSidebar(myProfile);
       }
@@ -1075,10 +1086,10 @@ window.buyItem = buyItem;
 function syncMiiState(user) {
   if (!user) return;
   miiState.color = user.avatar_color || '#16a34a';
-  miiState.skin  = user.avatar_skin  || '#fde68a';
-  miiState.eyes  = user.avatar_eyes  || 'normal';
+  miiState.skin = user.avatar_skin || '#fde68a';
+  miiState.eyes = user.avatar_eyes || 'normal';
   miiState.mouth = user.avatar_mouth || 'smile';
-  miiState.hair  = user.avatar_hair  || 'none';
+  miiState.hair = user.avatar_hair || 'none';
   drawMii(miiState, 'sidebarAvatar', 48);
   if (document.getElementById('miiCanvas')) drawMii(miiState, 'miiCanvas', 200);
 }
@@ -1087,7 +1098,7 @@ function drawMii(state, canvasId, size = 120) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  canvas.width  = size;
+  canvas.width = size;
   canvas.height = size;
   const cx = size / 2, cy = size / 2;
   const hr = size * 0.33;
@@ -1177,7 +1188,7 @@ function drawMii(state, canvasId, size = 120) {
   const mouthY = cy + hr * 0.35;
   const mouthR = hr * 0.22;
   ctx.strokeStyle = '#1f2937';
-  ctx.lineWidth   = size * 0.025;
+  ctx.lineWidth = size * 0.025;
 
   if (state.mouth === 'grin') {
     ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
@@ -1194,7 +1205,7 @@ function drawMii(state, canvasId, size = 120) {
   } else if (state.mouth === 'sad') {
     ctx.beginPath(); ctx.arc(cx, mouthY + mouthR * 0.6, mouthR, Math.PI, 0); ctx.stroke();
   } else if (state.mouth === 'rainbow') {
-    ['#ef4444','#f59e0b','#22c55e','#3b82f6','#8b5cf6'].forEach((color, i) => {
+    ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6'].forEach((color, i) => {
       ctx.strokeStyle = color; ctx.lineWidth = size * 0.018;
       ctx.beginPath(); ctx.arc(cx, mouthY, mouthR + i * 3, 0, Math.PI); ctx.stroke();
     });
@@ -1206,10 +1217,10 @@ function drawMii(state, canvasId, size = 120) {
 function drawStar(ctx, cx, cy, points, r, ir) {
   ctx.beginPath();
   for (let i = 0; i < points * 2; i++) {
-    const a  = (i * Math.PI) / points - Math.PI / 2;
+    const a = (i * Math.PI) / points - Math.PI / 2;
     const rd = i % 2 === 0 ? r : ir;
     i === 0 ? ctx.moveTo(cx + rd * Math.cos(a), cy + rd * Math.sin(a))
-            : ctx.lineTo(cx + rd * Math.cos(a), cy + rd * Math.sin(a));
+      : ctx.lineTo(cx + rd * Math.cos(a), cy + rd * Math.sin(a));
   }
   ctx.closePath(); ctx.fill();
 }
@@ -1235,62 +1246,62 @@ async function loadAvatarSection() {
     !!shopItems.find(i => i.name === name && owned.includes(i.id));
 
   // COLORI SFONDO
-  const baseColors = ['#16a34a','#22c55e','#3b82f6','#6366f1','#1e293b','#64748b','#ffffff'];
+  const baseColors = ['#16a34a', '#22c55e', '#3b82f6', '#6366f1', '#1e293b', '#64748b', '#ffffff'];
   const shopColorMap = { 'Viola Reale': '#8b5cf6', 'Rosso Fuoco': '#ef4444', 'Oro Puro': '#f59e0b' };
   const colorOpts = document.getElementById('colorOptions');
   if (colorOpts) {
-    const unlockedColors = [...baseColors, ...Object.entries(shopColorMap).filter(([n]) => hasItem(n)).map(([,c]) => c)];
+    const unlockedColors = [...baseColors, ...Object.entries(shopColorMap).filter(([n]) => hasItem(n)).map(([, c]) => c)];
     const lockedColors = Object.entries(shopColorMap).filter(([n]) => !hasItem(n));
     colorOpts.innerHTML =
-      unlockedColors.map(c => `<div class="color-swatch ${miiState.color===c?'selected':''}" style="background:${c};border:2px solid ${c===' #ffffff'?'#e2e8f0':'transparent'};" onclick="setAvatarColor('${c}',this)"></div>`).join('') +
-      lockedColors.map(([n,c]) => `<div class="color-swatch" title="${n} — acquistalo nel negozio!" style="background:${c};opacity:.3;cursor:not-allowed;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;">🔒</span></div>`).join('');
+      unlockedColors.map(c => `<div class="color-swatch ${miiState.color === c ? 'selected' : ''}" style="background:${c};border:2px solid ${c === ' #ffffff' ? '#e2e8f0' : 'transparent'};" onclick="setAvatarColor('${c}',this)"></div>`).join('') +
+      lockedColors.map(([n, c]) => `<div class="color-swatch" title="${n} — acquistalo nel negozio!" style="background:${c};opacity:.3;cursor:not-allowed;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;">🔒</span></div>`).join('');
   }
 
   // CARNAGIONE
   const skinOpts = document.getElementById('skinOptions');
   if (skinOpts) {
     skinOpts.innerHTML = SKIN_COLORS.map(c => `
-      <div class="color-swatch ${miiState.skin===c?'selected':''}" style="background:${c};" onclick="setAvatarSkin('${c}',this)"></div>
+      <div class="color-swatch ${miiState.skin === c ? 'selected' : ''}" style="background:${c};" onclick="setAvatarSkin('${c}',this)"></div>
     `).join('');
   }
 
   // CAPELLI
-  const hairLabels = { none:'🚫 Nessuno', short:'💇 Corti', long:'💁 Lunghi', curly:'🦱 Ricci', spiky:'⚡ Spiky', bun:'🎀 Bun' };
-  const hairShopMap = { 'Capelli Corti':'short', 'Capelli Lunghi':'long', 'Rainbow Hair':'curly', 'Gold Hair':'spiky', 'Galaxy Hair':'bun', 'Flame Hair':'curly' };
+  const hairLabels = { none: '🚫 Nessuno', short: '💇 Corti', long: '💁 Lunghi', curly: '🦱 Ricci', spiky: '⚡ Spiky', bun: '🎀 Bun' };
+  const hairShopMap = { 'Capelli Corti': 'short', 'Capelli Lunghi': 'long', 'Rainbow Hair': 'curly', 'Gold Hair': 'spiky', 'Galaxy Hair': 'bun', 'Flame Hair': 'curly' };
   const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
     hairOpts.innerHTML = HAIR_OPTIONS.map(h => {
-      const shopName = Object.entries(hairShopMap).find(([,v]) => v === h)?.[0];
+      const shopName = Object.entries(hairShopMap).find(([, v]) => v === h)?.[0];
       const isFree = freeHairs.includes(h) || !shopName;
       const isOwned = isFree || hasItem(shopName);
-      if (isOwned) return `<button class="option-btn ${miiState.hair===h?'selected':''}" onclick="setAvatarHair('${h}',this)">${hairLabels[h]}</button>`;
+      if (isOwned) return `<button class="option-btn ${miiState.hair === h ? 'selected' : ''}" onclick="setAvatarHair('${h}',this)">${hairLabels[h]}</button>`;
       return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${hairLabels[h]} 🔒</button>`;
     }).join('');
   }
 
   // OCCHI
-  const eyeLabels = { normal:'😐 Normali', happy:'😊 Felici', sleepy:'😴 Assonnati', surprised:'😲 Sorpresi', wink:'😉 Occhiolino', cool:'😎 Cool', star:'⭐ Stella', heart:'❤️ Cuore' };
-  const eyeShopMap = { star:'Star Eyes', heart:'Heart Eyes', cool:'Laser Eyes' };
+  const eyeLabels = { normal: '😐 Normali', happy: '😊 Felici', sleepy: '😴 Assonnati', surprised: '😲 Sorpresi', wink: '😉 Occhiolino', cool: '😎 Cool', star: '⭐ Stella', heart: '❤️ Cuore' };
+  const eyeShopMap = { star: 'Star Eyes', heart: 'Heart Eyes', cool: 'Laser Eyes' };
   const eyeOpts = document.getElementById('eyeOptions');
   if (eyeOpts) {
     eyeOpts.innerHTML = EYE_OPTIONS.map(e => {
       const shopName = eyeShopMap[e];
       const isOwned = !shopName || hasItem(shopName);
-      if (isOwned) return `<button class="option-btn ${miiState.eyes===e?'selected':''}" onclick="setAvatarEyes('${e}',this)">${eyeLabels[e]}</button>`;
+      if (isOwned) return `<button class="option-btn ${miiState.eyes === e ? 'selected' : ''}" onclick="setAvatarEyes('${e}',this)">${eyeLabels[e]}</button>`;
       return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${eyeLabels[e]} 🔒</button>`;
     }).join('');
   }
 
   // BOCCA
-  const mouthLabels = { smile:'😊 Sorriso', grin:'😁 Ghigno', open:'😮 Aperta', smirk:'😏 Smorfia', sad:'😢 Triste', rainbow:'🌈 Arcobaleno' };
-  const mouthShopMap = { rainbow:'Rainbow Mouth' };
+  const mouthLabels = { smile: '😊 Sorriso', grin: '😁 Ghigno', open: '😮 Aperta', smirk: '😏 Smorfia', sad: '😢 Triste', rainbow: '🌈 Arcobaleno' };
+  const mouthShopMap = { rainbow: 'Rainbow Mouth' };
   const mouthOpts = document.getElementById('mouthOptions');
   if (mouthOpts) {
     mouthOpts.innerHTML = MOUTH_OPTIONS.map(m => {
       const shopName = mouthShopMap[m];
       const isOwned = !shopName || hasItem(shopName);
-      if (isOwned) return `<button class="option-btn ${miiState.mouth===m?'selected':''}" onclick="setAvatarMouth('${m}',this)">${mouthLabels[m]}</button>`;
+      if (isOwned) return `<button class="option-btn ${miiState.mouth === m ? 'selected' : ''}" onclick="setAvatarMouth('${m}',this)">${mouthLabels[m]}</button>`;
       return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${mouthLabels[m]} 🔒</button>`;
     }).join('');
   }
@@ -1302,13 +1313,13 @@ async function loadAvatarSection() {
 async function saveAvatar() {
   const data = await apiRequest('/api/profile/avatar', 'PUT', {
     color: miiState.color, skin: miiState.skin,
-    eyes:  miiState.eyes,  mouth: miiState.mouth, hair: miiState.hair
+    eyes: miiState.eyes, mouth: miiState.mouth, hair: miiState.hair
   });
   if (data.error) { showNotification(data.error, 'error'); return; }
   if (myProfile) {
-    myProfile.avatar_color = miiState.color; myProfile.avatar_skin  = miiState.skin;
-    myProfile.avatar_eyes  = miiState.eyes;  myProfile.avatar_mouth = miiState.mouth;
-    myProfile.avatar_hair  = miiState.hair;
+    myProfile.avatar_color = miiState.color; myProfile.avatar_skin = miiState.skin;
+    myProfile.avatar_eyes = miiState.eyes; myProfile.avatar_mouth = miiState.mouth;
+    myProfile.avatar_hair = miiState.hair;
   }
   showNotification('✅ Avatar salvato!', 'success');
   drawMii(miiState, 'sidebarAvatar', 48);
@@ -1323,20 +1334,20 @@ async function loadProfile() {
   if (profile.error) { showNotification(profile.error, 'error'); return; }
   myProfile = profile;
 
-  document.getElementById('editName').value     = profile.name     || '';
+  document.getElementById('editName').value = profile.name || '';
   document.getElementById('editUsername').value = profile.username || '';
-  document.getElementById('editBio').value      = profile.bio      || '';
+  document.getElementById('editBio').value = profile.bio || '';
   document.getElementById('profPoints').textContent = profile.points || 0;
-  document.getElementById('profCo2').textContent    = parseFloat(profile.co2_saved || 0).toFixed(1);
-  document.getElementById('profActs').textContent   = profile.total_activities || 0;
+  document.getElementById('profCo2').textContent = parseFloat(profile.co2_saved || 0).toFixed(1);
+  document.getElementById('profActs').textContent = profile.total_activities || 0;
 
-  const pts  = profile.points || 0;
-  const lvl  = Math.floor(pts / 100) + 1;
+  const pts = profile.points || 0;
+  const lvl = Math.floor(pts / 100) + 1;
   const next = lvl * 100;
-  const pct  = ((pts % 100) / 100) * 100;
+  const pct = ((pts % 100) / 100) * 100;
   document.getElementById('profLevel').textContent = `Livello ${lvl} 🌱`;
-  document.getElementById('xpText').textContent    = `${pts}/${next} XP`;
-  document.getElementById('xpBar').style.width     = pct + '%';
+  document.getElementById('xpText').textContent = `${pts}/${next} XP`;
+  document.getElementById('xpBar').style.width = pct + '%';
 
   syncMiiState(profile);
   await loadBadges();
@@ -1356,9 +1367,9 @@ async function loadBadges() {
 }
 
 async function saveProfile() {
-  const name     = document.getElementById('editName')?.value.trim();
+  const name = document.getElementById('editName')?.value.trim();
   const username = document.getElementById('editUsername')?.value.trim();
-  const bio      = document.getElementById('editBio')?.value.trim();
+  const bio = document.getElementById('editBio')?.value.trim();
   if (!name || !username) { showNotification('Nome e username obbligatori', 'error'); return; }
   const data = await apiRequest('/api/profile', 'PUT', { name, username, bio });
   if (data.error) { showNotification(data.error, 'error'); return; }
@@ -1369,7 +1380,7 @@ window.saveProfile = saveProfile;
 
 async function changePassword() {
   const cur = document.getElementById('currentPw')?.value;
-  const nw  = document.getElementById('newPw')?.value;
+  const nw = document.getElementById('newPw')?.value;
   if (!cur || !nw) { showNotification('Inserisci entrambe le password', 'error'); return; }
   if (!checkPasswordStrength(nw)) { showNotification('La nuova password non è abbastanza sicura', 'error'); return; }
   const data = await apiRequest('/api/profile/password', 'PUT', { current_password: cur, new_password: nw });
@@ -1453,9 +1464,9 @@ function switchAdminTab(tab) {
   document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
   document.querySelector(`.admin-tab[onclick*="${tab}"]`)?.classList.add('active');
   document.getElementById(`adminTab${tab.charAt(0).toUpperCase() + tab.slice(1)}`)?.classList.add('active');
-  if (tab === 'users')      loadAdminUsers();
+  if (tab === 'users') loadAdminUsers();
   if (tab === 'activities') loadAdminActivities();
-  if (tab === 'posts')      loadAdminPosts();
+  if (tab === 'posts') loadAdminPosts();
 }
 window.switchAdminTab = switchAdminTab;
 
@@ -1478,9 +1489,9 @@ async function loadAdminUsers() {
         <div class="admin-actions">
           <button class="btn-sm" onclick="openEditUser(${u.id})">✏️</button>
           ${!u.is_banned
-            ? `<button class="btn-sm red" onclick="openBanModal(${u.id})">🔨 Ban</button>`
-            : `<button class="btn-sm green" onclick="unbanUser(${u.id})">✅ Unban</button>`
-          }
+      ? `<button class="btn-sm red" onclick="openBanModal(${u.id})">🔨 Ban</button>`
+      : `<button class="btn-sm green" onclick="unbanUser(${u.id})">✅ Unban</button>`
+    }
           ${u.id !== myProfile?.id ? `<button class="btn-sm red" onclick="deleteUser(${u.id})">🗑️</button>` : ''}
         </div>
       </td>
@@ -1530,10 +1541,10 @@ async function openEditUser(id) {
   const data = await apiRequest('/api/admin/users');
   const u = data.find(x => x.id === id);
   if (!u) return;
-  document.getElementById('editUserId').value        = id;
-  document.getElementById('editUserName').value      = u.name || '';
-  document.getElementById('editUserUsername').value  = u.username || '';
-  document.getElementById('editUserPoints').value    = u.points || 0;
+  document.getElementById('editUserId').value = id;
+  document.getElementById('editUserName').value = u.name || '';
+  document.getElementById('editUserUsername').value = u.username || '';
+  document.getElementById('editUserPoints').value = u.points || 0;
   document.getElementById('editUserIsAdmin').checked = u.is_admin || false;
   document.getElementById('editUserModal').style.display = 'flex';
 }
@@ -1543,11 +1554,11 @@ function closeEditUserModal() { document.getElementById('editUserModal').style.d
 window.closeEditUserModal = closeEditUserModal;
 
 async function confirmEditUser() {
-  const id       = document.getElementById('editUserId').value;
-  const name     = document.getElementById('editUserName').value.trim();
+  const id = document.getElementById('editUserId').value;
+  const name = document.getElementById('editUserName').value.trim();
   const username = document.getElementById('editUserUsername').value.trim();
-  const points   = parseInt(document.getElementById('editUserPoints').value) || 0;
-  const isAdmin  = document.getElementById('editUserIsAdmin').checked;
+  const points = parseInt(document.getElementById('editUserPoints').value) || 0;
+  const isAdmin = document.getElementById('editUserIsAdmin').checked;
   if (!name || !username) { showNotification('Nome e username obbligatori', 'error'); return; }
   const data = await apiRequest(`/api/admin/users/${id}`, 'PUT', { name, username, points, is_admin: isAdmin });
   if (data.error) { showNotification(data.error, 'error'); return; }
@@ -1559,7 +1570,7 @@ window.confirmEditUser = confirmEditUser;
 
 function openBanModal(userId) {
   document.getElementById('banUserId').value = userId;
-  document.getElementById('banDays').value   = '';
+  document.getElementById('banDays').value = '';
   document.getElementById('banReason').value = '';
   document.getElementById('banModal').style.display = 'flex';
 }
@@ -1569,8 +1580,8 @@ function closeBanModal() { document.getElementById('banModal').style.display = '
 window.closeBanModal = closeBanModal;
 
 async function confirmBan() {
-  const id     = document.getElementById('banUserId').value;
-  const days   = parseInt(document.getElementById('banDays').value) || 0;
+  const id = document.getElementById('banUserId').value;
+  const days = parseInt(document.getElementById('banDays').value) || 0;
   const reason = document.getElementById('banReason').value.trim() || 'Violazione regole';
   const data = await apiRequest(`/api/admin/users/${id}/ban`, 'POST', { days: days || null, reason });
   if (data.error) { showNotification(data.error, 'error'); return; }
@@ -1639,7 +1650,7 @@ async function loadTeams() {
   if (leaderboard && !lb.error) {
     leaderboard.innerHTML = lb.length ? lb.map((t, i) => `
       <div class="leaderboard-item" onclick="openTeam(${t.id})" style="cursor:pointer;">
-        <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${['🥇','🥈','🥉'][i]||i+1}</div>
+        <div class="lb-rank ${i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}">${['🥇', '🥈', '🥉'][i] || i + 1}</div>
         <div class="lb-info"><strong>${escapeHtml(t.name)}</strong><small>${t.member_count} membri</small></div>
         <div class="lb-stats">
           <span class="lb-co2">🌱 ${parseFloat(t.total_co2).toFixed(1)} kg</span>
@@ -1659,13 +1670,13 @@ async function loadTeams() {
       <div class="team-card-body">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <strong>${escapeHtml(t.name)}</strong>
-          <span class="team-role-badge ${t.role==='admin'?'admin':'member'}">${t.role==='admin'?'👑 Admin':'👤 Membro'}</span>
+          <span class="team-role-badge ${t.role === 'admin' ? 'admin' : 'member'}">${t.role === 'admin' ? '👑 Admin' : '👤 Membro'}</span>
         </div>
-        <small style="color:#64748b;">${escapeHtml(t.description||'')}</small>
+        <small style="color:#64748b;">${escapeHtml(t.description || '')}</small>
         <div class="team-card-stats">
           <span>👥 ${t.member_count} membri</span>
-          <span>🌱 ${parseFloat(t.total_co2||0).toFixed(1)} kg CO₂</span>
-          <span>⭐ ${t.total_points||0} pt</span>
+          <span>🌱 ${parseFloat(t.total_co2 || 0).toFixed(1)} kg CO₂</span>
+          <span>⭐ ${t.total_points || 0} pt</span>
         </div>
       </div>
     </div>`).join('');
@@ -1673,8 +1684,8 @@ async function loadTeams() {
 window.loadTeams = loadTeams;
 
 async function createTeam() {
-  const name  = document.getElementById('teamName')?.value.trim();
-  const desc  = document.getElementById('teamDesc')?.value.trim();
+  const name = document.getElementById('teamName')?.value.trim();
+  const desc = document.getElementById('teamDesc')?.value.trim();
   const color = document.getElementById('teamColor')?.value || '#16a34a';
   if (!name) { showNotification('Inserisci un nome per il team', 'error'); return; }
   const data = await apiRequest('/api/teams', 'POST', { name, description: desc, avatar_color: color });
@@ -1704,8 +1715,8 @@ async function openTeam(teamId) {
 
   document.getElementById('teamDetailName').textContent = data.name;
   document.getElementById('teamDetailDesc').textContent = data.description || '';
-  document.getElementById('teamDetailCo2').textContent  = parseFloat(data.stats.total_co2||0).toFixed(1);
-  document.getElementById('teamDetailPts').textContent  = data.stats.total_points || 0;
+  document.getElementById('teamDetailCo2').textContent = parseFloat(data.stats.total_co2 || 0).toFixed(1);
+  document.getElementById('teamDetailPts').textContent = data.stats.total_points || 0;
   document.getElementById('teamDetailMembers').textContent = data.stats.member_count || 0;
 
   const inviteLink = `${window.location.origin}?join=${data.invite_code}`;
@@ -1725,13 +1736,13 @@ async function openTeam(teamId) {
     <div class="user-card">
       <canvas width="36" height="36" style="border-radius:50%;" id="tmAv${m.id}"></canvas>
       <div class="user-card-info">
-        <strong>${escapeHtml(m.name)} ${m.role==='admin'?'👑':''}</strong>
-        <small>🌱 ${parseFloat(m.co2_saved||0).toFixed(1)} kg · ⭐ ${m.points||0} pt</small>
+        <strong>${escapeHtml(m.name)} ${m.role === 'admin' ? '👑' : ''}</strong>
+        <small>🌱 ${parseFloat(m.co2_saved || 0).toFixed(1)} kg · ⭐ ${m.points || 0} pt</small>
       </div>
     </div>`).join('');
   data.members.forEach(m => drawMii({
-    color: m.avatar_color||'#16a34a', skin: m.avatar_skin||'#fde68a',
-    eyes: m.avatar_eyes||'normal', mouth: m.avatar_mouth||'smile', hair: m.avatar_hair||'none'
+    color: m.avatar_color || '#16a34a', skin: m.avatar_skin || '#fde68a',
+    eyes: m.avatar_eyes || 'normal', mouth: m.avatar_mouth || 'smile', hair: m.avatar_hair || 'none'
   }, `tmAv${m.id}`, 36));
 
   await loadTeamChallenges(teamId);
@@ -1767,8 +1778,8 @@ async function loadTeamMessages(teamId) {
       </div>
     </div>`).join('') : '<div class="empty-state"><span>💬</span><p>Nessun messaggio</p></div>';
   data.forEach(m => drawMii({
-    color: m.avatar_color||'#16a34a', skin: m.avatar_skin||'#fde68a',
-    eyes: m.avatar_eyes||'normal', mouth: m.avatar_mouth||'smile', hair: m.avatar_hair||'none'
+    color: m.avatar_color || '#16a34a', skin: m.avatar_skin || '#fde68a',
+    eyes: m.avatar_eyes || 'normal', mouth: m.avatar_mouth || 'smile', hair: m.avatar_hair || 'none'
   }, `chatAv${m.id}`, 28));
   if (wasAtBottom) container.scrollTop = container.scrollHeight;
 }
@@ -1799,7 +1810,7 @@ async function loadTeamChallenges(teamId) {
         <span class="challenge-title">${escapeHtml(c.title)}</span>
         ${expired ? '<span style="color:#ef4444;font-size:12px;">⏰ Scaduta</span>' : ''}
       </div>
-      <p class="challenge-desc">${escapeHtml(c.description||'')}</p>
+      <p class="challenge-desc">${escapeHtml(c.description || '')}</p>
       <div class="challenge-meta">
         <span>🎯 ${c.co2_target} kg CO₂</span>
         <span>⭐ ${c.points_reward} pt</span>
@@ -1811,18 +1822,18 @@ async function loadTeamChallenges(teamId) {
 
 async function createTeamChallenge() {
   if (!currentTeamId) return;
-  const title   = document.getElementById('teamChTitle')?.value.trim();
-  const desc    = document.getElementById('teamChDesc')?.value.trim();
-  const co2     = parseFloat(document.getElementById('teamChCo2')?.value) || 0;
-  const pts     = parseInt(document.getElementById('teamChPts')?.value) || 0;
+  const title = document.getElementById('teamChTitle')?.value.trim();
+  const desc = document.getElementById('teamChDesc')?.value.trim();
+  const co2 = parseFloat(document.getElementById('teamChCo2')?.value) || 0;
+  const pts = parseInt(document.getElementById('teamChPts')?.value) || 0;
   const endDate = document.getElementById('teamChDate')?.value;
-  if (!title)   { showNotification('Titolo obbligatorio', 'error'); return; }
+  if (!title) { showNotification('Titolo obbligatorio', 'error'); return; }
   if (!endDate) { showNotification('Data scadenza obbligatoria', 'error'); return; }
   const data = await apiRequest(`/api/teams/${currentTeamId}/challenges`, 'POST',
     { title, description: desc, co2_target: co2, points_reward: pts, end_date: endDate });
   if (data.error) { showNotification(data.error, 'error'); return; }
   showNotification('✅ Sfida creata!', 'success');
-  ['teamChTitle','teamChDesc','teamChCo2','teamChPts','teamChDate'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['teamChTitle', 'teamChDesc', 'teamChCo2', 'teamChPts', 'teamChDate'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   await loadTeamChallenges(currentTeamId);
 }
 window.createTeamChallenge = createTeamChallenge;
@@ -1859,10 +1870,10 @@ window.deleteTeam = deleteTeam;
 // ═══════════════════════════════════════════
 const TUTORIAL_STEPS = [
   { emoji: '🌱', title: 'Benvenuto su EcoTrack!', text: 'Traccia le tue attività green e riduci la tua impronta di CO₂ ogni giorno.' },
-  { emoji: '🚴', title: 'Registra attività',      text: 'Vai su Attività e scegli come ti sei spostato: bici, treno, bus o lavoro remoto.' },
-  { emoji: '⭐', title: 'Guadagna punti',          text: 'Ogni attività ti dà punti e CO₂ risparmiata. Scala la classifica globale!' },
+  { emoji: '🚴', title: 'Registra attività', text: 'Vai su Attività e scegli come ti sei spostato: bici, treno, bus o lavoro remoto.' },
+  { emoji: '⭐', title: 'Guadagna punti', text: 'Ogni attività ti dà punti e CO₂ risparmiata. Scala la classifica globale!' },
   { emoji: '🛍️', title: 'Personalizza il tuo Avatar', text: 'Usa i punti per acquistare oggetti nel Negozio e personalizza il tuo Mii!' },
-  { emoji: '🏆', title: 'Sfide e Social',          text: 'Crea sfide, segui altri utenti e condividi i tuoi progressi nel feed Social.' },
+  { emoji: '🏆', title: 'Sfide e Social', text: 'Crea sfide, segui altri utenti e condividi i tuoi progressi nel feed Social.' },
 ];
 
 function showTutorial() {
@@ -1918,7 +1929,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const joinCode = params.get('join');
   if (joinCode && token) {
     const joinData = await apiRequest('/api/teams/join', 'POST', { invite_code: joinCode });
-    if (!joinData.error) showNotification(`✅ Sei entrato nel team ${joinData.team?.name||''}!`, 'success');
+    if (!joinData.error) showNotification(`✅ Sei entrato nel team ${joinData.team?.name || ''}!`, 'success');
   }
 
   if (params.get('verified') === '1') {
@@ -1930,7 +1941,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!data.error) {
       myProfile = data;
       document.getElementById('authContainer').style.display = 'none';
-      document.getElementById('appContainer').style.display  = 'flex';
+      document.getElementById('appContainer').style.display = 'flex';
       updateSidebar(data);
       syncMiiState(data);
       await loadDashboard();
