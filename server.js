@@ -1,13 +1,13 @@
 'use strict';
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const { Resend } = require('resend');
-const { Pool } = require('pg');
-const path = require('path');
+const express    = require('express');
+const cors       = require('cors');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+const crypto     = require('crypto');
+const sgMail = require('@sendgrid/mail');
+const { Pool }   = require('pg');
+const path       = require('path');
 
 // ═══════════════════════════════════════════
 // VALIDAZIONE VARIABILI D'AMBIENTE
@@ -307,17 +307,17 @@ async function seedShop() {
 // ═══════════════════════════════════════════
 // EMAIL
 // ═══════════════════════════════════════════
-function getResend() {
-  if (!process.env.RESEND_API_KEY) return null;
-  return new Resend(process.env.RESEND_API_KEY);
+function initSendGrid() {
+  if (!process.env.SENDGRID_API_KEY) return false;
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  return true;
 }
 
 async function sendVerifyEmail(email, token) {
-  const resend = getResend();
-  if (!resend) { console.log('DEV verify token:', token); return; }
+  if (!initSendGrid()) { console.log('DEV verify token:', token); return; }
   const url = `${process.env.BASE_URL || 'http://localhost:3000'}/api/verify?token=${token}`;
-  const { error } = await resend.emails.send({
-    from: 'EcoTrack <onboarding@resend.dev>',
+  await sgMail.send({
+    from: { name: 'EcoTrack', email: process.env.MAIL_FROM || 'noreply@ecotrack.app' },
     to: email,
     subject: 'Verifica il tuo account EcoTrack 🌱',
     html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;padding:40px;background:#f0fdf4;border-radius:16px">
@@ -328,15 +328,13 @@ async function sendVerifyEmail(email, token) {
       <p style="color:#64748b;font-size:13px">Se non ti sei registrato, ignora questa email.</p>
     </div>`
   });
-  if (error) throw new Error(error.message);
 }
 
 async function sendResetEmail(email, token) {
-  const resend = getResend();
-  if (!resend) { console.log('DEV reset token:', token); return; }
+  if (!initSendGrid()) { console.log('DEV reset token:', token); return; }
   const url = `${process.env.BASE_URL || 'http://localhost:3000'}?action=reset&token=${token}`;
-  const { error } = await resend.emails.send({
-    from: 'EcoTrack <onboarding@resend.dev>',
+  await sgMail.send({
+    from: { name: 'EcoTrack', email: process.env.MAIL_FROM || 'noreply@ecotrack.app' },
     to: email,
     subject: 'Reset password EcoTrack 🔑',
     html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;padding:40px;background:#f0fdf4;border-radius:16px">
@@ -346,7 +344,6 @@ async function sendResetEmail(email, token) {
       <p style="color:#64748b;font-size:13px">Il link scade tra 1 ora.</p>
     </div>`
   });
-  if (error) throw new Error(error.message);
 }
 
 // ═══════════════════════════════════════════
