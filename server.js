@@ -919,52 +919,59 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
       return res.json({ answer: `🤖 Sono il tuo consulente ecologico personale! Posso risponderti solo su temi legati alla sostenibilità, alle tue attività green e al tuo impatto ambientale. Prova a chiedermi come ridurre le emissioni o come migliorare il tuo punteggio!` });
     }
 
-    // Personalised tip engine
-    let tips = [];
-
-    if (u.current_streak >= 7) {
-      tips.push(`🔥 Wow ${u.name}, il tuo streak di ${u.current_streak} giorni consecutivi è eccellente! Mantienilo registrando almeno un'attività ogni giorno.`);
-    } else if (u.current_streak >= 3) {
-      tips.push(`🌱 Streak di ${u.current_streak} giorni: stai andando bene! Cerca di non saltare oggi per guadagnare il bonus +20 punti.`);
-    } else {
-      tips.push(`💡 Registra un'attività ogni giorno per attivare il sistema di streak e guadagnare bonus punti automatici!`);
-    }
-
-    if (u.co2_saved < 10) {
-      tips.push(`🚴 Hai risparmiato ${parseFloat(u.co2_saved).toFixed(1)} kg di CO₂ finora. Prova a usare la **bici** anche solo per brevi spostamenti: ogni km vale 0.15 kg di CO₂!`);
-    } else if (u.co2_saved < 50) {
-      tips.push(`🚂 Ottimo lavoro con ${parseFloat(u.co2_saved).toFixed(1)} kg di CO₂ risparmiata! Considera il **treno** per i viaggi più lunghi: è 4x meno inquinante dell'auto.`);
-    } else {
-      tips.push(`🌍 Sei un campione: ${parseFloat(u.co2_saved).toFixed(1)} kg di CO₂ risparmiata! Condividi i tuoi progressi nel Social e inspira gli altri utenti.`);
-    }
-
-    if (u.total_activities < 5) {
-      tips.push(`📈 Inizia con piccoli cambiamenti: anche una videochiamata al posto di un viaggio aziendale vale 8 punti e 0.1 kg CO₂ all'ora!`);
-    }
-
-    if (q.includes('carpooling')) {
-      tips.push(`🚗 Il carpooling è fantastico: seleziona un collega durante il salvataggio per condividere metà dei punti con lui! Collaborare conviene a entrambi.`);
-    }
-
-    if (q.includes('bici') || q.includes('bike')) {
-      tips.push(`🚴 In bici risparmi 0.15 kg di CO₂ per km. Percorsi da 10 km ti danno 50 punti! Prova a usarla per andare al lavoro almeno 2 volte a settimana.`);
-    }
-
-    if (q.includes('remoto') || q.includes('smart working') || q.includes('casa')) {
-      tips.push(`🏠 Ogni ora di smart working evita in media 0.5 kg CO₂. Una giornata intera da casa equivale a non aver guidato per 30 km!`);
-    }
+    // ── Question-specific answers (priority) ──
+    let answer = '';
+    const co2 = parseFloat(u.co2_saved || 0).toFixed(1);
+    const streak = u.current_streak || 0;
 
     if (q.includes('streak') || q.includes('bonus')) {
-      tips.push(`🔥 Il bonus streak scatta dal 2° giorno consecutivo e vale +20 punti extra per ogni attività! Più a lungo mantieni lo streak, più diventa prezioso.`);
+      answer = `🔥 **Come funziona lo Streak**\n\nOgni giorno consecutivo in cui registri almeno un'attività, il tuo streak cresce di 1. Dal **2° giorno in poi** ottieni **+20 punti bonus** automatici su ogni attività!\n\n📊 **Il tuo streak attuale:** ${streak} giorni\n\nConsiglio: anche un'attività piccola (es. una videocall) basta per mantenere lo streak attivo. Non saltare neanche un giorno!`;
     }
 
-    // Build final answer
-    const selectedTips = tips.slice(0, 3);
-    if (selectedTips.length === 0) {
-      selectedTips.push(`🌿 Come consulente eco per ${u.name}: cerca di variare le tue attività green — bici, treno, videochiamata e smart working. Ogni azione conta!`);
+    else if (q.includes('punti') || q.includes('attività') || q.includes('attivita') || q.includes('guadagn')) {
+      answer = `⭐ **Classifica attività per punti/km o ora:**\n\n🏠 **Remoto** — 10 pt/ora + 0.5 kg CO₂/ora (il migliore!)\n💻 **Videocall** — 8 pt/ora + 0.1 kg CO₂/ora\n🚴 **Bici** — 5 pt/km + 0.15 kg CO₂/km\n🚗 **Carpooling** — 3 pt/km + 0.06 kg CO₂/km\n🚂 **Treno** — 2 pt/km + 0.04 kg CO₂/km\n🚌 **Bus** — 1.5 pt/km + 0.08 kg CO₂/km\n\n💡 Per massimizzare: registra le ore di smart working e usa la bici per spostamenti brevi. Con lo streak attivo (+20 bonus) i punti salgono velocemente!`;
     }
 
-    const answer = selectedTips.join('\n\n');
+    else if (q.includes('bici') || q.includes('bike') || q.includes('ciclismo')) {
+      answer = `🚴 **Consigli per ridurre CO₂ con la bici**\n\nOgni km in bici ti fa risparmiare **0.15 kg di CO₂** rispetto all'auto e guadagnare **5 punti**.\n\n📏 Esempio: un tragitto casa-lavoro di 10 km = **1.5 kg CO₂** risparmiata e **50 punti** al giorno!\n\n🗓️ Se lo fai 5 giorni a settimana:\n- 7.5 kg CO₂ a settimana\n- 250 punti + bonus streak\n- ~30 kg CO₂ al mese\n\n💪 Il tuo totale attuale: **${co2} kg CO₂** risparmiata. Continua così!`;
+    }
+
+    else if (q.includes('carpooling') || q.includes('condivi')) {
+      answer = `🚗 **Come funziona il Carpooling su EcoTrack**\n\nQuando registri un'attività Carpooling:\n- Guadagni **3 pt/km** e **0.06 kg CO₂/km**\n- Puoi **selezionare un passeggero** dal menu a tendina\n- Il passeggero riceve automaticamente **metà dei tuoi punti** e CO₂!\n\n🤝 Esempio: 20 km di carpooling = 60 pt per te + 30 pt per il passeggero, entrambi risparmiate CO₂.\n\nÈ l'unica attività collaborativa — usala per far salire in classifica anche i tuoi colleghi!`;
+    }
+
+    else if (q.includes('remoto') || q.includes('smart working') || q.includes('casa') || q.includes('lavoro')) {
+      answer = `🏠 **Smart Working e impatto ambientale**\n\nOgni ora di lavoro da remoto evita in media **0.5 kg CO₂** (niente spostamenti auto!) e ti dà **10 punti**.\n\n📊 Una giornata intera (8 ore):\n- 4 kg CO₂ risparmiata\n- 80 punti + bonus streak\n\nÈ equivalente a non guidare per ~30 km! Se combini smart working + bici nei giorni in ufficio, l'impatto diventa enorme.\n\n💼 Il tuo totale: **${co2} kg CO₂** risparmiata finora.`;
+    }
+
+    else if (q.includes('classifica') || q.includes('leader')) {
+      answer = `🏆 **Come scalare la classifica**\n\n1. **Registra attività ogni giorno** per il bonus streak (+20 pt)\n2. **Usa il Remoto** quando puoi (10 pt/ora, il più redditizio)\n3. **Bici per spostamenti** (5 pt/km)\n4. **Carpooling** per condividere punti col passeggero\n\n📊 I tuoi stats: **${u.points} punti**, **${co2} kg CO₂**, streak: **${streak} giorni**\n\nPunta a mantenere lo streak attivo — il bonus di 20 pt su ogni attività fa la differenza in classifica!`;
+    }
+
+    else if (q.includes('sfida') || q.includes('challenge') || q.includes('badge')) {
+      answer = `🏅 **Badge e sfide**\n\nI badge si sbloccano automaticamente raggiungendo soglie:\n- 🌱 **Prima Volta** — prima attività registrata\n- 🌍 **10 kg CO₂** — 10 kg risparmiata\n- 🌍 **50 kg CO₂** — 50 kg risparmiata\n- 🏆 **100 kg CO₂** — 100 kg risparmiata\n\n📊 Il tuo progresso: **${co2} kg CO₂** — ${parseFloat(co2) >= 100 ? 'tutti sbloccati! 🎉' : `prossimo badge a ${parseFloat(co2) < 10 ? '10' : parseFloat(co2) < 50 ? '50' : '100'} kg`}`;
+    }
+
+    else if (q.includes('migliora') || q.includes('consiglio') || q.includes('consigli') || q.includes('suggerim')) {
+      answer = `🌿 **Consigli personalizzati per ${u.name}**\n\n`;
+      if (streak < 3) answer += `1. 🔥 **Attiva lo streak!** Registra un'attività al giorno per ottenere +20 punti bonus automatici.\n`;
+      else answer += `1. 🔥 **Ottimo streak di ${streak} giorni!** Non fermarti — ogni giorno conta.\n`;
+      answer += `2. 🚴 **Usa la bici** per tragitti sotto 10 km — è l'attività con il miglior rapporto CO₂/punti per km.\n`;
+      answer += `3. 🏠 **Smart working** vale 10 pt/ora — il più redditizio in assoluto.\n`;
+      answer += `4. 🚗 **Carpooling** con un collega: metà dei punti vanno anche a lui!\n`;
+      answer += `5. 📱 Condividi i tuoi progressi nella sezione Social per motivare gli altri.\n`;
+      answer += `\n📊 Attualmente: **${u.points} pt**, **${co2} kg CO₂**, **${u.total_activities} attività**`;
+    }
+
+    else if (q.includes('co2') || q.includes('carbon') || q.includes('emissioni') || q.includes('impronta')) {
+      answer = `🌍 **La tua impronta ecologica su EcoTrack**\n\nHai risparmiato **${co2} kg di CO₂** con **${u.total_activities} attività**.\n\n📏 Per darti un'idea:\n- ${co2} kg CO₂ = circa **${Math.round(parseFloat(co2) / 0.15)} km percorsi in bici** invece che in auto\n- Equivale a **${Math.round(parseFloat(co2) / 22)} alberi piantati** (un albero assorbe ~22 kg CO₂/anno)\n\n💡 Per ridurre ancora di più: combina bici + smart working + treno per i viaggi lunghi. Ogni piccola azione si somma!`;
+    }
+
+    else {
+      // Fallback generico ma comunque personalizzato
+      answer = `🌿 **Ciao ${u.name}!** Ecco il tuo riepilogo:\n\n📊 **${u.points} punti** | **${co2} kg CO₂ risparmiata** | **${u.total_activities} attività** | 🔥 Streak: **${streak} giorni**\n\nProva a chiedermi qualcosa di specifico:\n- \"Quali attività danno più punti?\"\n- \"Come funziona lo streak?\"\n- \"Consigli sulla bici\"\n- \"Come funziona il carpooling?\"`;
+    }
+
     return res.json({ answer });
   } catch (err) {
     console.error('AI advisor error:', err);
