@@ -292,8 +292,15 @@ async function seedShop() {
     ['Star Eyes', 'Occhi stella scintillante', 'eyes', '⭐', 200, false],
     ['Heart Eyes', 'Occhi cuore innamorati', 'eyes', '❤️', 200, false],
     ['Laser Eyes', 'Occhi laser potenti', 'eyes', '😎', 400, true],
+    ['Occhi Felici', 'Sguardo radioso', 'eyes', '😊', 50, false],
+    ['Occhi Assonnati', 'Per chi ama dormire', 'eyes', '😴', 50, false],
+    ['Occhi Sorpresi', 'Sempre stupito', 'eyes', '😲', 80, false],
+    ['Occhi Occhiolino', 'Un tocco di simpatia', 'eyes', '😉', 80, false],
     ['Rainbow Mouth', 'Sorriso arcobaleno', 'mouth', '🌈', 250, false],
     ['Fire Mouth', 'Bocca di fuoco', 'mouth', '🔥', 350, true],
+    ['Bocca Sorridente', 'Sempre allegro', 'mouth', '😁', 40, false],
+    ['Bocca Aperta', 'Incredulo', 'mouth', '😮', 40, false],
+    ['Bocca Triste', 'Giornata no', 'mouth', '😢', 40, false],
     ['Viola Reale', 'Colore viola maestoso', 'color', '🟣', 150, false],
     ['Rosso Fuoco', 'Colore rosso ardente', 'color', '🔴', 150, false],
     ['Oro Puro', 'Colore oro lussuoso', 'color', '🟡', 400, true],
@@ -309,6 +316,15 @@ async function seedShop() {
     );
   }
   console.log('🛍️ Shop popolato');
+
+  // Migration for new items
+  for (const item of items) {
+    await db.query(`
+      INSERT INTO shop_items (name,description,category,emoji,cost,is_rare)
+      SELECT $1,$2,$3,$4,$5,$6
+      WHERE NOT EXISTS (SELECT 1 FROM shop_items WHERE name=$1)
+    `, item);
+  }
 }
 
 // ═══════════════════════════════════════════

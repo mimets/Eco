@@ -600,12 +600,19 @@ textarea::placeholder {
   color: var(--gray-400);
 }
 
-/* Photo Verification */
+#photoGroup {
+  background: #f0fdf4; /* Light green */
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid #bcf0da;
+  margin-bottom: 4px;
+}
+
 .photo-upload-zone {
   margin-top: 8px;
-  border: 2px dashed var(--gray-200);
+  border: 2px dashed var(--gray-300);
   border-radius: var(--radius-md);
-  background: var(--gray-50);
+  background: white;
   overflow: hidden;
   transition: var(--transition);
   cursor: pointer;

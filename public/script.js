@@ -527,10 +527,11 @@ function renderEmptyChart() {
 // ACTIVITIES
 // ═══════════════════════════════════════════
 function selectActivityType(type, btn) {
+  console.log('Selecting activity type:', type);
   currentActivityType = type;
   document.getElementById('actType').value = type;
   document.querySelectorAll('.activity-type-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
 
   const rate = CO2_RATES[type];
   
@@ -718,6 +719,7 @@ async function loadActivities() {
         <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + escapeHtml(a.note) : ''} · ${timeAgo(a.date)}</small>
       </div>
       <div class="act-meta">
+        ${a.photo_proof ? '<span title="Foto verificata" style="color:var(--brand);margin-right:8px;">📸</span>' : ''}
         <div class="act-co2">-${a.co2_saved} kg</div>
         <div class="act-pts">+${a.points} pt</div>
       </div>
@@ -1394,13 +1396,13 @@ async function loadAvatarSection() {
 
   // CAPELLI
   const hairLabels = { none: '🚫 Nessuno', short: '💇 Corti', long: '💁 Lunghi', curly: '🦱 Ricci', spiky: '⚡ Spiky', bun: '🎀 Bun' };
-  const hairShopMap = { 'Capelli Corti': 'short', 'Capelli Lunghi': 'long', 'Rainbow Hair': 'curly', 'Gold Hair': 'spiky', 'Galaxy Hair': 'bun', 'Flame Hair': 'curly' };
+  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair' };
   const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
     hairOpts.innerHTML = HAIR_OPTIONS.map(h => {
-      const shopName = Object.entries(hairShopMap).find(([, v]) => v === h)?.[0];
-      const isFree = freeHairs.includes(h) || !shopName;
+      const shopName = hairShopMap[h];
+      const isFree = freeHairs.includes(h);
       const isOwned = isFree || hasItem(shopName);
       if (isOwned) return `<button class="option-btn ${miiState.hair === h ? 'selected' : ''}" onclick="setAvatarHair('${h}',this)">${hairLabels[h]}</button>`;
       return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${hairLabels[h]} 🔒</button>`;
@@ -1409,27 +1411,31 @@ async function loadAvatarSection() {
 
   // OCCHI
   const eyeLabels = { normal: '😐 Normali', happy: '😊 Felici', sleepy: '😴 Assonnati', surprised: '😲 Sorpresi', wink: '😉 Occhiolino', cool: '😎 Cool', star: '⭐ Stella', heart: '❤️ Cuore' };
-  const eyeShopMap = { star: 'Star Eyes', heart: 'Heart Eyes', cool: 'Laser Eyes' };
+  const eyeShopMap = { star: 'Star Eyes', heart: 'Heart Eyes', cool: 'Laser Eyes', happy: 'Occhi Felici', sleepy: 'Occhi Assonnati', surprised: 'Occhi Sorpresi', wink: 'Occhi Occhiolino' };
+  const freeEyes = ['normal'];
   const eyeOpts = document.getElementById('eyeOptions');
   if (eyeOpts) {
     eyeOpts.innerHTML = EYE_OPTIONS.map(e => {
       const shopName = eyeShopMap[e];
-      const isOwned = !shopName || hasItem(shopName);
+      const isFree = freeEyes.includes(e);
+      const isOwned = isFree || hasItem(shopName);
       if (isOwned) return `<button class="option-btn ${miiState.eyes === e ? 'selected' : ''}" onclick="setAvatarEyes('${e}',this)">${eyeLabels[e]}</button>`;
-      return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${eyeLabels[e]} 🔒</button>`;
+      return `<button class="option-btn" title="${shopName || 'Oggetto speciale'} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${eyeLabels[e]} 🔒</button>`;
     }).join('');
   }
 
   // BOCCA
   const mouthLabels = { smile: '😊 Sorriso', grin: '😁 Ghigno', open: '😮 Aperta', smirk: '😏 Smorfia', sad: '😢 Triste', rainbow: '🌈 Arcobaleno' };
-  const mouthShopMap = { rainbow: 'Rainbow Mouth' };
+  const mouthShopMap = { rainbow: 'Rainbow Mouth', grin: 'Bocca Sorridente', open: 'Bocca Aperta', sad: 'Bocca Triste' };
+  const freeMouths = ['smile', 'smirk'];
   const mouthOpts = document.getElementById('mouthOptions');
   if (mouthOpts) {
     mouthOpts.innerHTML = MOUTH_OPTIONS.map(m => {
       const shopName = mouthShopMap[m];
-      const isOwned = !shopName || hasItem(shopName);
+      const isFree = freeMouths.includes(m);
+      const isOwned = isFree || hasItem(shopName);
       if (isOwned) return `<button class="option-btn ${miiState.mouth === m ? 'selected' : ''}" onclick="setAvatarMouth('${m}',this)">${mouthLabels[m]}</button>`;
-      return `<button class="option-btn" title="${shopName} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${mouthLabels[m]} 🔒</button>`;
+      return `<button class="option-btn" title="${shopName || 'Oggetto speciale'} — acquistalo nel negozio!" style="opacity:.4;cursor:not-allowed;">${mouthLabels[m]} 🔒</button>`;
     }).join('');
   }
 
