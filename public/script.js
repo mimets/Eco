@@ -549,23 +549,42 @@ function selectActivityType(type, btn) {
   document.getElementById('saveActivityBtn').disabled = false;
   updateActivityPreview();
 
-  // FIX MAPPA: mostra il container prima di inizializzare Leaflet
+  // Show map for km activities
   const mapSection = document.getElementById('mapSection');
   if (rate.type === 'km') {
     mapSection.style.display = 'block';
-    // requestAnimationFrame garantisce che il DOM sia visibile prima di init
     requestAnimationFrame(() => {
-      if (!mapInitialized) {
-        initMap();
-      } else {
-        mapInstance?.invalidateSize();
-      }
+      if (!mapInitialized) { initMap(); }
+      else { mapInstance?.invalidateSize(); }
     });
   } else {
     mapSection.style.display = 'none';
   }
+
+  // Show carpooling user picker only for Carpooling
+  const carpoolGroup = document.getElementById('carpoolGroup');
+  if (type === 'Carpooling') {
+    carpoolGroup.style.display = 'block';
+    loadCarpoolUsers();
+  } else {
+    carpoolGroup.style.display = 'none';
+  }
 }
 window.selectActivityType = selectActivityType;
+
+async function loadCarpoolUsers() {
+  const sel = document.getElementById('carpoolUserId');
+  const data = await apiRequest('/api/social/users');
+  if (!data || data.error) return;
+  sel.innerHTML = '<option value="">\u2014 Seleziona passeggero (opzionale) \u2014</option>';
+  data.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = `${u.name} (@${u.username})`;
+    sel.appendChild(opt);
+  });
+}
+window.loadCarpoolUsers = loadCarpoolUsers;
 
 function updateActivityPreview() {
   if (!currentActivityType) return;
@@ -594,11 +613,14 @@ async function saveActivity() {
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
 
+  const carpoolUserId = document.getElementById('carpoolUserId')?.value || '';
+
   const data = await apiRequest('/api/activities', 'POST', {
     type: currentActivityType, km, hours,
     note: document.getElementById('actNote')?.value || '',
     from_addr: document.getElementById('fromAddr')?.value || '',
-    to_addr: document.getElementById('toAddr')?.value || ''
+    to_addr: document.getElementById('toAddr')?.value || '',
+    carpool_user_id: carpoolUserId ? parseInt(carpoolUserId) : null
   });
 
   btn.disabled = false;
@@ -2101,3 +2123,58 @@ async function sharePost(text) {
   }
 }
 window.sharePost = sharePost;
+
+// ═══════════════════════════════════════════
+// AI ECO-ADVISOR
+// ═══════════════════════════════════════════
+function appendAIMessage(role, text, typing = false) {
+  const container = document.getElementById('aiMessages');
+  const div = document.createElement('div');
+  div.className = `ai-msg ${role}`;
+  const avatar = document.createElement('div');
+  avatar.className = 'ai-avatar';
+  avatar.textContent = role === 'bot' ? '\ud83e\udd16' : '\ud83d\udcac';
+  const bubble = document.createElement('div');
+  bubble.className = 'ai-bubble';
+  if (typing) {
+    bubble.innerHTML = '<span class="ai-typing"><span></span><span></span><span></span></span>';
+  } else {
+    bubble.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+  }
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return bubble;
+}
+
+async function askAI(question) {
+  document.getElementById('aiInput').value = question;
+  await sendAI();
+}
+window.askAI = askAI;
+
+async function sendAI() {
+  const input = document.getElementById('aiInput');
+  const q = input.value.trim();
+  if (!q) return;
+
+  appendAIMessage('user', escapeHtml(q));
+  input.value = '';
+
+  const sendBtn = document.getElementById('aiSendBtn');
+  sendBtn.disabled = true;
+  const typingBubble = appendAIMessage('bot', '', true);
+
+  const data = await apiRequest('/api/ai-advisor', 'POST', { question: q });
+
+  sendBtn.disabled = false;
+  if (data.error) {
+    typingBubble.textContent = '\u274c Errore: ' + data.error;
+  } else {
+    const text = data.answer || 'Nessuna risposta.';
+    typingBubble.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+  }
+  document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
+}
+window.sendAI = sendAI;

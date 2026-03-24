@@ -204,6 +204,9 @@
         <div class="nav-item" onclick="showSection('teams')">
           <i class="fas fa-users-cog"></i><span>Team</span>
         </div>
+        <div class="nav-item" onclick="showSection('ai-advisor')">
+          <i class="fas fa-robot"></i><span>EcoAI</span>
+        </div>
         <div class="nav-item admin-nav" id="adminNavItem" style="display:none" onclick="showSection('admin')">
           <i class="fas fa-crown"></i><span>Admin</span>
         </div>
@@ -354,6 +357,14 @@
                 <label class="label-sm">Ore di lavoro</label>
                 <input type="number" id="actHours" placeholder="es. 8" min="0" step="0.5"
                   oninput="updateActivityPreview()" />
+              </div>
+
+              <!-- Carpooling user picker -->
+              <div id="carpoolGroup" style="display:none;margin-top:14px;">
+                <label class="label-sm">🚗 Passeggero (riceve metà dei tuoi punti)</label>
+                <select id="carpoolUserId" style="width:100%;padding:10px 13px;border:1.5px solid var(--gray-200);border-radius:8px;background:#fff;color:var(--gray-800);font-size:14px;cursor:pointer;">
+                  <option value="">— Seleziona un utente (opzionale) —</option>
+                </select>
               </div>
 
               <div id="activitySummary" class="activity-preview" style="display:none;">
@@ -1021,8 +1032,46 @@
     </div>
   </div>
 
-  <!-- Toast -->
+  <!-- TOAST -->
   <div id="notifToast" class="notification-toast"></div>
+
+  <!-- AI ADVISOR SECTION -->
+  <section id="ai-advisor" class="tab-pane">
+    <div class="section-header">
+      <div>
+        <h2>🤖 EcoAI — Il tuo consulente green</h2>
+        <p>Chiedi consigli personalizzati sulla tua impronta ecologica. Risponde solo di sostenibilità!</p>
+      </div>
+    </div>
+
+    <div class="ai-chat-container">
+      <div id="aiMessages" class="ai-messages">
+        <div class="ai-msg bot">
+          <div class="ai-avatar">🤖</div>
+          <div class="ai-bubble">Ciao! Sono il tuo consulente ecologico personale 🌱<br>Chiedimi come ridurre la tua CO₂, migliorare il punteggio o qualsiasi consiglio green!</div>
+        </div>
+      </div>
+
+      <div class="ai-presets">
+        <p class="label-sm" style="margin-bottom:8px;color:var(--gray-500);">Domande rapide:</p>
+        <div class="ai-preset-chips">
+          <button class="ai-chip" onclick="askAI('Come posso migliorare il mio streak?')">🔥 Come miglioro lo streak?</button>
+          <button class="ai-chip" onclick="askAI('Quali attività danno più punti?')">⭐ Quali attività danno più punti?</button>
+          <button class="ai-chip" onclick="askAI('Come riduco le emissioni CO2 con la bici?')">🚴 Consigli sulla bici</button>
+          <button class="ai-chip" onclick="askAI('Come funziona il carpooling con i punti?')">🚗 Come funziona il carpooling?</button>
+          <button class="ai-chip" onclick="askAI('Consigli per lavorare da remoto e ridurre impronta?')">🏠 Smart working</button>
+          <button class="ai-chip" onclick="askAI('Quanti punti bonus do lo streak?')">💡 Bonus streak</button>
+        </div>
+      </div>
+
+      <div class="ai-input-row">
+        <input type="text" id="aiInput" placeholder="Scrivi una domanda eco..." onkeydown="if(event.key==='Enter') sendAI()" />
+        <button class="btn-primary" onclick="sendAI()" id="aiSendBtn">
+          <i class="fas fa-paper-plane"></i> Chiedi
+        </button>
+      </div>
+    </div>
+  </section>
 
   <!-- ═══════════════════════════════════════════ -->
   <!-- SCRIPTS -->

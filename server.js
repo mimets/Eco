@@ -864,9 +864,126 @@ app.post('/api/activities', auth, async (req, res) => {
       [co2, finalPoints, streak, req.user.id]
     );
     checkBadges(req.user.id).catch(console.error);
+
+    // Carpooling: share half-points with a co-passenger if specified
+    if (type === 'Carpooling' && req.body.carpool_user_id) {
+      const cpId = parseInt(req.body.carpool_user_id);
+      if (cpId && cpId !== req.user.id) {
+        const sharePoints = Math.round(finalPoints / 2);
+        const shareCo2   = parseFloat((co2 / 2).toFixed(2));
+        await db.query(
+          `UPDATE users SET points=points+$1, co2_saved=co2_saved+$2, total_activities=total_activities+1 WHERE id=$3`,
+          [sharePoints, shareCo2, cpId]
+        );
+        await db.query(
+          `INSERT INTO notifications (user_id,message,icon) VALUES ($1,$2,'🚗')`,
+          [cpId, `Hai ricevuto ${sharePoints} punti e ${shareCo2} kg CO₂ da un passaggio in carpooling! 🚗`]
+        );
+        return res.json({ ok: true, co2_saved: co2, points: finalPoints, streakBonus, carpoolShared: sharePoints });
+      }
+    }
+
     return res.json({ ok: true, co2_saved: co2, points: finalPoints, streakBonus });
   } catch (err) {
     console.error('Activities POST error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// ═══════════════════════════════════════════
+// AI ECO-ADVISOR
+// ═══════════════════════════════════════════
+app.post('/api/ai-advisor', auth, async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question || question.trim().length < 3)
+      return res.status(400).json({ error: 'Domanda non valida' });
+
+    const { rows: userRows } = await db.query(
+      'SELECT name, points, co2_saved, total_activities, current_streak FROM users WHERE id=$1',
+      [req.user.id]
+    );
+    const u = userRows[0];
+    if (!u) return res.status(404).json({ error: 'Utente non trovato' });
+
+    const q = question.toLowerCase();
+
+    // Off-topic guard — only eco/sustainability topics allowed
+    const ECO_KEYWORDS = ['co2', 'carbon', 'bici', 'bus', 'treno', 'carpooling', 'remoto', 'videocall',
+      'eco', 'green', 'sostenib', 'ambient', 'impronta', 'emissione', 'punti', 'streak',
+      'clima', 'trasport', 'lavoro', 'risparmio', 'energia', 'migliora', 'consiglio', 'consigli',
+      'attivi', 'classifica', 'sfida', 'badge', 'progressi', 'settimana', 'giorno', 'mese'];
+
+    const isOnTopic = ECO_KEYWORDS.some(k => q.includes(k));
+    if (!isOnTopic) {
+      return res.json({ answer: `🤖 Sono il tuo consulente ecologico personale! Posso risponderti solo su temi legati alla sostenibilità, alle tue attività green e al tuo impatto ambientale. Prova a chiedermi come ridurre le emissioni o come migliorare il tuo punteggio!` });
+    }
+
+    // Personalised tip engine
+    let tips = [];
+
+    if (u.current_streak >= 7) {
+      tips.push(`🔥 Wow ${u.name}, il tuo streak di ${u.current_streak} giorni consecutivi è eccellente! Mantienilo registrando almeno un'attività ogni giorno.`);
+    } else if (u.current_streak >= 3) {
+      tips.push(`🌱 Streak di ${u.current_streak} giorni: stai andando bene! Cerca di non saltare oggi per guadagnare il bonus +20 punti.`);
+    } else {
+      tips.push(`💡 Registra un'attività ogni giorno per attivare il sistema di streak e guadagnare bonus punti automatici!`);
+    }
+
+    if (u.co2_saved < 10) {
+      tips.push(`🚴 Hai risparmiato ${parseFloat(u.co2_saved).toFixed(1)} kg di CO₂ finora. Prova a usare la **bici** anche solo per brevi spostamenti: ogni km vale 0.15 kg di CO₂!`);
+    } else if (u.co2_saved < 50) {
+      tips.push(`🚂 Ottimo lavoro con ${parseFloat(u.co2_saved).toFixed(1)} kg di CO₂ risparmiata! Considera il **treno** per i viaggi più lunghi: è 4x meno inquinante dell'auto.`);
+    } else {
+      tips.push(`🌍 Sei un campione: ${parseFloat(u.co2_saved).toFixed(1)} kg di CO₂ risparmiata! Condividi i tuoi progressi nel Social e inspira gli altri utenti.`);
+    }
+
+    if (u.total_activities < 5) {
+      tips.push(`📈 Inizia con piccoli cambiamenti: anche una videochiamata al posto di un viaggio aziendale vale 8 punti e 0.1 kg CO₂ all'ora!`);
+    }
+
+    if (q.includes('carpooling')) {
+      tips.push(`🚗 Il carpooling è fantastico: seleziona un collega durante il salvataggio per condividere metà dei punti con lui! Collaborare conviene a entrambi.`);
+    }
+
+    if (q.includes('bici') || q.includes('bike')) {
+      tips.push(`🚴 In bici risparmi 0.15 kg di CO₂ per km. Percorsi da 10 km ti danno 50 punti! Prova a usarla per andare al lavoro almeno 2 volte a settimana.`);
+    }
+
+    if (q.includes('remoto') || q.includes('smart working') || q.includes('casa')) {
+      tips.push(`🏠 Ogni ora di smart working evita in media 0.5 kg CO₂. Una giornata intera da casa equivale a non aver guidato per 30 km!`);
+    }
+
+    if (q.includes('streak') || q.includes('bonus')) {
+      tips.push(`🔥 Il bonus streak scatta dal 2° giorno consecutivo e vale +20 punti extra per ogni attività! Più a lungo mantieni lo streak, più diventa prezioso.`);
+    }
+
+    // Build final answer
+    const selectedTips = tips.slice(0, 3);
+    if (selectedTips.length === 0) {
+      selectedTips.push(`🌿 Come consulente eco per ${u.name}: cerca di variare le tue attività green — bici, treno, videochiamata e smart working. Ogni azione conta!`);
+    }
+
+    const answer = selectedTips.join('\n\n');
+    return res.json({ answer });
+  } catch (err) {
+    console.error('AI advisor error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// ═══════════════════════════════════════════
+// SOCIAL USERS (for carpooling picker)
+// ═══════════════════════════════════════════
+app.get('/api/social/users', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, username FROM users WHERE id != $1 AND verified = 1 ORDER BY name ASC LIMIT 200',
+      [req.user.id]
+    );
+    return res.json(rows);
+  } catch (err) {
+    console.error('Social users error:', err);
     return res.status(500).json({ error: 'Errore server' });
   }
 });
