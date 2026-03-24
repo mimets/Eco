@@ -600,6 +600,47 @@ textarea::placeholder {
   color: var(--gray-400);
 }
 
+/* Photo Verification */
+.photo-upload-zone {
+  margin-top: 8px;
+  border: 2px dashed var(--gray-200);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+  overflow: hidden;
+  transition: var(--transition);
+  cursor: pointer;
+}
+
+.photo-upload-zone:hover {
+  border-color: var(--brand);
+  background: white;
+}
+
+#photoPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  color: var(--gray-500);
+  gap: 10px;
+}
+
+#photoPlaceholder i {
+  font-size: 28px;
+  color: var(--brand);
+}
+
+#photoPlaceholder span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#photoPreviewContainer img {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
 .password-strength span {
   display: flex;
   align-items: center;

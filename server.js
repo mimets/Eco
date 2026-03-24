@@ -39,7 +39,7 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || true,
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting senza dipendenze esterne
@@ -118,9 +118,12 @@ async function initDB() {
       note TEXT DEFAULT '',
       from_addr TEXT DEFAULT '',
       to_addr TEXT DEFAULT '',
+      photo_proof TEXT,
       date TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Migration for existing tables
+  try { await db.query('ALTER TABLE activities ADD COLUMN IF NOT EXISTS photo_proof TEXT'); } catch(e){}
   await db.query(`
     CREATE TABLE IF NOT EXISTS challenges (
       id SERIAL PRIMARY KEY,
@@ -830,10 +833,17 @@ app.post('/api/activities', auth, async (req, res) => {
     const co2 = calcCo2(type, kmVal, hoursVal);
     const points = calcPoints(type, kmVal, hoursVal);
 
+    // Photo verification required for transport activities
+    const PHOTO_REQUIRED = ['Bici', 'Treno', 'Bus', 'Carpooling'];
+    const photoProof = req.body.photo_proof || null;
+    if (PHOTO_REQUIRED.includes(type) && !photoProof) {
+      return res.status(400).json({ error: '📸 Foto di verifica obbligatoria per le attività di trasporto!' });
+    }
+
     await db.query(
-      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean]
+      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr,photo_proof)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean, photoProof]
     );
 
     // DAILY STREAK LOGIC
