@@ -29,16 +29,12 @@ const CO2_RATES = {
   'Bus': { type: 'km', co2: 0.08, points: 1.5 },
   'Carpooling': { type: 'km', co2: 0.06, points: 3 },
   'Remoto': { type: 'hours', co2: 0.5, points: 10 },
-  'Videocall': { type: 'hours', co2: 0.1, points: 8 },
-  'Pasto Veg': { type: 'count', co2: 1.5, points: 10 },
-  'Riciclo': { type: 'kg', co2: 2.0, points: 15 },
-  'Energia': { type: 'hours', co2: 0.2, points: 5 }
+  'Videocall': { type: 'hours', co2: 0.1, points: 8 }
 };
 
 const ACTIVITY_ICONS = {
   'Bici': '🚴', 'Treno': '🚂', 'Bus': '🚌',
-  'Carpooling': '🚗', 'Remoto': '🏠', 'Videocall': '💻',
-  'Pasto Veg': '🥦', 'Riciclo': '♻️', 'Energia': '⚡'
+  'Carpooling': '🚗', 'Remoto': '🏠', 'Videocall': '💻'
 };
 
 const BG_COLORS = [

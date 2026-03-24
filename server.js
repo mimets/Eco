@@ -799,15 +799,12 @@ app.post('/api/activities', auth, async (req, res) => {
       return res.status(400).json({ error: 'Tipo attività non valido' });
 
     const MAX_LIMITS = {
-      'Bici': { type: 'km', max: 150 },
-      'Treno': { type: 'km', max: 1500 },
-      'Bus': { type: 'km', max: 800 },
-      'Carpooling': { type: 'km', max: 1000 },
-      'Remoto': { type: 'hours', max: 16 },
-      'Videocall': { type: 'hours', max: 16 },
-      'Pasto Veg': { type: 'count', max: 6 },
-      'Riciclo': { type: 'kg', max: 50 },
-      'Energia': { type: 'hours', max: 24 }
+      'Bici': { max: 150 },
+      'Treno': { max: 1500 },
+      'Bus': { max: 800 },
+      'Carpooling': { max: 1000 },
+      'Remoto': { max: 16 },
+      'Videocall': { max: 16 }
     };
 
     let kmVal = parseFloat(km) || 0;
@@ -815,9 +812,9 @@ app.post('/api/activities', auth, async (req, res) => {
     const rate = CO2_RATES[type];
     const limit = MAX_LIMITS[type];
 
-    if (['km', 'kg', 'count'].includes(rate.type)) {
-      if (kmVal <= 0) return res.status(400).json({ error: 'Quantità/Distanza non valida' });
-      if (kmVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} consentito in una singola attività per ${type}.` });
+    if (rate.type === 'km') {
+      if (kmVal <= 0) return res.status(400).json({ error: 'Distanza non valida' });
+      if (kmVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} km consentiti per ${type}.` });
     } else if (rate.type === 'hours') {
       if (hoursVal <= 0) return res.status(400).json({ error: 'Ore non valide' });
       if (hoursVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} ore consentite per ${type}.` });
