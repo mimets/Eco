@@ -24,7 +24,7 @@ let miiState = {
 };
 
 const CO2_RATES = {
-  'Bici': { type: 'km', co2: 0, points: 5 },
+  'Bici': { type: 'km', co2: 0.15, points: 5 },
   'Treno': { type: 'km', co2: 0.04, points: 2 },
   'Bus': { type: 'km', co2: 0.08, points: 1.5 },
   'Carpooling': { type: 'km', co2: 0.06, points: 3 },
@@ -1325,6 +1325,46 @@ async function saveAvatar() {
   drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.saveAvatar = saveAvatar;
+
+function setAvatarColor(val, btn) {
+  miiState.color = val;
+  document.querySelectorAll('#colorOptions .color-swatch').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200);
+}
+window.setAvatarColor = setAvatarColor;
+
+function setAvatarSkin(val, btn) {
+  miiState.skin = val;
+  document.querySelectorAll('#skinOptions .color-swatch').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200);
+}
+window.setAvatarSkin = setAvatarSkin;
+
+function setAvatarHair(val, btn) {
+  miiState.hair = val;
+  document.querySelectorAll('#hairOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200);
+}
+window.setAvatarHair = setAvatarHair;
+
+function setAvatarEyes(val, btn) {
+  miiState.eyes = val;
+  document.querySelectorAll('#eyeOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200);
+}
+window.setAvatarEyes = setAvatarEyes;
+
+function setAvatarMouth(val, btn) {
+  miiState.mouth = val;
+  document.querySelectorAll('#mouthOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200);
+}
+window.setAvatarMouth = setAvatarMouth;
 
 // ═══════════════════════════════════════════
 // PROFILE
