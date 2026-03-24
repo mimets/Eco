@@ -308,12 +308,12 @@ async function seedShop() {
 // EMAIL
 // ═══════════════════════════════════════════
 function getTransporter() {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return null;
+  if (!process.env.MAIL_USER || !process.env.MAIL_PASS) return null;
   return nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS
     }
   });
 }
@@ -323,7 +323,7 @@ async function sendVerifyEmail(email, token) {
   if (!transporter) { console.log('DEV verify token:', token); return; }
   const url = `${process.env.BASE_URL || 'http://localhost:3000'}/api/verify?token=${token}`;
   await transporter.sendMail({
-    from: `"EcoTrack" <${process.env.EMAIL_USER}>`,
+    from: `"EcoTrack" <${process.env.MAIL_USER}>`,
     to: email,
     subject: 'Verifica il tuo account EcoTrack 🌱',
     html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;padding:40px;background:#f0fdf4;border-radius:16px">
@@ -341,7 +341,7 @@ async function sendResetEmail(email, token) {
   if (!transporter) { console.log('DEV reset token:', token); return; }
   const url = `${process.env.BASE_URL || 'http://localhost:3000'}?action=reset&token=${token}`;
   await transporter.sendMail({
-    from: `"EcoTrack" <${process.env.EMAIL_USER}>`,
+    from: `"EcoTrack" <${process.env.MAIL_USER}>`,
     to: email,
     subject: 'Reset password EcoTrack 🔑',
     html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:auto;padding:40px;background:#f0fdf4;border-radius:16px">
