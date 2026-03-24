@@ -360,6 +360,7 @@ async function showSection(section) {
     case 'notifiche': await loadNotifications(); break;
     case 'teams': await loadTeams(); break;
     case 'admin': if (myProfile?.is_admin) await loadAdminPanel(); break;
+    case 'ai-advisor': break; // AI section is self-contained, no async load needed
   }
 }
 window.showSection = showSection;
