@@ -943,6 +943,44 @@
         </div>
       </section>
 
+      <!-- ══════════════════════════ AI ADVISOR ══════════════════════════ -->
+      <section id="ai-advisor" class="tab-pane">
+        <div class="section-header">
+          <div>
+            <h2>🤖 EcoAI — Il tuo consulente green</h2>
+            <p>Consigli personalizzati sulla tua impronta ecologica. Risponde solo di sostenibilità!</p>
+          </div>
+        </div>
+
+        <div class="ai-chat-container">
+          <div id="aiMessages" class="ai-messages">
+            <div class="ai-msg bot">
+              <div class="ai-avatar">🤖</div>
+              <div class="ai-bubble">Ciao! Sono il tuo consulente ecologico personale 🌱<br>Chiedimi come ridurre la tua CO₂, migliorare il punteggio o qualsiasi consiglio green!</div>
+            </div>
+          </div>
+
+          <div class="ai-presets">
+            <p class="label-sm" style="margin-bottom:8px;color:var(--gray-500);">Domande rapide:</p>
+            <div class="ai-preset-chips">
+              <button class="ai-chip" onclick="askAI('Come posso migliorare il mio streak?')">🔥 Come miglioro lo streak?</button>
+              <button class="ai-chip" onclick="askAI('Quali attività danno più punti?')">⭐ Quali attività danno più punti?</button>
+              <button class="ai-chip" onclick="askAI('Come riduco le emissioni CO2 con la bici?')">🚴 Consigli sulla bici</button>
+              <button class="ai-chip" onclick="askAI('Come funziona il carpooling con i punti?')">🚗 Come funziona il carpooling?</button>
+              <button class="ai-chip" onclick="askAI('Consigli per lavorare da remoto e ridurre impronta?')">🏠 Smart working</button>
+              <button class="ai-chip" onclick="askAI('Quanti punti bonus da lo streak?')">💡 Bonus streak</button>
+            </div>
+          </div>
+
+          <div class="ai-input-row">
+            <input type="text" id="aiInput" placeholder="Scrivi una domanda eco..." onkeydown="if(event.key==='Enter') sendAI()" />
+            <button class="btn-primary" onclick="sendAI()" id="aiSendBtn">
+              <i class="fas fa-paper-plane"></i> Chiedi
+            </button>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -1035,43 +1073,6 @@
   <!-- TOAST -->
   <div id="notifToast" class="notification-toast"></div>
 
-  <!-- AI ADVISOR SECTION -->
-  <section id="ai-advisor" class="tab-pane">
-    <div class="section-header">
-      <div>
-        <h2>🤖 EcoAI — Il tuo consulente green</h2>
-        <p>Chiedi consigli personalizzati sulla tua impronta ecologica. Risponde solo di sostenibilità!</p>
-      </div>
-    </div>
-
-    <div class="ai-chat-container">
-      <div id="aiMessages" class="ai-messages">
-        <div class="ai-msg bot">
-          <div class="ai-avatar">🤖</div>
-          <div class="ai-bubble">Ciao! Sono il tuo consulente ecologico personale 🌱<br>Chiedimi come ridurre la tua CO₂, migliorare il punteggio o qualsiasi consiglio green!</div>
-        </div>
-      </div>
-
-      <div class="ai-presets">
-        <p class="label-sm" style="margin-bottom:8px;color:var(--gray-500);">Domande rapide:</p>
-        <div class="ai-preset-chips">
-          <button class="ai-chip" onclick="askAI('Come posso migliorare il mio streak?')">🔥 Come miglioro lo streak?</button>
-          <button class="ai-chip" onclick="askAI('Quali attività danno più punti?')">⭐ Quali attività danno più punti?</button>
-          <button class="ai-chip" onclick="askAI('Come riduco le emissioni CO2 con la bici?')">🚴 Consigli sulla bici</button>
-          <button class="ai-chip" onclick="askAI('Come funziona il carpooling con i punti?')">🚗 Come funziona il carpooling?</button>
-          <button class="ai-chip" onclick="askAI('Consigli per lavorare da remoto e ridurre impronta?')">🏠 Smart working</button>
-          <button class="ai-chip" onclick="askAI('Quanti punti bonus do lo streak?')">💡 Bonus streak</button>
-        </div>
-      </div>
-
-      <div class="ai-input-row">
-        <input type="text" id="aiInput" placeholder="Scrivi una domanda eco..." onkeydown="if(event.key==='Enter') sendAI()" />
-        <button class="btn-primary" onclick="sendAI()" id="aiSendBtn">
-          <i class="fas fa-paper-plane"></i> Chiedi
-        </button>
-      </div>
-    </div>
-  </section>
 
   <!-- ═══════════════════════════════════════════ -->
   <!-- SCRIPTS -->
