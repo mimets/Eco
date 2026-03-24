@@ -918,6 +918,9 @@ async function loadPosts() {
           <button class="post-action-btn" onclick="toggleComments(${p.id})">
             <i class="fas fa-comment"></i> <span class="comment-count">${p.comments_count || 0}</span>
           </button>
+          <button class="post-action-btn" onclick="sharePost('${escapeHtml(p.content || '').replace(/'/g, "\\\\'")}')">
+            <i class="fas fa-share-alt"></i> Condividi
+          </button>
           ${canDelete ? `<button class="post-action-btn post-delete" onclick="deletePost(${p.id})"><i class="fas fa-trash"></i></button>` : ''}
         </div>
         <div class="comments-section" id="comments-${p.id}" style="display:none;">
@@ -2087,3 +2090,18 @@ document.addEventListener('DOMContentLoaded', () => {
     navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
   }
 });
+
+async function sharePost(text) {
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'EcoTrack Social',
+        text: 'Guarda questo post su EcoTrack! 🌱\\n"' + text + '"',
+        url: window.location.origin
+      });
+    } catch (e) { console.log('Condivisione annullata', e); }
+  } else {
+    showNotification('Condivisione nativa non supportata su questo dispositivo', 'info');
+  }
+}
+window.sharePost = sharePost;
