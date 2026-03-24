@@ -486,25 +486,28 @@ app.post('/api/register', authLimiter, async (req, res) => {
     if (ex.length) return res.status(400).json({ error: 'Email o username già in uso' });
 
     const hash = await bcrypt.hash(password, 10);
-    const vTok = crypto.randomBytes(32).toString('hex');
+    // const vTok = crypto.randomBytes(32).toString('hex'); // EMAIL VERIFY DISABLED
     const { rows } = await db.query(
-      "INSERT INTO users (name,username,email,password,verify_token,verified,owned_items) VALUES ($1,$2,$3,$4,$5,0,'[]') RETURNING *",
-      [name.trim(), username.toLowerCase(), email.toLowerCase(), hash, vTok]
+      "INSERT INTO users (name,username,email,password,verify_token,verified,owned_items) VALUES ($1,$2,$3,$4,$5,1,'[]') RETURNING *",
+      // verified=1 directly — email verification disabled temporarily
+      [name.trim(), username.toLowerCase(), email.toLowerCase(), hash, '']
     );
 
+    /* EMAIL VERIFICATION — re-enable when SMTP is configured correctly
     try {
       await sendVerifyEmail(email.toLowerCase(), vTok);
     } catch (err) {
       await db.query('DELETE FROM users WHERE id=$1', [rows[0].id]);
       console.error('Email di verifica non inviata:', err);
-      return res.status(500).json({ error: "Errore invio email Server. Se usi Gmail, ricorda di usare una 'Password per le app' per il parametro MAIL_PASS su Render!" });
+      return res.status(500).json({ error: "Errore invio email Server. Usa una 'Password per le app' Gmail per MAIL_PASS su Render." });
     }
+    */
 
     await db.query(
       "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'welcome',$2,'👋')",
       [rows[0].id, 'Benvenuto su EcoTrack! 🌱 Inizia a tracciare le tue attività green!']
     );
-    return res.json({ ok: true, message: 'Registrazione completata! Controlla la tua email.' });
+    return res.json({ ok: true, message: 'Registrazione completata! Ora puoi accedere.' });
   } catch (err) {
     console.error('Register error:', err);
     return res.status(500).json({ error: 'Errore interno del server' });
