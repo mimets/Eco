@@ -314,7 +314,9 @@ async function seedShop() {
 function getTransporter() {
   if (!process.env.MAIL_USER || !process.env.MAIL_PASS) return null;
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
       user: process.env.MAIL_USER,
       pass: process.env.MAIL_PASS
@@ -490,10 +492,13 @@ app.post('/api/register', authLimiter, async (req, res) => {
       [name.trim(), username.toLowerCase(), email.toLowerCase(), hash, vTok]
     );
 
-    // Non bloccare la risposta sull'email
-    sendVerifyEmail(email.toLowerCase(), vTok).catch(err => {
-      console.error('Email di verifica non inviata:', err.message);
-    });
+    try {
+      await sendVerifyEmail(email.toLowerCase(), vTok);
+    } catch (err) {
+      await db.query('DELETE FROM users WHERE id=$1', [rows[0].id]);
+      console.error('Email di verifica non inviata:', err);
+      return res.status(500).json({ error: "Errore invio email Server. Se usi Gmail, ricorda di usare una 'Password per le app' per il parametro MAIL_PASS su Render!" });
+    }
 
     await db.query(
       "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'welcome',$2,'👋')",
@@ -793,12 +798,30 @@ app.post('/api/activities', auth, async (req, res) => {
     if (!type || !CO2_RATES[type])
       return res.status(400).json({ error: 'Tipo attività non valido' });
 
-    const kmVal = Math.min(parseFloat(km) || 0, 10000); // max 10000 km
-    const hoursVal = Math.min(parseFloat(hours) || 0, 24);    // max 24 ore
-    const rate = CO2_RATES[type];
+    const MAX_LIMITS = {
+      'Bici': { type: 'km', max: 150 },
+      'Treno': { type: 'km', max: 1500 },
+      'Bus': { type: 'km', max: 800 },
+      'Carpooling': { type: 'km', max: 1000 },
+      'Remoto': { type: 'hours', max: 16 },
+      'Videocall': { type: 'hours', max: 16 },
+      'Pasto Veg': { type: 'count', max: 6 },
+      'Riciclo': { type: 'kg', max: 50 },
+      'Energia': { type: 'hours', max: 24 }
+    };
 
-    if (rate.type === 'km' && kmVal <= 0) return res.status(400).json({ error: 'Distanza non valida' });
-    if (rate.type === 'hours' && hoursVal <= 0) return res.status(400).json({ error: 'Ore non valide' });
+    let kmVal = parseFloat(km) || 0;
+    let hoursVal = parseFloat(hours) || 0;
+    const rate = CO2_RATES[type];
+    const limit = MAX_LIMITS[type];
+
+    if (['km', 'kg', 'count'].includes(rate.type)) {
+      if (kmVal <= 0) return res.status(400).json({ error: 'Quantità/Distanza non valida' });
+      if (kmVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} consentito in una singola attività per ${type}.` });
+    } else if (rate.type === 'hours') {
+      if (hoursVal <= 0) return res.status(400).json({ error: 'Ore non valide' });
+      if (hoursVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} ore consentite per ${type}.` });
+    }
 
     const noteClean = (note || '').slice(0, 200);
     const fromAddrClean = (from_addr || '').slice(0, 300);
