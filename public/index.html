@@ -6,6 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EcoTrack 🌱</title>
 
+  <!-- PWA Manifest & Theme -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#16a34a" />
+
   <!-- Leaflet CSS - FIX MAPPA BIANCA -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
@@ -206,6 +210,9 @@
       </nav>
 
       <div class="sidebar-footer">
+        <button class="btn-logout" onclick="toggleTheme()" style="background:none;border:none;color:#64748b;margin-bottom:12px;font-size:15px;text-align:left;">
+          <i class="fas fa-moon"></i> Tema Scuro
+        </button>
         <button class="btn-logout" onclick="logout()">
           <i class="fas fa-sign-out-alt"></i> Logout
         </button>
@@ -226,6 +233,7 @@
         <div class="topbar-info">
           <span>🌍 <b id="topbarCo2">0 kg</b></span>
           <span>⭐ <b id="topbarPoints">0 pt</b></span>
+          <button onclick="toggleTheme()" style="background:none;border:none;font-size:16px;cursor:pointer;margin-left:8px;">🌙</button>
         </div>
       </div>
 
@@ -234,6 +242,17 @@
         <div class="section-header">
           <h2>🏠 Dashboard</h2>
           <p id="dashGreeting">Bentornato! Continua così 💪</p>
+        </div>
+
+        <!-- AQI Widget -->
+        <div id="aqiWidget" class="card" style="margin-bottom:20px;display:none;background:linear-gradient(135deg, var(--primary), var(--secondary));color:white;">
+          <div class="card-body" style="display:flex;align-items:center;gap:16px;padding:16px;">
+            <div style="font-size:36px;" id="aqiEmoji">🌍</div>
+            <div>
+              <h4 style="margin:0;font-size:18px;" id="aqiTitle">Qualità dell'Aria: Calcolo...</h4>
+              <p style="margin:4px 0 0;font-size:14px;opacity:0.9;" id="aqiDesc">Richiedendo dati meteo locali...</p>
+            </div>
+          </div>
         </div>
 
         <!-- Stats Cards -->
@@ -324,14 +343,16 @@
                 <button class="activity-type-btn" onclick="selectActivityType('Bici', this)">🚴 Bici</button>
                 <button class="activity-type-btn" onclick="selectActivityType('Treno', this)">🚂 Treno</button>
                 <button class="activity-type-btn" onclick="selectActivityType('Bus', this)">🚌 Bus</button>
-                <button class="activity-type-btn" onclick="selectActivityType('Carpooling', this)">🚗
-                  Carpooling</button>
+                <button class="activity-type-btn" onclick="selectActivityType('Carpooling', this)">🚗 Carpooling</button>
                 <button class="activity-type-btn" onclick="selectActivityType('Remoto', this)">🏠 Remoto</button>
                 <button class="activity-type-btn" onclick="selectActivityType('Videocall', this)">💻 Videocall</button>
+                <button class="activity-type-btn" onclick="selectActivityType('Pasto Veg', this)">🥦 Pasto Veg</button>
+                <button class="activity-type-btn" onclick="selectActivityType('Riciclo', this)">♻️ Riciclo</button>
+                <button class="activity-type-btn" onclick="selectActivityType('Energia', this)">⚡ Energia</button>
               </div>
 
               <div id="kmGroup" style="display:none;margin-top:14px;">
-                <label class="label-sm">Distanza (km)</label>
+                <label class="label-sm" id="kmLabel">Distanza (km)</label>
                 <input type="number" id="actKm" placeholder="es. 15" min="0" step="0.1"
                   oninput="updateActivityPreview()" />
               </div>
@@ -584,6 +605,7 @@
       <section id="profile" class="tab-pane">
         <div class="section-header">
           <h2>👤 Profilo</h2>
+          <button class="btn-sm" style="background:#3b82f6;color:white;" onclick="exportMyCsv()"><i class="fas fa-download"></i> Esporta dati</button>
         </div>
         <div class="profile-layout">
           <!-- Info card -->
@@ -834,10 +856,10 @@
 
         <!-- Admin Tabs -->
         <div class="admin-tabs">
-          <button class="admin-tab active" onclick="switchAdminTab('users')"><i class="fas fa-users"></i>
-            Utenti</button>
+          <button class="admin-tab active" onclick="switchAdminTab('users')"><i class="fas fa-users"></i> Utenti</button>
           <button class="admin-tab" onclick="switchAdminTab('activities')"><i class="fas fa-leaf"></i> Attività</button>
           <button class="admin-tab" onclick="switchAdminTab('posts')"><i class="fas fa-newspaper"></i> Post</button>
+          <button class="btn-sm" style="margin-left:auto;background:#3b82f6;color:#fff;" onclick="exportAdminCsv()"><i class="fas fa-download"></i> Export Storico</button>
         </div>
 
         <!-- Utenti -->

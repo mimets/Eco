@@ -58,6 +58,25 @@
   --transition-slow: all .3s cubic-bezier(.4, 0, .2, 1);
 }
 
+body.dark-theme {
+  --gray-50: #0a0f1e;
+  --gray-100: #0f172a;
+  --gray-200: #1e293b;
+  --gray-300: #334155;
+  --gray-400: #475569;
+  --gray-500: #64748b;
+  --gray-600: #94a3b8;
+  --gray-700: #cbd5e1;
+  --gray-800: #e2e8f0;
+  --gray-900: #f8fafc;
+  --gray-25: #000000;
+  --sidebar-bg: #000000;
+  --red-bg: #450a0a;
+  --green-bg: #064e3b;
+  --yellow-bg: #451a03;
+  --blue-bg: #1e3a8a;
+}
+
 html {
   font-size: 16px;
   scroll-behavior: smooth;
@@ -102,6 +121,13 @@ input:focus,
 textarea:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(0, 112, 210, .12);
+}
+
+body.dark-theme input,
+body.dark-theme textarea {
+  background: var(--gray-200);
+  border-color: var(--gray-300);
+  color: var(--gray-800);
 }
 
 input::placeholder,

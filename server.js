@@ -209,6 +209,8 @@ async function initDB() {
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS to_addr TEXT DEFAULT ''`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''`,
     `ALTER TABLE notifications ADD COLUMN IF NOT EXISTS data JSONB DEFAULT '{}'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_date DATE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS current_streak INTEGER DEFAULT 0`,
     // Indici per performance
     `CREATE INDEX IF NOT EXISTS idx_activities_user ON activities(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date DESC)`,
@@ -294,6 +296,8 @@ async function seedShop() {
     ['Oro Puro', 'Colore oro lussuoso', 'color', '🟡', 400, true],
     ['Corona', 'Corona reale dorata', 'accessory', '👑', 250, true],
     ['Cappello', 'Cappellino sportivo', 'accessory', '🧢', 100, false],
+    ['Occhiali Estivi', 'Protezione solare stile eco', 'accessory', '🕶️', 200, false],
+    ['Sciarpa Invernale', 'Caldo abbraccio ecologico', 'accessory', '🧣', 150, true],
   ];
   for (const item of items) {
     await db.query(
@@ -357,11 +361,15 @@ async function sendResetEmail(email, token) {
 // AUTH MIDDLEWARE
 // ═══════════════════════════════════════════
 function auth(req, res, next) {
+  let token = null;
   const h = req.headers.authorization;
-  if (!h || !h.startsWith('Bearer '))
-    return res.status(401).json({ error: 'Non autorizzato' });
+  if (h && h.startsWith('Bearer ')) token = h.slice(7);
+  else if (req.query.token) token = req.query.token;
+  
+  if (!token) return res.status(401).json({ error: 'Non autorizzato' });
+  
   try {
-    req.user = jwt.verify(h.slice(7), process.env.JWT_SECRET);
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
     return res.status(401).json({ error: 'Token non valido' });
@@ -382,24 +390,29 @@ async function adminAuth(req, res, next) {
 // HELPERS
 // ═══════════════════════════════════════════
 const CO2_RATES = {
-  'Bici': { type: 'km', co2: 0, pts: 5 },
+  'Bici': { type: 'km', co2: 0.15, pts: 5 },
   'Treno': { type: 'km', co2: 0.04, pts: 2 },
   'Bus': { type: 'km', co2: 0.08, pts: 1.5 },
   'Carpooling': { type: 'km', co2: 0.06, pts: 3 },
   'Remoto': { type: 'hours', co2: 0.5, pts: 10 },
-  'Videocall': { type: 'hours', co2: 0.1, pts: 8 }
+  'Videocall': { type: 'hours', co2: 0.1, pts: 8 },
+  'Pasto Veg': { type: 'count', co2: 1.5, pts: 10 },
+  'Riciclo': { type: 'kg', co2: 2.0, pts: 15 },
+  'Energia': { type: 'hours', co2: 0.2, pts: 5 }
 };
 
 function calcCo2(type, km, hours) {
   const r = CO2_RATES[type];
   if (!r) return 0;
-  return parseFloat(((r.type === 'km' ? km : hours) * r.co2).toFixed(2));
+  const multiplier = (r.type === 'km' || r.type === 'kg' || r.type === 'count') ? km : hours;
+  return parseFloat((multiplier * r.co2).toFixed(2));
 }
 
 function calcPoints(type, km, hours) {
   const r = CO2_RATES[type];
   if (!r) return 0;
-  return Math.max(1, Math.round((r.type === 'km' ? km : hours) * r.pts));
+  const multiplier = (r.type === 'km' || r.type === 'kg' || r.type === 'count') ? km : hours;
+  return Math.max(1, Math.round(multiplier * r.pts));
 }
 
 function parseOwned(raw) {
@@ -413,7 +426,7 @@ function safeUser(u) {
   return {
     id: u.id, name: u.name, username: u.username, email: u.email,
     bio: u.bio || '', points: u.points || 0, co2_saved: u.co2_saved || 0,
-    total_activities: u.total_activities || 0,
+    total_activities: u.total_activities || 0, current_streak: u.current_streak || 0,
     is_admin: u.is_admin || false, tutorial_done: u.tutorial_done || false,
     avatar_color: u.avatar_color || '#16a34a', avatar_skin: u.avatar_skin || '#fde68a',
     avatar_eyes: u.avatar_eyes || 'normal', avatar_mouth: u.avatar_mouth || 'smile',
@@ -434,6 +447,17 @@ function isValidPassword(pw) {
 
 function isValidUsername(u) {
   return u && /^[a-z0-9_]{3,30}$/.test(u);
+}
+
+const BAD_WORDS = ['cazzo', 'merda', 'puttana', 'stronz', 'vaffanculo', 'bastard', 'troia', 'coglione'];
+function filterText(text) {
+  if (!text) return text;
+  let filtered = text;
+  for (const bw of BAD_WORDS) {
+    const reg = new RegExp(bw, 'gi');
+    filtered = filtered.replace(reg, '*'.repeat(bw.length));
+  }
+  return filtered;
 }
 
 // ═══════════════════════════════════════════
@@ -596,7 +620,7 @@ app.post('/api/reset-password', passwordLimiter, async (req, res) => {
 app.get('/api/profile', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id,name,username,email,bio,points,co2_saved,is_admin,tutorial_done,
+      `SELECT id,name,username,email,bio,points,co2_saved,current_streak,is_admin,tutorial_done,
               avatar_color,avatar_skin,avatar_eyes,avatar_mouth,avatar_hair,owned_items
        FROM users WHERE id=$1`,
       [req.user.id]
@@ -625,7 +649,7 @@ app.put('/api/profile', auth, async (req, res) => {
     );
     if (ex.length) return res.status(400).json({ error: 'Username già in uso' });
     await db.query('UPDATE users SET name=$1,username=$2,bio=$3 WHERE id=$4',
-      [name.trim(), username.toLowerCase(), bio || '', req.user.id]);
+      [filterText(name.trim()), username.toLowerCase(), filterText(bio || ''), req.user.id]);
     return res.json({ ok: true });
   } catch (err) {
     console.error('Profile PUT error:', err);
@@ -672,6 +696,29 @@ app.put('/api/profile/password', auth, async (req, res) => {
     await db.query('UPDATE users SET password=$1 WHERE id=$2', [hash, req.user.id]);
     return res.json({ ok: true });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
+});
+
+app.get('/api/profile/export', auth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT type, km, hours, co2_saved, points, TO_CHAR(date, 'YYYY-MM-DD') as date FROM activities WHERE user_id=$1 ORDER BY date DESC`, [req.user.id]);
+    const csv = 'Data,Tipo,Quantita(km/h/pz),CO2(kg),Punti\n' + rows.map(r => `${r.date},${r.type},${r.km || r.hours},${r.co2_saved},${r.points}`).join('\n');
+    res.header('Content-Type', 'text/csv');
+    res.attachment('ecotrack_my_activities.csv');
+    return res.send(csv);
+  } catch (err) { res.status(500).json({ error: 'Errore server' }); }
+});
+
+app.get('/api/admin/export', adminAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT TO_CHAR(a.date, 'YYYY-MM-DD') as date, u.username, a.type, COALESCE(a.km,0)+COALESCE(a.hours,0) as qty, a.co2_saved, a.points 
+      FROM activities a JOIN users u ON a.user_id = u.id ORDER BY a.date DESC
+    `);
+    const csv = 'Data,Utente,Tipo,Quantita,CO2(kg),Punti\n' + rows.map(r => `${r.date},${r.username},${r.type},${r.qty},${r.co2_saved},${r.points}`).join('\n');
+    res.header('Content-Type', 'text/csv');
+    res.attachment('ecotrack_all_activities.csv');
+    return res.send(csv);
+  } catch (err) { res.status(500).json({ error: 'Errore server' }); }
 });
 
 app.post('/api/tutorial/complete', auth, async (req, res) => {
@@ -765,12 +812,36 @@ app.post('/api/activities', auth, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean]
     );
+
+    // DAILY STREAK LOGIC
+    const userRes = await db.query("SELECT TO_CHAR(last_activity_date, 'YYYY-MM-DD') as last_date, current_streak FROM users WHERE id=$1", [req.user.id]);
+    const lastDate = userRes.rows[0].last_date;
+    let streak = userRes.rows[0].current_streak || 0;
+    
+    const todayDate = new Date();
+    const todayStr = todayDate.toISOString().split('T')[0];
+    const yestDate = new Date(todayDate);
+    yestDate.setDate(todayDate.getDate() - 1);
+    const yestStr = yestDate.toISOString().split('T')[0];
+
+    let streakBonus = 0;
+    if (lastDate !== todayStr) {
+      if (lastDate === yestStr) streak += 1;
+      else streak = 1;
+
+      if (streak > 1) {
+        streakBonus = 20; // Bonus for consecutive days!
+        await db.query("INSERT INTO notifications (user_id,message,icon) VALUES ($1,$2,'🔥')", [req.user.id, `Hai ottenuto 20 punti bonus per il tuo streak di ${streak} giorni! 🔥`]);
+      }
+    }
+    const finalPoints = points + streakBonus;
+
     await db.query(
-      `UPDATE users SET co2_saved=co2_saved+$1,points=points+$2,total_activities=total_activities+1 WHERE id=$3`,
-      [co2, points, req.user.id]
+      `UPDATE users SET co2_saved=co2_saved+$1, points=points+$2, total_activities=total_activities+1, last_activity_date=CURRENT_DATE, current_streak=$3 WHERE id=$4`,
+      [co2, finalPoints, streak, req.user.id]
     );
     checkBadges(req.user.id).catch(console.error);
-    return res.json({ ok: true, co2_saved: co2, points });
+    return res.json({ ok: true, co2_saved: co2, points: finalPoints, streakBonus });
   } catch (err) {
     console.error('Activities POST error:', err);
     return res.status(500).json({ error: 'Errore server' });
@@ -914,7 +985,7 @@ app.post('/api/social/posts', auth, async (req, res) => {
     if (content.length > 1000) return res.status(400).json({ error: 'Post troppo lungo (max 1000 caratteri)' });
     const { rows } = await db.query(
       "INSERT INTO posts (user_id,content,image_url,likes) VALUES ($1,$2,$3,'[]') RETURNING *",
-      [req.user.id, content.trim(), (image_url || '').slice(0, 500)]
+      [req.user.id, filterText(content.trim()), (image_url || '').slice(0, 500)]
     );
     checkBadges(req.user.id).catch(console.error);
     return res.json({ ok: true, post: rows[0] });
@@ -979,7 +1050,7 @@ app.post('/api/social/posts/:id/comments', auth, async (req, res) => {
     const { rows: post } = await db.query('SELECT user_id FROM posts WHERE id=$1', [postId]);
     if (!post.length) return res.status(404).json({ error: 'Post non trovato' });
     await db.query('INSERT INTO comments (post_id,user_id,content) VALUES ($1,$2,$3)',
-      [postId, req.user.id, content.trim()]);
+      [postId, req.user.id, filterText(content.trim())]);
     if (post[0].user_id !== req.user.id) {
       const { rows: c } = await db.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
       db.query(

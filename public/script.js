@@ -29,12 +29,16 @@ const CO2_RATES = {
   'Bus': { type: 'km', co2: 0.08, points: 1.5 },
   'Carpooling': { type: 'km', co2: 0.06, points: 3 },
   'Remoto': { type: 'hours', co2: 0.5, points: 10 },
-  'Videocall': { type: 'hours', co2: 0.1, points: 8 }
+  'Videocall': { type: 'hours', co2: 0.1, points: 8 },
+  'Pasto Veg': { type: 'count', co2: 1.5, points: 10 },
+  'Riciclo': { type: 'kg', co2: 2.0, points: 15 },
+  'Energia': { type: 'hours', co2: 0.2, points: 5 }
 };
 
 const ACTIVITY_ICONS = {
   'Bici': '🚴', 'Treno': '🚂', 'Bus': '🚌',
-  'Carpooling': '🚗', 'Remoto': '🏠', 'Videocall': '💻'
+  'Carpooling': '🚗', 'Remoto': '🏠', 'Videocall': '💻',
+  'Pasto Veg': '🥦', 'Riciclo': '♻️', 'Energia': '⚡'
 };
 
 const BG_COLORS = [
@@ -381,6 +385,41 @@ async function loadDashboard() {
   document.getElementById('dashGreeting').textContent =
     `${greet}, ${myProfile?.name || 'utente'}! Continua così 💪`;
 
+  // AQI Widget via Open-Meteo
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async pos => {
+      try {
+        const { latitude, longitude } = pos.coords;
+        const aqiRes = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=european_aqi`);
+        const aqiData = await aqiRes.json();
+        const aqi = aqiData?.current?.european_aqi;
+        if (aqi !== undefined) {
+          const w = document.getElementById('aqiWidget');
+          const t = document.getElementById('aqiTitle');
+          const d = document.getElementById('aqiDesc');
+          const e = document.getElementById('aqiEmoji');
+          if (w) w.style.display = 'block';
+          if (aqi <= 30) {
+            w.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            t.textContent = "Qualità dell'Aria: Ottima";
+            d.textContent = `AQI: ${aqi} — Perfetto per le tue attività all'aperto!`;
+            e.textContent = '🌿';
+          } else if (aqi <= 60) {
+            w.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            t.textContent = "Qualità dell'Aria: Moderata";
+            d.textContent = `AQI: ${aqi} — Accettabile, impara a ridurre le emissioni.`;
+            e.textContent = '😐';
+          } else {
+            w.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+            t.textContent = "Qualità dell'Aria: Scadente";
+            d.textContent = `AQI: ${aqi} — Qualità aria bassa. Usa bici o mezzi pubblici!`;
+            e.textContent = '😷';
+          }
+        }
+      } catch(e) { console.log('AQI error', e); }
+    }, () => console.log('Geolocation timeout/denied'), { timeout: 5000 });
+  }
+
   // Carica tutto in parallelo
   const [stats, activities, yearly, badges] = await Promise.all([
     apiRequest('/api/stats'),
@@ -497,7 +536,19 @@ function selectActivityType(type, btn) {
   btn.classList.add('active');
 
   const rate = CO2_RATES[type];
-  document.getElementById('kmGroup').style.display = rate.type === 'km' ? 'block' : 'none';
+  
+  if (['km', 'kg', 'count'].includes(rate.type)) {
+    document.getElementById('kmGroup').style.display = 'block';
+    const label = document.getElementById('kmLabel');
+    if (label) {
+      if (rate.type === 'km') label.textContent = 'Distanza (km)';
+      else if (rate.type === 'kg') label.textContent = 'Quantità (kg)';
+      else if (rate.type === 'count') label.textContent = 'Numero di pasti';
+    }
+  } else {
+    document.getElementById('kmGroup').style.display = 'none';
+  }
+  
   document.getElementById('hoursGroup').style.display = rate.type === 'hours' ? 'block' : 'none';
   document.getElementById('saveActivityBtn').disabled = false;
   updateActivityPreview();
@@ -525,7 +576,7 @@ function updateActivityPreview() {
   const rate = CO2_RATES[currentActivityType];
   const km = parseFloat(document.getElementById('actKm')?.value) || 0;
   const hours = parseFloat(document.getElementById('actHours')?.value) || 0;
-  const value = rate.type === 'km' ? km : hours;
+  const value = ['km', 'kg', 'count'].includes(rate.type) ? km : hours;
   const co2 = (value * rate.co2).toFixed(2);
   const pts = Math.round(value * rate.points);
   document.getElementById('pCO2').textContent = co2 + ' kg';
@@ -540,7 +591,7 @@ async function saveActivity() {
   const km = parseFloat(document.getElementById('actKm')?.value) || 0;
   const hours = parseFloat(document.getElementById('actHours')?.value) || 0;
 
-  if (rate.type === 'km' && km <= 0) { showNotification('Inserisci la distanza', 'error'); return; }
+  if (['km', 'kg', 'count'].includes(rate.type) && km <= 0) { showNotification('Inserisci la quantità o distanza valida', 'error'); return; }
   if (rate.type === 'hours' && hours <= 0) { showNotification('Inserisci le ore', 'error'); return; }
 
   const btn = document.getElementById('saveActivityBtn');
@@ -559,7 +610,9 @@ async function saveActivity() {
 
   if (data.error) { showNotification(data.error, 'error'); return; }
 
-  showNotification(`✅ Attività salvata! +${data.co2_saved} kg CO₂, +${data.points} pt`, 'success');
+  let msg = `✅ Attività salvata! +${data.co2_saved} kg CO₂, +${data.points} pt`;
+  if (data.streakBonus) msg += ` (🔥 +${data.streakBonus} pt Streak!)`;
+  showNotification(msg, 'success');
 
   ['actKm', 'actHours', 'actNote', 'fromAddr', 'toAddr'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
@@ -1995,7 +2048,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Chiudi modal cliccando fuori
   document.getElementById('confirmModal')?.addEventListener('click', e => {
-    if (e.target === document.getElementById('confirmModal')) closeConfirm();
+    if (e.target === e.currentTarget) window.confirmCallback?.(false);
   });
   document.getElementById('banModal')?.addEventListener('click', e => {
     if (e.target === document.getElementById('banModal')) closeBanModal();
@@ -2003,4 +2056,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('editUserModal')?.addEventListener('click', e => {
     if (e.target === document.getElementById('editUserModal')) closeEditUserModal();
   });
+});
+
+// ═══════════════════════════════════════════
+// EXPORT & PWA & THEME
+// ═══════════════════════════════════════════
+async function exportMyCsv() {
+  window.open('/api/profile/export?token=' + token, '_blank');
+}
+window.exportMyCsv = exportMyCsv;
+
+async function exportAdminCsv() {
+  window.open('/api/admin/export?token=' + token, '_blank');
+}
+window.exportAdminCsv = exportAdminCsv;
+
+function toggleTheme() {
+  document.body.classList.toggle('dark-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+  localStorage.setItem('ecotrack_theme', isDark ? 'dark' : 'light');
+}
+window.toggleTheme = toggleTheme;
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('ecotrack_theme') === 'dark') {
+    document.body.classList.add('dark-theme');
+  }
+  
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+  }
 });
