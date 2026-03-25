@@ -8,6 +8,8 @@ const crypto     = require('crypto');
 const nodemailer = require('nodemailer');
 const { Pool }   = require('pg');
 const path       = require('path');
+const http       = require('http');
+const { Server } = require('socket.io');
 
 // ═══════════════════════════════════════════
 // VALIDAZIONE VARIABILI D'AMBIENTE
@@ -22,6 +24,8 @@ if (!process.env.DATABASE_URL) {
 }
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 const PORT = process.env.PORT || 3000;
 
 const db = new Pool({
@@ -297,6 +301,21 @@ async function initDB() {
   console.log('✅ Database inizializzato');
 }
 
+// ═══════════════════════════════════════════
+// SOCKET.IO
+// ═══════════════════════════════════════════
+io.on('connection', (socket) => {
+  console.log('⚡ Utente connesso:', socket.id);
+  socket.on('disconnect', () => console.log('🔌 Utente di disconnesso:', socket.id));
+});
+
+function emitToAll(event, data) {
+  io.emit(event, data);
+}
+
+// ═══════════════════════════════════════════
+// SEED SHOP
+// ═══════════════════════════════════════════
 async function seedShop() {
   const items = [
     ['Capelli Corti', 'Taglio classico', 'hair', '💇', 50, false],
@@ -1170,6 +1189,8 @@ app.post('/api/social/posts', auth, async (req, res) => {
       [req.user.id, filterText(content.trim()), (image_url || '').slice(0, 500)]
     );
     checkBadges(req.user.id).catch(console.error);
+    const postWithAuthor = { ...rows[0], author_name: req.user.name, author_username: req.user.username, likes_count: 0, liked_by_me: false, comments_count: 0 };
+    emitToAll('new_post', postWithAuthor);
     return res.json({ ok: true, post: rows[0] });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
 });
@@ -1207,6 +1228,7 @@ app.post('/api/social/posts/:id/like', auth, async (req, res) => {
       }
     } else { likes.splice(idx, 1); }
     await db.query('UPDATE posts SET likes=$1 WHERE id=$2', [JSON.stringify(likes), postId]);
+    emitToAll('update_post', { id: postId, likes_count: likes.length });
     return res.json({ liked: idx === -1, likes_count: likes.length });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
 });
@@ -1241,6 +1263,7 @@ app.post('/api/social/posts/:id/comments', auth, async (req, res) => {
       ).catch(console.error);
     }
     const { rows: cnt } = await db.query('SELECT COUNT(*) as c FROM comments WHERE post_id=$1', [postId]);
+    emitToAll('update_comments', { id: postId, comments_count: parseInt(cnt[0].c) });
     return res.json({ ok: true, comments_count: parseInt(cnt[0].c) });
   } catch { return res.status(500).json({ error: 'Errore server' }); }
 });
@@ -1503,6 +1526,8 @@ app.post('/api/teams/:id/messages', auth, async (req, res) => {
       'INSERT INTO team_messages (team_id,user_id,content) VALUES ($1,$2,$3) RETURNING *',
       [teamId, req.user.id, content.trim()]
     );
+    const msg = { ...rows[0], author_name: req.user.name, author_username: req.user.username };
+    emitToAll('new_team_message', { team_id: teamId, message: msg });
     return res.json({ ok: true, message: rows[0] });
   } catch (err) {
     return res.status(500).json({ error: 'Errore server' });
@@ -1608,6 +1633,7 @@ app.post('/api/teams/:id/rides', auth, async (req, res) => {
         [m.user_id, `${meRow[0]?.name} offre un passaggio nel team ${teamRow[0]?.name}: ${from_addr} → ${to_addr}`]
       ).catch(() => {});
     }
+    emitToAll('new_ride', { team_id: teamId, ride: rows[0] });
     return res.json({ ok: true, ride: rows[0] });
   } catch (err) {
     console.error('Create ride error:', err);
@@ -1904,7 +1930,7 @@ app.get('*', (req, res) => {
 });
 
 initDB().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 EcoTrack sulla porta ${PORT}`);
   });
 }).catch(err => {

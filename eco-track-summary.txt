@@ -1,0 +1,78 @@
+ECOTRACK: STATO DEL PROGETTO & ROADMAP
+
+Ecco una panoramica completa di tutto quello che abbiamo implementato nell'app e una lista di suggerimenti per migliorarla in futuro.
+
+-----------------------------------------------------------
+CHECKLIST FUNZIONALITA' IMPLEMENTATE
+-----------------------------------------------------------
+
+DASHBOARD & STATISTICHE
+[x] Card Riassuntive: CO2 salvata (totale, settimana, mese) e Punti.
+[x] AQI Widget: Qualita' dell'aria in tempo reale via geolocalizzazione (Open-Meteo).
+[x] Grafico Annuale: Visualizzazione dei risparmi mensili in un grafico dinamico.
+[x] Recap Rapido: Ultime attivita' e ultimi badge ottenuti.
+
+GESTIONE ATTIVITA'
+[x] Tipologie multiple: Bici, Treno, Bus, Carpooling, Remoto, Videocall, Pasto Veg, Riciclo, Energia.
+[x] Calcolo CO2/Punti: Algoritmi personalizzati basati sul tipo di sforzo ambientale.
+[x] Integrazione Mappe: Selezione indirizzi (Nominatim) e calcolo percorso (Leaflet Routing).
+[x] Daily Streak: Bonus di 20 pt automatici per registrazioni in giorni consecutivi.
+[x] Carpooling Passenger: Possibilita' di selezionare un collega per dividere i punti.
+
+AVATAR & GAMIFICATION
+[x] Mii Engine: Sistema di disegno su Canvas personalizzato.
+[x] Customizer: Scelta di colori, carnagione, capelli, occhi e bocca.
+[x] Negozio: Sblocco di oggetti rari/speciali (es. Capelli Fiamma, Bocca Fuoco) usando i punti.
+[x] Sincronizzazione: Gli acquisti nel negozio sbloccano istantaneamente le opzioni nell'editor.
+[x] Classifica Globale: Hall of Fame degli utenti più attivi con icone di grado (1, 2, 3).
+
+SOCIAL & COMMUNITY
+[x] Feed Social: Pubblicazione post, like e commenti.
+[x] Sistema Follow: Segui altri utenti per vedere i loro progressi.
+[x] Sfide: Creazione di sfide pubbliche/private con target CO2 e premi in punti.
+[x] Condivisione: Integrazione con la condivisione nativa del dispositivo.
+
+TEAM CO-WORKING
+[x] Gestione Team: Creazione/Unione tramite codice invito.
+[x] Bacheca Passaggi: Un vero "board" per offrire o richiedere passaggi in auto (carpooling) con posti limitati.
+[x] Chat Team: Messaggistica in tempo reale per coordinarsi.
+
+AI & NOTIFICHE
+[x] AI Eco-Advisor: Chatbot AI locale con consigli su sostenibilita' e gamification.
+[x] Centro Notifiche: Avvisi per nuovi follow, achievement, messaggi e bonus.
+
+ESPERIENZA MOBILE (PREMIUM UX)
+[x] Responsive UI: Design ottimizzato per desktop e mobile.
+[x] Sticky Topbar: Header fisso con stats rapide su mobile.
+[x] Bottom Navigation: Barra di navigazione inferiore per accessibilita' a una mano.
+[x] Real-time 10s: Polling automatico ogni 10 secondi per aggiornamenti senza refresh.
+
+ADMIN & SICUREZZA
+[x] Admin Panel: Gestione utenti (bannare/modificare) e monitoring sistema.
+[x] Esportazione Dati: Scaricamento di tutte le attivita' in formato CSV.
+[x] Security: JWT Authentication, Hashing Password (bcrypt), Anti-cheat sui km.
+
+-----------------------------------------------------------
+ROADMAP PER IL FUTURO
+-----------------------------------------------------------
+
+1. VERO REAL-TIME (WEBSOCKETS)
+Passare a Socket.io per rendere le chat e i post istantanei al 100%.
+
+2. INTEGRAZIONI FITNESS (STRAVA/FIT)
+Sincronizzazione automatica con Strava o Google Fit per le attivita' fisiche.
+
+3. PWA INSTALLABILE
+Migliorare il manifest per permettere l'installazione come app nativa.
+
+4. MAPPA GLOBALE DELL'IMPATTO
+Visualizzazione grafica dei risparmi CO2 di tutta la community nel mondo.
+
+5. LEGHE SETTIMANALI
+Sistema di promozioni/retrocessioni stile Duolingo.
+
+6. SCAN RIFIUTI CON AI
+Riconoscimento oggetti tramite fotocamera per istruzioni di riciclo.
+
+CONSIGLIO TECNICO FINALE:
+Considera di passare a un framework come React o Vite se l'app dovesse crescere ancora molto in complessita'.

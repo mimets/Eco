@@ -12,6 +12,7 @@ let currentActivityType = null;
 let allShopItems = [];
 let currentShopCategory = 'all';
 let tutorialStep = 1;
+let socket = null;
 
 window.confirmCallback = null;
 
@@ -77,10 +78,14 @@ function startRealtime(section) {
   const intervalTime = 10000;
   
   if (intervals[section]) {
-    realtimeIntervals[section] = setInterval(intervals[section], intervalTime);
+    // Se il socket è connesso, non polliamo social e teams (sono istantanei!)
+    const skipPolling = socket && socket.connected && (section === 'social' || section === 'teams');
+    if (!skipPolling) {
+      realtimeIntervals[section] = setInterval(intervals[section], intervalTime);
+    }
   }
-  // Notifiche sempre attive con polling a 30s
-  if (section !== 'notifiche') {
+  // Notifiche sempre attive con polling a 30s (fallback se socket fallisce)
+  if (section !== 'notifiche' && !(socket && socket.connected)) {
     realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 30000);
   }
 }
@@ -2325,4 +2330,61 @@ async function deleteRide(rideId) {
     await loadRides(currentTeamId);
   }, '🗑️');
 }
-window.deleteRide = deleteRide;
+window.deleteRide = deleteRide;
+
+// ═══════════════════════════════════════════
+// SOCKET.IO REAL-TIME
+// ═══════════════════════════════════════════
+function setupWebSockets() {
+  if (typeof io === 'undefined') return;
+  
+  socket = io();
+  
+  socket.on('connect', () => {
+    console.log('🌐 Connesso al server real-time (Socket.io)');
+  });
+
+  socket.on('new_post', (post) => {
+    if (document.getElementById('social').classList.contains('active')) {
+      loadPosts(); // Refresh feed
+    }
+    showNotification(`📢 Nuovo post da ${post.author_name}!`, 'info');
+  });
+
+  socket.on('update_post', ({ id, likes_count }) => {
+    // Aggiorna contatore like visibile senza ricaricare tutto
+    const postEl = document.querySelector(`.post-card[data-id="${id}"] .btn-like span`);
+    if (postEl) postEl.textContent = likes_count;
+  });
+
+  socket.on('update_comments', ({ id, comments_count }) => {
+    const postEl = document.querySelector(`.post-card[data-id="${id}"] .btn-comment span`);
+    if (postEl) postEl.textContent = comments_count;
+  });
+
+  socket.on('new_team_message', ({ team_id, message }) => {
+    if (currentTeamId === team_id) {
+       // Se siamo nella chat del team, ricarica
+       loadTeamMessages(team_id);
+    }
+    showNotification(`💬 Nuovo messaggio nel team da ${message.author_name}`, 'info');
+  });
+
+  socket.on('new_ride', ({ team_id, ride }) => {
+    if (currentTeamId === team_id) {
+       loadRides(team_id);
+    }
+    showNotification(`🚗 Nuovo passaggio offerto da ${ride.driver_name}!`, 'info');
+  });
+
+  socket.on('new_notification', ({ user_id }) => {
+    if (myProfile && myProfile.id === user_id) {
+      loadNotificationCount();
+    }
+  });
+}
+
+// Inizializzazione al caricamento
+document.addEventListener('DOMContentLoaded', () => {
+  setupWebSockets();
+});
