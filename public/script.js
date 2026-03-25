@@ -1156,7 +1156,9 @@ window.filterShop = filterShop;
 function renderShop() {
   const container = document.getElementById('shopGrid');
   if (!container) return;
-  const owned = myProfile?.owned_items || [];
+  const rawOwned = myProfile?.owned_items || [];
+  // Normalize to numbers to avoid type mismatch (DB may return string IDs in some paths)
+  const owned = rawOwned.map(id => Number(id));
   const filtered = currentShopCategory === 'all'
     ? allShopItems
     : allShopItems.filter(i => i.category === currentShopCategory);
@@ -1167,7 +1169,7 @@ function renderShop() {
   }
 
   container.innerHTML = filtered.map(item => {
-    const isOwned = owned.includes(item.id);
+    const isOwned = owned.includes(Number(item.id));
     return `
       <div class="shop-item ${isOwned ? 'owned' : ''} ${item.is_rare ? 'rare' : ''}" onclick="buyItem(${item.id})">
         ${item.is_rare ? '<span class="rare-badge">✨ Raro</span>' : ''}
@@ -1199,7 +1201,7 @@ async function buyItem(itemId) {
       showNotification(`✅ Acquistato: ${item.name}!`, 'success');
       if (myProfile) {
         myProfile.points = data.new_points;
-        myProfile.owned_items = data.owned_items;
+        myProfile.owned_items = (data.owned_items || []).map(id => Number(id));
         updateSidebar(myProfile);
       }
       document.getElementById('shopPoints').textContent = data.new_points;
@@ -1919,6 +1921,7 @@ async function openTeam(teamId) {
   }, `tmAv${m.id}`, 36));
 
   await loadTeamChallenges(teamId);
+  await loadRides(teamId);
   await loadTeamMessages(teamId);
   if (teamMessagesInterval) clearInterval(teamMessagesInterval);
   teamMessagesInterval = setInterval(() => loadTeamMessages(teamId), 5000);
@@ -2237,3 +2240,114 @@ async function sendAI() {
   document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
 }
 window.sendAI = sendAI;
+
+async function loadRides(teamId) {
+  const data = await apiRequest(`/api/teams/${teamId}/rides`);
+  const container = document.getElementById('ridesList');
+  if (!container) return;
+  if (data.error || !data.length) {
+    container.innerHTML = '<div class="empty-state"><span>🚗</span><p>Nessun passaggio disponibile</p></div>';
+    return;
+  }
+  container.innerHTML = data.map(r => {
+    const joined = Array.isArray(r.joined_users) ? r.joined_users : (typeof r.joined_users === 'string' ? JSON.parse(r.joined_users) : []);
+    const isDriver = r.driver_id === myProfile?.id;
+    const isJoined = joined.includes(myProfile?.id);
+    const seatsLeft = r.total_seats - joined.length;
+    
+    return `
+      <div class="activity-item" style="flex-direction:column;align-items:flex-start;gap:8px;padding:12px;">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <canvas width="32" height="32" style="border-radius:50%;" id="rideAv${r.id}"></canvas>
+            <div>
+              <strong>${escapeHtml(r.driver_name)}</strong>
+              <small style="display:block;color:#64748b;">${timeAgo(r.departure_time)}</small>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <span class="badge-admin ${seatsLeft > 0 ? 'active' : 'banned'}" style="margin:0;">
+              ${seatsLeft > 0 ? `💺 ${seatsLeft} posti liberi` : '🚫 Al completo'}
+            </span>
+          </div>
+        </div>
+        <div style="padding:10px;background:rgba(0,0,0,0.03);border-radius:8px;width:100%;">
+          <div style="font-weight:600;display:flex;align-items:center;gap:6px;">
+            <span style="color:var(--brand);">📍</span> ${escapeHtml(r.from_addr)}
+          </div>
+          <div style="margin:4px 0 4px 5px;border-left:2px dashed #cbd5e1;height:12px;"></div>
+          <div style="font-weight:600;display:flex;align-items:center;gap:6px;">
+            <span style="color:#ef4444;">🏁</span> ${escapeHtml(r.to_addr)}
+          </div>
+        </div>
+        ${r.note ? `<p style="font-size:13px;color:#4b5563;margin:0;">💬 ${escapeHtml(r.note)}</p>` : ''}
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center;margin-top:4px;">
+          <div style="font-size:12px;color:#64748b;">Partenza: ${new Date(r.departure_time).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+          <div style="display:flex;gap:8px;">
+            ${isDriver ? `
+              <button class="btn-sm red" onclick="deleteRide(${r.id})">🗑️</button>
+            ` : `
+              <button class="btn-sm ${isJoined ? 'red' : 'green'}" onclick="joinRide(${r.id})">
+                ${isJoined ? '❌ Lascia' : '➕ Partecipa'}
+              </button>
+            `}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  data.forEach(r => {
+    drawMii({
+      color: r.driver_avatar_color || '#16a34a', skin: r.driver_avatar_skin || '#fde68a',
+      eyes: r.driver_avatar_eyes || 'normal', mouth: r.driver_avatar_mouth || 'smile', hair: r.driver_avatar_hair || 'none'
+    }, `rideAv${r.id}`, 32);
+  });
+}
+window.loadRides = loadRides;
+
+async function createRide() {
+  if (!currentTeamId) return;
+  const from_addr = document.getElementById('rideFrom')?.value.trim();
+  const to_addr = document.getElementById('rideTo')?.value.trim();
+  const departure_time = document.getElementById('rideDeparture')?.value;
+  const total_seats = document.getElementById('rideSeats')?.value;
+  const note = document.getElementById('rideNote')?.value.trim();
+
+  if (!from_addr || !to_addr || !departure_time) {
+    showNotification('Compila i campi obbligatori', 'error'); return;
+  }
+
+  const data = await apiRequest(`/api/teams/${currentTeamId}/rides`, 'POST', {
+    from_addr, to_addr, departure_time, total_seats, note
+  });
+
+  if (data.error) { showNotification(data.error, 'error'); return; }
+  
+  showNotification('🚗 Passaggio pubblicato!', 'success');
+  ['rideFrom', 'rideTo', 'rideDeparture', 'rideNote'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  await loadRides(currentTeamId);
+}
+window.createRide = createRide;
+
+async function joinRide(rideId) {
+  if (!currentTeamId) return;
+  const data = await apiRequest(`/api/teams/${currentTeamId}/rides/${rideId}/join`, 'POST');
+  if (data.error) { showNotification(data.error, 'error'); return; }
+  showNotification(data.joined ? '✅ Ti sei unito al passaggio!' : 'Hai lasciato il passaggio', 'success');
+  await loadRides(currentTeamId);
+}
+window.joinRide = joinRide;
+
+async function deleteRide(rideId) {
+  if (!currentTeamId) return;
+  showConfirm('Elimina passaggio', 'Vuoi davvero eliminare questo annuncio?', async () => {
+    const data = await apiRequest(`/api/teams/${currentTeamId}/rides/${rideId}`, 'DELETE');
+    if (data.error) { showNotification(data.error, 'error'); return; }
+    showNotification('✅ Passaggio eliminato', 'success');
+    await loadRides(currentTeamId);
+  }, '🗑️');
+}
+window.deleteRide = deleteRide;

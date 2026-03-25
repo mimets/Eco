@@ -255,6 +255,22 @@ async function initDB() {
     `CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_team_messages_team ON team_messages(team_id)`,
     `ALTER TABLE challenges ADD COLUMN IF NOT EXISTS team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE`,
+    // CARPOOL RIDES — annunci di carpooling nel team
+    `CREATE TABLE IF NOT EXISTS carpool_rides (
+      id SERIAL PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      driver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_addr TEXT NOT NULL,
+      to_addr TEXT NOT NULL,
+      departure_time TIMESTAMP NOT NULL,
+      total_seats INTEGER NOT NULL DEFAULT 4,
+      joined_users JSONB DEFAULT '[]',
+      note TEXT DEFAULT '',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_carpool_rides_team ON carpool_rides(team_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_carpool_rides_driver ON carpool_rides(driver_id)`,
   ];
 
   for (const sql of migrations) {
@@ -1537,6 +1553,121 @@ app.post('/api/teams/:id/challenges', auth, async (req, res) => {
     return res.json({ ok: true, challenge: rows[0] });
   } catch (err) {
     console.error('Team challenge error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// ═══════════════════════════════════════════
+// CARPOOL RIDES (Team rides board)
+// ═══════════════════════════════════════════
+
+// Lista rides di un team
+app.get('/api/teams/:id/rides', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { rows } = await db.query(`
+      SELECT r.*, u.name as driver_name, u.username as driver_username
+      FROM carpool_rides r
+      JOIN users u ON u.id = r.driver_id
+      WHERE r.team_id = $1 AND r.is_active = true AND r.departure_time > NOW()
+      ORDER BY r.departure_time ASC LIMIT 20
+    `, [teamId]);
+    return res.json(rows);
+  } catch (err) {
+    console.error('Get rides error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Crea un annuncio di carpooling
+app.post('/api/teams/:id/rides', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { from_addr, to_addr, departure_time, total_seats, note } = req.body;
+    if (!from_addr || !to_addr) return res.status(400).json({ error: 'Partenza e destinazione obbligatorie' });
+    if (!departure_time) return res.status(400).json({ error: 'Orario di partenza obbligatorio' });
+    const seats = parseInt(total_seats) || 4;
+    if (seats < 1 || seats > 8) return res.status(400).json({ error: 'Posti disponibili: tra 1 e 8' });
+    const depTime = new Date(departure_time);
+    if (isNaN(depTime.getTime()) || depTime < new Date()) return res.status(400).json({ error: 'Orario non valido' });
+    const { rows } = await db.query(
+      `INSERT INTO carpool_rides (team_id,driver_id,from_addr,to_addr,departure_time,total_seats,note,joined_users)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'[]') RETURNING *`,
+      [teamId, req.user.id, from_addr.slice(0,300), to_addr.slice(0,300), depTime, seats, (note||'').slice(0,200)]
+    );
+    // Notifica ai membri del team
+    const { rows: members } = await db.query(
+      'SELECT user_id FROM team_members WHERE team_id=$1 AND user_id!=$2', [teamId, req.user.id]
+    );
+    const { rows: meRow } = await db.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
+    const { rows: teamRow } = await db.query('SELECT name FROM teams WHERE id=$1', [teamId]);
+    for (const m of members) {
+      db.query(
+        "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'carpool',$2,'🚗')",
+        [m.user_id, `${meRow[0]?.name} offre un passaggio nel team ${teamRow[0]?.name}: ${from_addr} → ${to_addr}`]
+      ).catch(() => {});
+    }
+    return res.json({ ok: true, ride: rows[0] });
+  } catch (err) {
+    console.error('Create ride error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Partecipa a un ride
+app.post('/api/teams/:teamId/rides/:rideId/join', auth, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.teamId);
+    const rideId = parseInt(req.params.rideId);
+    const { rows: memberCheck } = await db.query(
+      'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
+    );
+    if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    const { rows: rideRows } = await db.query('SELECT * FROM carpool_rides WHERE id=$1 AND team_id=$2', [rideId, teamId]);
+    if (!rideRows.length) return res.status(404).json({ error: 'Passaggio non trovato' });
+    const ride = rideRows[0];
+    if (ride.driver_id === req.user.id) return res.status(400).json({ error: 'Sei già il guidatore!' });
+    let joined = Array.isArray(ride.joined_users) ? ride.joined_users : (typeof ride.joined_users === 'string' ? JSON.parse(ride.joined_users) : []);
+    if (joined.includes(req.user.id)) {
+      // Leave
+      joined = joined.filter(id => id !== req.user.id);
+      await db.query('UPDATE carpool_rides SET joined_users=$1 WHERE id=$2', [JSON.stringify(joined), rideId]);
+      return res.json({ ok: true, joined: false, seats_left: ride.total_seats - joined.length });
+    }
+    if (joined.length >= ride.total_seats) return res.status(400).json({ error: 'Non ci sono posti disponibili!' });
+    joined.push(req.user.id);
+    await db.query('UPDATE carpool_rides SET joined_users=$1 WHERE id=$2', [JSON.stringify(joined), rideId]);
+    // Notifica al guidatore
+    const { rows: me } = await db.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
+    db.query(
+      "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'carpool',$2,'🚗')",
+      [ride.driver_id, `${me[0]?.name} si è unito al tuo passaggio: ${ride.from_addr} → ${ride.to_addr}`]
+    ).catch(() => {});
+    return res.json({ ok: true, joined: true, seats_left: ride.total_seats - joined.length });
+  } catch (err) {
+    console.error('Join ride error:', err);
+    return res.status(500).json({ error: 'Errore server' });
+  }
+});
+
+// Elimina/chiudi un ride (solo guidatore)
+app.delete('/api/teams/:teamId/rides/:rideId', auth, async (req, res) => {
+  try {
+    const rideId = parseInt(req.params.rideId);
+    const { rows } = await db.query('SELECT driver_id FROM carpool_rides WHERE id=$1', [rideId]);
+    if (!rows.length) return res.status(404).json({ error: 'Passaggio non trovato' });
+    if (rows[0].driver_id !== req.user.id) return res.status(403).json({ error: 'Solo il guidatore può eliminare il passaggio' });
+    await db.query('UPDATE carpool_rides SET is_active=false WHERE id=$1', [rideId]);
+    return res.json({ ok: true });
+  } catch (err) {
     return res.status(500).json({ error: 'Errore server' });
   }
 });
