@@ -24,8 +24,6 @@
 
   <link rel="stylesheet" href="style.css" />
   
-  <!-- Three.js for REAL 3D -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
 </head>
 
 <body>
@@ -143,161 +141,156 @@
   </div>
 
   <!-- ═══════════════════════════════════════════ -->
-  <!-- APP CONTAINER -->
+  <!-- APP LAYOUT -->
   <!-- ═══════════════════════════════════════════ -->
-  <div id="appContainer" style="display:none;isolation:isolate;">
-
+  <div id="appContainer" class="app-layout" style="display:none;">
+    
     <!-- SIDEBAR -->
-    <aside id="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">🌱 <span>EcoTrack</span></div>
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">🌱</span>
+        <span class="brand-text">EcoTrack</span>
       </div>
 
-      <!-- Avatar + Info -->
-      <div class="sidebar-profile">
-          <div class="user-avatar-container">
-            <canvas id="userAvatar" width="100" height="100"></canvas>
-            <div id="userAvatar-3d" style="width: 100px; height: 100px; position: absolute; top: 0; left: 0;"></div>
-          </div>
-          <div class="sidebar-profile-info">
-          <span id="sidebarName">Utente</span>
-          <span id="sidebarEmail" class="sidebar-email"></span>
-        </div>
-      </div>
-
-      <!-- Stats rapide -->
-      <div class="sidebar-stats">
-        <div class="sidebar-stat">
-          <span class="sidebar-stat-value" id="sidebarPoints">0</span>
-          <span class="sidebar-stat-label">Punti</span>
-        </div>
-        <div class="sidebar-stat">
-          <span class="sidebar-stat-value" id="sidebarCo2">0</span>
-          <span class="sidebar-stat-label">kg CO₂</span>
-        </div>
-      </div>
-
-      <!-- Navigation -->
-      <nav class="sidebar-nav">
-        <div class="nav-item active" onclick="showSection('dashboard')">
-          <i class="fas fa-home"></i><span>Dashboard</span>
-        </div>
-        <div class="nav-item" onclick="showSection('activities')">
-          <i class="fas fa-leaf"></i><span>Attività</span>
-        </div>
-        <div class="nav-item" onclick="showSection('challenges')">
-          <i class="fas fa-trophy"></i><span>Sfide</span>
-        </div>
-        <div class="nav-item" onclick="showSection('leaderboard')">
-          <i class="fas fa-medal"></i><span>Classifica</span>
-        </div>
-        <div class="nav-item" onclick="showSection('social')">
-          <i class="fas fa-users"></i><span>Social</span>
-        </div>
-        <div class="nav-item" onclick="showSection('shop')">
-          <i class="fas fa-store"></i><span>Negozio</span>
-        </div>
-        <div class="nav-item" onclick="showSection('avatar')">
-          <i class="fas fa-palette"></i><span>Avatar</span>
-        </div>
-        <div class="nav-item" onclick="showSection('profile')">
-          <i class="fas fa-user-cog"></i><span>Profilo</span>
-        </div>
-        <div class="nav-item" onclick="showSection('notifiche')">
-          <i class="fas fa-bell"></i><span>Notifiche</span>
-          <span id="notifBadge" class="notif-badge" style="display:none">0</span>
-        </div>
-        <div class="nav-item" onclick="showSection('teams')">
-          <i class="fas fa-users-cog"></i><span>Team</span>
-        </div>
-        <div class="nav-item" onclick="showSection('ai-advisor')">
-          <i class="fas fa-robot"></i><span>EcoAI</span>
-        </div>
-        <div class="nav-item admin-nav" id="adminNavItem" style="display:none" onclick="showSection('admin')">
-          <i class="fas fa-crown"></i><span>Admin</span>
-        </div>
+      <nav class="sidebar-menu">
+        <a href="#" class="menu-link active" onclick="showSection('dashboard')">
+          <i class="fas fa-grid-2"></i> <span>Panoramica</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('activities')">
+          <i class="fas fa-leaf"></i> <span>Attività</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('challenges')">
+          <i class="fas fa-trophy"></i> <span>Sfide</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('leaderboard')">
+          <i class="fas fa-chart-line"></i> <span>Classifica</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('social')">
+          <i class="fas fa-comment-alt-nodes"></i> <span>Community</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('shop')">
+          <i class="fas fa-bag-shopping"></i> <span>Negozio</span>
+        </a>
+        <div class="menu-divider">Account</div>
+        <a href="#" class="menu-link" onclick="showSection('avatar')">
+          <i class="fas fa-user-astronaut"></i> <span>Il mio Avatar</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('profile')">
+          <i class="fas fa-gear"></i> <span>Impostazioni</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('teams')">
+          <i class="fas fa-users-gear"></i> <span>Il mio Team</span>
+        </a>
+        <a href="#" class="menu-link" onclick="showSection('ai-advisor')">
+          <i class="fas fa-sparkles"></i> <span>Chiedi a EcoAI</span>
+        </a>
       </nav>
 
-      <div class="sidebar-footer">
-        <button class="btn-logout" onclick="logout()">
-          <i class="fas fa-sign-out-alt"></i> Logout
+      <div class="sidebar-user">
+        <div class="user-info">
+          <div class="user-mini-avatar" id="sidebarAvatarContainer">
+             <canvas id="userAvatar" width="40" height="40"></canvas>
+          </div>
+          <div class="user-details">
+            <p id="sidebarName" class="user-name">Caricamento...</p>
+            <p id="sidebarPoints" class="user-subtitle">0 punti</p>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="logout()" title="Esci">
+          <i class="fas fa-right-from-bracket"></i>
         </button>
       </div>
     </aside>
 
-    <!-- Sidebar overlay mobile -->
-    <div id="sidebarOverlay" onclick="toggleMobileNav()"
-      style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99;"></div>
-
-    <!-- MAIN -->
-    <main id="mainContent">
-
-      <!-- Topbar mobile -->
-      <div class="topbar">
-        <button class="topbar-menu" onclick="toggleMobileNav()"><i class="fas fa-bars"></i></button>
-        <div class="topbar-logo-mini">🌱</div>
-        <div class="topbar-info">
-          <div class="topbar-stat">🌍 <span id="topbarCo2">0.0 kg</span></div>
-          <div class="topbar-stat">⭐ <span id="topbarPoints">0 pt</span></div>
+    <!-- CONTENT AREA -->
+    <main class="app-main">
+      
+      <!-- TOP NAVIGATION BAR -->
+      <header class="app-header">
+        <div class="header-search">
+          <i class="fas fa-search"></i>
+          <input type="text" placeholder="Cerca attività, sfide o amici..." />
         </div>
-      </div>
-
-      <!-- ══════════════════════════ DASHBOARD ══════════════════════════ -->
-      <section id="dashboard" class="tab-pane active">
-        <div class="section-header">
-          <h2>🏠 Dashboard</h2>
-          <p id="dashGreeting">Bentornato! Continua così 💪</p>
+        <div class="header-actions">
+          <div class="header-stat">
+             <span class="label">CO₂ Salvata:</span>
+             <span class="value" id="topbarCo2">0.0 kg</span>
+          </div>
+          <button class="icon-btn" onclick="showSection('notifiche')">
+            <i class="fas fa-bell"></i>
+            <span id="notifBadge" class="header-badge" style="display:none">0</span>
+          </button>
+          <button class="menu-toggle" onclick="toggleMobileNav()">
+            <i class="fas fa-bars"></i>
+          </button>
         </div>
+      </header>
 
-        <!-- AQI Widget -->
-        <div id="aqiWidget" class="card" style="margin-bottom:20px;display:none;background:linear-gradient(135deg, var(--primary), var(--secondary));color:white;">
-          <div class="card-body" style="display:flex;align-items:center;gap:16px;padding:16px;">
-            <div style="font-size:36px;" id="aqiEmoji">🌍</div>
+      <div class="content-wrapper">
+        <!-- ══════════════════════════ DASHBOARD ══════════════════════════ -->
+        <section id="dashboard" class="tab-pane active">
+          <div class="view-header">
             <div>
-              <h4 style="margin:0;font-size:18px;" id="aqiTitle">Qualità dell'Aria: Calcolo...</h4>
-              <p style="margin:4px 0 0;font-size:14px;opacity:0.9;" id="aqiDesc">Richiedendo dati meteo locali...</p>
+              <h1 id="dashGreeting">👋 Ciao, Federico</h1>
+              <p class="view-subtitle">Ecco il tuo impatto ambientale di oggi.</p>
             </div>
+            <button class="btn-primary-saas" onclick="showSection('activities')">
+              <i class="fas fa-plus"></i> Nuova Attività
+            </button>
           </div>
-        </div>
 
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-          <div class="stat-card green">
-            <div class="stat-card-icon">🌍</div>
-            <div class="stat-card-body">
-              <span class="stat-card-value" id="dashboardTotalCo2">0</span>
-              <span class="stat-card-label">kg CO₂ totali</span>
+          <!-- DASHBOARD GRID -->
+          <div class="bento-grid">
+            <!-- AQI WIDGET -->
+            <div id="aqiWidget" class="bento-card aqi-card">
+              <div class="card-icon"><i class="fas fa-wind"></i></div>
+              <div class="card-content">
+                <p class="card-label">Qualità dell'Aria Località</p>
+                <h3 id="aqiTitle">Rilevamento...</h3>
+                <p id="aqiDesc" class="card-helper">Inizializzazione sensori virtuali...</p>
+              </div>
             </div>
-          </div>
-          <div class="stat-card blue">
-            <div class="stat-card-icon">📅</div>
-            <div class="stat-card-body">
-              <span class="stat-card-value" id="dashboardWeekCo2">0</span>
-              <span class="stat-card-label">kg CO₂ settimana</span>
-            </div>
-          </div>
-          <div class="stat-card purple">
-            <div class="stat-card-icon">🗓️</div>
-            <div class="stat-card-body">
-              <span class="stat-card-value" id="dashboardMonthCo2">0</span>
-              <span class="stat-card-label">kg CO₂ mese</span>
-            </div>
-          </div>
-          <div class="stat-card yellow">
-            <div class="stat-card-icon">⭐</div>
-            <div class="stat-card-body">
-              <span class="stat-card-value" id="dashboardPoints">0</span>
-              <span class="stat-card-label">Punti totali</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- Chart + Badge -->
-        <div class="dashboard-row">
-          <div class="card flex-2">
-            <div class="card-header">
-              <h3>📊 Andamento CO₂ annuale</h3>
+            <!-- STATS CARDS -->
+            <div class="bento-card">
+              <p class="card-label">CO₂ Totale Risparmiata</p>
+              <div class="stat-flex">
+                <h2 id="dashboardTotalCo2">0.0</h2>
+                <span class="unit">kg</span>
+              </div>
+              <div class="trend up"><i class="fas fa-arrow-up"></i> +12% vs mese scorso</div>
             </div>
+
+            <div class="bento-card">
+              <p class="card-label">Punti Accumulati</p>
+              <div class="stat-flex">
+                <h2 id="dashboardPoints">0</h2>
+                <span class="unit">pt</span>
+              </div>
+              <p class="card-helper">Prossimo badge a 500 pt</p>
+            </div>
+
+            <div class="bento-card chart-card">
+              <div class="card-header-flex">
+                <h3>Andamento Settimanale</h3>
+                <div class="card-actions">
+                   <span class="badge-tag">Risultati Ottimi</span>
+                </div>
+              </div>
+              <div class="chart-container-saas">
+                <canvas id="dashboardChart"></canvas>
+              </div>
+            </div>
+
+            <div class="bento-card badge-card">
+              <h3>Badge Recenti</h3>
+              <div id="dashboardRecentBadges" class="dashboard-badge-list-saas">
+                <!-- Badges dynamically injected -->
+                <div class="no-data-msg">Nessun badge sbloccato recentemente.</div>
+              </div>
+            </div>
+          </div>
+
             <div class="card-body">
               <canvas id="yearlyChart" style="width:100%;height:200px;"></canvas>
             </div>
@@ -1142,7 +1135,6 @@
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
-  <script src="three-scene.js"></script>
 </body>
 
 </html>

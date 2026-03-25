@@ -317,7 +317,6 @@ function logout() {
     localStorage.removeItem('ecotoken');
     document.getElementById('authContainer').style.display = 'flex';
     document.getElementById('appContainer').style.display = 'none';
-    switchAuthTab('login');
     showNotification('Arrivederci! 👋', 'info');
   }, '👋');
 }
@@ -326,6 +325,13 @@ window.logout = logout;
 // ═══════════════════════════════════════════
 // SIDEBAR
 // ═══════════════════════════════════════════
+function updateHeaderStats() {
+  const pointsEl = document.getElementById('sidebarPoints');
+  const co2El = document.getElementById('topbarCo2');
+
+  if (pointsEl) pointsEl.innerText = `${userPoints} punti`;
+  if (co2El) co2El.innerText = `${userTotalCo2.toFixed(1)} kg`;
+}
 function updateSidebar(user) {
   document.getElementById('sidebarName').textContent = user.name || user.username || 'Utente';
   document.getElementById('sidebarEmail').textContent = user.email || '';
@@ -343,43 +349,58 @@ function updateSidebar(user) {
 }
 window.updateSidebar = updateSidebar;
 
-// ═══════════════════════════════════════════
-// SECTION NAVIGATION
-// ═══════════════════════════════════════════
-async function showSection(section) {
-  document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.getAttribute('onclick')?.includes(`'${section}'`));
+async function showSection(sectionId) {
+  // Update state
+  currentSection = sectionId;
+
+  // Hide all sections
+  document.querySelectorAll('section.tab-pane').forEach(s => s.classList.remove('active'));
+
+  // Show target section
+  const target = document.getElementById(sectionId);
+  if (target) {
+    target.classList.add('active');
+  }
+
+  // Update Nav Links
+  document.querySelectorAll('.menu-link').forEach(link => {
+    link.classList.remove('active');
+    if (link.getAttribute('onclick')?.includes(`'${sectionId}'`)) {
+      link.classList.add('active');
+    }
   });
 
-  const target = document.getElementById(section);
-  if (target) target.classList.add('active');
+  // Close Mobile Nav if open
+  if (window.innerWidth <= 768) {
+    toggleMobileNav(false);
+  }
 
-  document.getElementById('sidebar')?.classList.remove('open');
-  document.getElementById('sidebarOverlay').style.display = 'none';
-
-  switch (section) {
+  // Special section triggers
+  switch (sectionId) {
     case 'dashboard': await loadDashboard(); break;
     case 'activities': await loadActivities(); break;
     case 'challenges': await loadChallenges(); break;
     case 'leaderboard': await loadLeaderboard(); break;
     case 'social': await loadSocial(); break;
     case 'shop': await loadShop(); break;
-    case 'avatar': await loadAvatarSection(); break;
+    case 'avatar': await loadAvatar(); break;
     case 'profile': await loadProfile(); break;
     case 'notifiche': await loadNotifications(); break;
     case 'teams': await loadTeams(); break;
     case 'admin': if (myProfile?.is_admin) await loadAdminPanel(); break;
-    case 'ai-advisor': break; // AI section is self-contained, no async load needed
+    case 'ai-advisor': break;
   }
 }
 window.showSection = showSection;
 
-function toggleMobileNav() {
-  const sidebar = document.getElementById('sidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  sidebar.classList.toggle('open');
-  overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+function toggleMobileNav(force) {
+  const sidebar = document.querySelector('.app-sidebar');
+  if (!sidebar) return;
+  if (force === false) {
+    sidebar.classList.remove('mobile-active');
+  } else {
+    sidebar.classList.toggle('mobile-active');
+  }
 }
 window.toggleMobileNav = toggleMobileNav;
 
