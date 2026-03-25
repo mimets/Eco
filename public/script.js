@@ -1364,7 +1364,7 @@ async function loadAvatarSection() {
     const unlockedColors = [...baseColors, ...Object.entries(shopColorMap).filter(([n]) => hasItem(n)).map(([, c]) => c)];
     const lockedColors = Object.entries(shopColorMap).filter(([n]) => !hasItem(n));
     colorOpts.innerHTML =
-      unlockedColors.map(c => `<div class="color-swatch ${miiState.color === c ? 'selected' : ''}" style="background:${c};border:2px solid ${c === ' #ffffff' ? '#e2e8f0' : 'transparent'};" onclick="setAvatarColor('${c}',this)"></div>`).join('') +
+      unlockedColors.map(c => `<div class="color-swatch ${miiState.color === c ? 'selected' : ''}" style="background:${c};border:2px solid ${c === '#ffffff' ? '#e2e8f0' : 'transparent'};" onclick="setAvatarColor('${c}',this)"></div>`).join('') +
       lockedColors.map(([n, c]) => `<div class="color-swatch" title="${n} — acquistalo nel negozio!" style="background:${c};opacity:.3;cursor:not-allowed;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;">🔒</span></div>`).join('');
   }
 
@@ -1378,7 +1378,7 @@ async function loadAvatarSection() {
 
   // CAPELLI
   const hairLabels = { none: '🚫 Nessuno', short: '💇 Corti', long: '💁 Lunghi', curly: '🦱 Ricci', spiky: '⚡ Spiky', bun: '🎀 Bun', flame: '🔥 Fire' };
-  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair', flame: 'Flame Hair' };
+  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair', flame: 'Capelli Fiamma' };
   const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
