@@ -742,8 +742,8 @@ app.put('/api/profile/avatar', auth, async (req, res) => {
   try {
     const { color, skin, eyes, mouth, hair } = req.body;
     const validEyes = ['normal', 'happy', 'sleepy', 'surprised', 'wink', 'cool', 'star', 'heart'];
-    const validMouth = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow'];
-    const validHair = ['none', 'short', 'long', 'curly', 'spiky', 'bun'];
+    const validMouth = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow', 'fire'];
+    const validHair = ['none', 'short', 'long', 'curly', 'spiky', 'bun', 'flame'];
     const colorRegex = /^#[0-9a-fA-F]{6}$/;
 
     if (color && !colorRegex.test(color)) return res.status(400).json({ error: 'Colore non valido' });
