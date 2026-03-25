@@ -229,10 +229,10 @@
       <!-- Topbar mobile -->
       <div class="topbar">
         <button class="topbar-menu" onclick="toggleMobileNav()"><i class="fas fa-bars"></i></button>
-        <span class="topbar-title">🌱 EcoTrack</span>
+        <div class="topbar-logo-mini">🌱</div>
         <div class="topbar-info">
-          <span>🌍 <b id="topbarCo2">0 kg</b></span>
-          <span>⭐ <b id="topbarPoints">0 pt</b></span>
+          <div class="topbar-stat">🌍 <span id="topbarCo2">0.0 kg</span></div>
+          <div class="topbar-stat">⭐ <span id="topbarPoints">0 pt</span></div>
         </div>
       </div>
 
@@ -1033,6 +1033,25 @@
       </section>
 
     </main>
+
+    <!-- BOTTOM NAV MOBILE -->
+    <nav class="bottom-nav">
+      <div class="bnav-item active" onclick="showSection('dashboard')" data-section="dashboard">
+        <i class="fas fa-home"></i><span>Home</span>
+      </div>
+      <div class="bnav-item" onclick="showSection('activities')" data-section="activities">
+        <i class="fas fa-plus-circle"></i><span>Attività</span>
+      </div>
+      <div class="bnav-item" onclick="showSection('social')" data-section="social">
+        <i class="fas fa-globe-europe"></i><span>Social</span>
+      </div>
+      <div class="bnav-item" onclick="showSection('teams')" data-section="teams">
+        <i class="fas fa-users"></i><span>Team</span>
+      </div>
+      <div class="bnav-item" onclick="showSection('profile')" data-section="profile">
+        <i class="fas fa-user"></i><span>Tu</span>
+      </div>
+    </nav>
   </div>
 
   <!-- ═══════════════════════════════════════════ -->

@@ -48,9 +48,9 @@ const SKIN_COLORS = [
   '#c05621', '#7b341e', '#fef3c7', '#ffe4e6'
 ];
 
-const HAIR_OPTIONS = ['none', 'short', 'long', 'curly', 'spiky', 'bun'];
+const HAIR_OPTIONS = ['none', 'short', 'long', 'curly', 'spiky', 'bun', 'flame'];
 const EYE_OPTIONS = ['normal', 'happy', 'sleepy', 'surprised', 'wink', 'cool', 'star', 'heart'];
-const MOUTH_OPTIONS = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow'];
+const MOUTH_OPTIONS = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow', 'fire'];
 
 // ═══════════════════════════════════════════
 // REAL-TIME POLLING — aggiornamento più lento per evitare sovraccarico server aziendale
@@ -64,19 +64,24 @@ function startRealtime(section) {
     social: () => loadPosts(),
     leaderboard: () => loadLeaderboard(),
     notifiche: () => loadNotifications(),
-    teams: () => { if (currentTeamId) loadTeamMessages(currentTeamId); },
+    teams: () => { 
+      if (currentTeamId) {
+        loadTeamMessages(currentTeamId);
+        loadRides(currentTeamId);
+      }
+    },
     shop: () => loadShop(),
   };
   
-  // Differenti intervalli: Chat team più veloce, resto più lento
-  const intervalTime = section === 'teams' ? 10000 : 30000;
+  // Intervallo ridotto a 10s per sensazione "real-time" senza sovraccaricare
+  const intervalTime = 10000;
   
   if (intervals[section]) {
     realtimeIntervals[section] = setInterval(intervals[section], intervalTime);
   }
-  // Notifiche sempre attive ma con polling a 1 minuto
+  // Notifiche sempre attive con polling a 30s
   if (section !== 'notifiche') {
-    realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 60000);
+    realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 30000);
   }
 }
 
@@ -1280,6 +1285,14 @@ function drawMii(state, canvasId, size = 120) {
       ctx.closePath();
       ctx.fill();
     }
+  } else if (state.hair === 'flame') {
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillStyle = i === 0 ? '#ef4444' : '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(cx + i * hr * 0.4, cy - hr * 0.5);
+      ctx.quadraticCurveTo(cx + i * hr * 0.6, cy - hr * 1.5, cx + i * hr * 0.2, cy - hr * 0.8);
+      ctx.fill();
+    }
   }
 
   const eyeY = cy - hr * 0.1;
@@ -1340,6 +1353,17 @@ function drawMii(state, canvasId, size = 120) {
       ctx.strokeStyle = color; ctx.lineWidth = size * 0.018;
       ctx.beginPath(); ctx.arc(cx, mouthY, mouthR + i * 3, 0, Math.PI); ctx.stroke();
     });
+  } else if (state.mouth === 'fire') {
+    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
+    ctx.fillStyle = '#f59e0b'; ctx.fill(); ctx.strokeStyle = '#ef4444'; ctx.stroke();
+    for (let i = -1; i <= 1; i++) {
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 5, mouthY);
+        ctx.lineTo(cx + i * 5 - 3, mouthY + 8);
+        ctx.lineTo(cx + i * 5 + 3, mouthY + 8);
+        ctx.fill();
+    }
   } else {
     ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI); ctx.stroke();
   }
@@ -1397,8 +1421,8 @@ async function loadAvatarSection() {
   }
 
   // CAPELLI
-  const hairLabels = { none: '🚫 Nessuno', short: '💇 Corti', long: '💁 Lunghi', curly: '🦱 Ricci', spiky: '⚡ Spiky', bun: '🎀 Bun' };
-  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair' };
+  const hairLabels = { none: '🚫 Nessuno', short: '💇 Corti', long: '💁 Lunghi', curly: '🦱 Ricci', spiky: '⚡ Spiky', bun: '🎀 Bun', flame: '🔥 Fire' };
+  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair', flame: 'Flame Hair' };
   const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
@@ -1427,8 +1451,8 @@ async function loadAvatarSection() {
   }
 
   // BOCCA
-  const mouthLabels = { smile: '😊 Sorriso', grin: '😁 Ghigno', open: '😮 Aperta', smirk: '😏 Smorfia', sad: '😢 Triste', rainbow: '🌈 Arcobaleno' };
-  const mouthShopMap = { rainbow: 'Rainbow Mouth', grin: 'Bocca Sorridente', open: 'Bocca Aperta', sad: 'Bocca Triste' };
+  const mouthLabels = { smile: '😊 Sorriso', grin: '😁 Ghigno', open: '😮 Aperta', smirk: '😏 Smorfia', sad: '😢 Triste', rainbow: '🌈 Arcobaleno', fire: '🔥 Fuoco' };
+  const mouthShopMap = { rainbow: 'Rainbow Mouth', grin: 'Bocca Sorridente', open: 'Bocca Aperta', sad: 'Bocca Triste', fire: 'Fire Mouth' };
   const freeMouths = ['smile', 'smirk'];
   const mouthOpts = document.getElementById('mouthOptions');
   if (mouthOpts) {
