@@ -317,6 +317,7 @@ function logout() {
     localStorage.removeItem('ecotoken');
     document.getElementById('authContainer').style.display = 'flex';
     document.getElementById('appContainer').style.display = 'none';
+    switchAuthTab('login');
     showNotification('Arrivederci! 👋', 'info');
   }, '👋');
 }
@@ -325,20 +326,19 @@ window.logout = logout;
 // ═══════════════════════════════════════════
 // SIDEBAR
 // ═══════════════════════════════════════════
-function updateHeaderStats() {
-  const pointsEl = document.getElementById('sidebarPoints');
-  const co2El = document.getElementById('topbarCo2');
-
-  if (pointsEl) pointsEl.innerText = `${userPoints} punti`;
-  if (co2El) co2El.innerText = `${userTotalCo2.toFixed(1)} kg`;
-}
 function updateSidebar(user) {
-  document.getElementById('sidebarName').textContent = user.name || user.username || 'Utente';
-  document.getElementById('sidebarEmail').textContent = user.email || '';
-  document.getElementById('sidebarPoints').textContent = user.points || 0;
-  document.getElementById('sidebarCo2').textContent = parseFloat(user.co2_saved || 0).toFixed(1);
-  document.getElementById('topbarCo2').textContent = parseFloat(user.co2_saved || 0).toFixed(1) + ' kg';
-  document.getElementById('topbarPoints').textContent = (user.points || 0) + ' pt';
+  const sbName = document.getElementById('sidebarName');
+  if (sbName) sbName.textContent = user.name || user.username || 'Utente';
+  const sbEmail = document.getElementById('sidebarEmail');
+  if (sbEmail) sbEmail.textContent = user.email || '';
+  const sbPoints = document.getElementById('sidebarPoints');
+  if (sbPoints) sbPoints.textContent = (user.points || 0) + ' punti';
+  const sbCo2 = document.getElementById('sidebarCo2');
+  if (sbCo2) sbCo2.textContent = parseFloat(user.co2_saved || 0).toFixed(1);
+  const tbCo2 = document.getElementById('topbarCo2');
+  if (tbCo2) tbCo2.textContent = parseFloat(user.co2_saved || 0).toFixed(1) + ' kg';
+  const tbPoints = document.getElementById('topbarPoints');
+  if (tbPoints) tbPoints.textContent = (user.points || 0) + ' pt';
 
   const adminNav = document.getElementById('adminNavItem');
   if (adminNav) adminNav.style.display = user.is_admin ? 'flex' : 'none';
@@ -346,49 +346,45 @@ function updateSidebar(user) {
   drawMii(miiState, 'sidebarAvatar', 48);
   const soc = document.getElementById('socialAvatar');
   if (soc) drawMii(miiState, 'socialAvatar', 36);
+  
+  // also update userAvatar canvas if present
+  drawMii(miiState, 'userAvatar', 40);
 }
 window.updateSidebar = updateSidebar;
 
-async function showSection(sectionId) {
-  // Update state
-  currentSection = sectionId;
-
-  // Hide all sections
-  document.querySelectorAll('section.tab-pane').forEach(s => s.classList.remove('active'));
-
-  // Show target section
-  const target = document.getElementById(sectionId);
-  if (target) {
-    target.classList.add('active');
-  }
-
-  // Update Nav Links
-  document.querySelectorAll('.menu-link').forEach(link => {
-    link.classList.remove('active');
-    if (link.getAttribute('onclick')?.includes(`'${sectionId}'`)) {
-      link.classList.add('active');
-    }
+// ═══════════════════════════════════════════
+// SECTION NAVIGATION
+// ═══════════════════════════════════════════
+async function showSection(section) {
+  document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.menu-link, .bnav-item, .nav-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick')?.includes(`'${section}'`));
   });
 
-  // Close Mobile Nav if open
+  const target = document.getElementById(section);
+  if (target) target.classList.add('active');
+
+  const oldSidebar = document.getElementById('sidebar');
+  if (oldSidebar) oldSidebar.classList.remove('open');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (overlay) overlay.style.display = 'none';
   if (window.innerWidth <= 768) {
     toggleMobileNav(false);
   }
 
-  // Special section triggers
-  switch (sectionId) {
+  switch (section) {
     case 'dashboard': await loadDashboard(); break;
     case 'activities': await loadActivities(); break;
     case 'challenges': await loadChallenges(); break;
     case 'leaderboard': await loadLeaderboard(); break;
     case 'social': await loadSocial(); break;
     case 'shop': await loadShop(); break;
-    case 'avatar': await loadAvatar(); break;
+    case 'avatar': await loadAvatarSection(); break;
     case 'profile': await loadProfile(); break;
     case 'notifiche': await loadNotifications(); break;
     case 'teams': await loadTeams(); break;
     case 'admin': if (myProfile?.is_admin) await loadAdminPanel(); break;
-    case 'ai-advisor': break;
+    case 'ai-advisor': break; // AI section is self-contained, no async load needed
   }
 }
 window.showSection = showSection;
