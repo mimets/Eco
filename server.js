@@ -880,19 +880,25 @@ app.post('/api/activities', auth, async (req, res) => {
       'Bus': { max: 800 },
       'Carpooling': { max: 1000 },
       'Remoto': { max: 16 },
-      'Videocall': { max: 16 }
+      'Videocall': { max: 16 },
+      'Energia': { max: 24 },
+      'Pasto Veg': { max: 10 },
+      'Riciclo': { max: 100 }
     };
 
     let kmVal = parseFloat(km) || 0;
     let hoursVal = parseFloat(hours) || 0;
     const rate = CO2_RATES[type];
-    const limit = MAX_LIMITS[type];
+    const limit = MAX_LIMITS[type] || { max: 9999 }; // Default fallback
 
     if (rate.type === 'km') {
-      if (kmVal <= 0) return res.status(400).json({ error: 'Distanza non valida' });
+      if (kmVal <= 0) return res.status(400).json({ error: 'Valore non valido (deve essere maggiore di 0)' });
       if (kmVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} km consentiti per ${type}.` });
+    } else if (rate.type === 'kg' || rate.type === 'count') {
+      if (kmVal <= 0) return res.status(400).json({ error: 'Quantità non valida (deve essere maggiore di 0)' });
+      if (kmVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} consentito per ${type}.` });
     } else if (rate.type === 'hours') {
-      if (hoursVal <= 0) return res.status(400).json({ error: 'Ore non valide' });
+      if (hoursVal <= 0) return res.status(400).json({ error: 'Ore non valide (devono essere maggiori di 0)' });
       if (hoursVal > limit.max) return res.status(400).json({ error: `Anti-cheat 🚨 Massimo ${limit.max} ore consentite per ${type}.` });
     }
 
