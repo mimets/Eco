@@ -275,10 +275,29 @@ async function initDB() {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_carpool_rides_team ON carpool_rides(team_id)`,
     `CREATE INDEX IF NOT EXISTS idx_carpool_rides_driver ON carpool_rides(driver_id)`,
+    // Assicura che i nomi degli oggetti siano unici per poter fare UPSERT o evitare duplicati
+    `ALTER TABLE shop_items ADD CONSTRAINT shop_items_name_unique UNIQUE (name)`,
   ];
 
   for (const sql of migrations) {
-    try { await db.query(sql); } catch (e) { console.log('Migration skip:', e.message); }
+    try { await db.query(sql); } catch (e) {
+       // Silenzia errori di constraint già esistente
+       if (!e.message.includes('already exists')) console.log('Migration info:', e.message); 
+    }
+  }
+  
+  // Forza inserimento oggetti critici se mancanti
+  const criticalItems = [
+    ['Flame Hair', 'Capelli di fuoco', 'hair', '🔥', 600, true],
+    ['Fire Mouth', 'Bocca di fuoco', 'mouth', '🔥', 350, true],
+    ['Rainbow Hair', 'Capelli arcobaleno magici', 'hair', '🌈', 300, true],
+    ['Rainbow Mouth', 'Sorriso arcobaleno', 'mouth', '🌈', 250, false]
+  ];
+  for (const item of criticalItems) {
+    await db.query(
+      'INSERT INTO shop_items (name,description,category,emoji,cost,is_rare) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (name) DO NOTHING',
+      item
+    ).catch(() => {});
   }
   console.log('✅ Migrations completate');
 
