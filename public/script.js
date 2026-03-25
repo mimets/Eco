@@ -1193,89 +1193,134 @@ function drawMii(state, canvasId, size = 120) {
   canvas.width = size;
   canvas.height = size;
   const cx = size / 2, cy = size / 2;
-  const hr = size * 0.33;
+  const hr = size * 0.28; // Head radius slightly smaller to fit bust
 
   ctx.clearRect(0, 0, size, size);
 
+  // 1. BACKGROUND CIRCLE
   ctx.beginPath();
   ctx.arc(cx, cy, size * 0.48, 0, Math.PI * 2);
   ctx.fillStyle = state.color || '#16a34a';
   ctx.fill();
 
-  ctx.fillStyle = '#1f2937';
-  if (state.hair === 'long') {
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + hr * 0.6, hr * 0.75, hr * 1.1, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (state.hair === 'bun') {
-    ctx.beginPath();
-    ctx.arc(cx, cy - hr * 1.1, hr * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // 2. SHOULDERS & NECK (The "Bust")
+  ctx.fillStyle = state.skin || '#fde68a';
+  
+  // Shoulders
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + hr * 1.6, hr * 1.5, hr * 0.8, 0, 0, Math.PI, true);
+  ctx.fill();
+  
+  // Neck
+  ctx.beginPath();
+  ctx.rect(cx - hr * 0.3, cy + hr * 0.5, hr * 0.6, hr * 0.6);
+  ctx.fill();
+  
+  // Neck Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.beginPath();
+  ctx.arc(cx, cy + hr * 0.8, hr * 0.4, 0, Math.PI, true);
+  ctx.fill();
 
+  // 3. EARS
+  ctx.fillStyle = state.skin || '#fde68a';
+  [-1, 1].forEach(dir => {
+    ctx.beginPath();
+    ctx.arc(cx + dir * hr * 1.05, cy + hr * 0.1, hr * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 4. FACE (Head) with 3D Radial Gradient
+  const faceGrad = ctx.createRadialGradient(cx - hr * 0.3, cy - hr * 0.3, hr * 0.1, cx, cy, hr * 1.2);
+  faceGrad.addColorStop(0, lightenColor(state.skin || '#fde68a', 15));
+  faceGrad.addColorStop(0.7, state.skin || '#fde68a');
+  faceGrad.addColorStop(1, darkenColor(state.skin || '#fde68a', 10));
+  
   ctx.beginPath();
   ctx.arc(cx, cy, hr, 0, Math.PI * 2);
-  ctx.fillStyle = state.skin || '#fde68a';
+  ctx.fillStyle = faceGrad;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,.1)';
+  ctx.strokeStyle = 'rgba(0,0,0,0.05)';
   ctx.lineWidth = 1;
   ctx.stroke();
 
+  // 5. NOSE BRIDGE (Subtle shadow)
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - hr * 0.2);
+  ctx.lineTo(cx - hr * 0.1, cy + hr * 0.1);
+  ctx.lineTo(cx + hr * 0.1, cy + hr * 0.1);
+  ctx.fill();
+
+  // 6. HAIR RENDERING (Detailed)
   ctx.fillStyle = '#1f2937';
+  if (state.hair === 'long') {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + hr * 0.3, hr * 1.1, hr * 1.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (state.hair === 'bun') {
+    ctx.beginPath();
+    ctx.arc(cx, cy - hr * 1.1, hr * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   if (state.hair === 'short') {
     ctx.beginPath();
-    ctx.arc(cx, cy - hr * 0.5, hr * 0.85, Math.PI, 0);
+    ctx.arc(cx, cy - hr * 0.3, hr * 1.1, Math.PI, 0);
     ctx.fill();
   } else if (state.hair === 'curly') {
-    for (let i = -1; i <= 1; i++) {
+    for (let i = -1.2; i <= 1.2; i += 0.4) {
       ctx.beginPath();
-      ctx.arc(cx + i * hr * 0.35, cy - hr * 0.85, hr * 0.22, 0, Math.PI * 2);
+      ctx.arc(cx + i * hr * 0.8, cy - hr * 0.9, hr * 0.35, 0, Math.PI * 2);
       ctx.fill();
     }
   } else if (state.hair === 'spiky') {
-    for (let i = -2; i <= 2; i++) {
-      ctx.beginPath();
-      ctx.moveTo(cx + i * hr * 0.22, cy - hr * 0.7);
-      ctx.lineTo(cx + i * hr * 0.22 - hr * 0.12, cy - hr * 1.15);
-      ctx.lineTo(cx + i * hr * 0.22 + hr * 0.12, cy - hr * 1.15);
-      ctx.closePath();
-      ctx.fill();
+    ctx.beginPath();
+    for (let i = -3; i <= 3; i++) {
+        const x = cx + i * hr * 0.3;
+        const y = cy - hr * 0.8;
+        ctx.moveTo(x - hr * 0.15, y);
+        ctx.lineTo(x, y - hr * 0.5);
+        ctx.lineTo(x + hr * 0.15, y);
     }
+    ctx.fill();
   } else if (state.hair === 'flame') {
-    for (let i = -1; i <= 1; i++) {
-      ctx.fillStyle = i === 0 ? '#ef4444' : '#f59e0b';
+    for (let i = -3; i <= 3; i++) {
+      ctx.fillStyle = i % 2 === 0 ? '#ef4444' : '#f59e0b';
       ctx.beginPath();
-      ctx.moveTo(cx + i * hr * 0.4, cy - hr * 0.5);
-      ctx.quadraticCurveTo(cx + i * hr * 0.6, cy - hr * 1.5, cx + i * hr * 0.2, cy - hr * 0.8);
+      ctx.moveTo(cx + i * hr * 0.25, cy - hr * 0.6);
+      ctx.quadraticCurveTo(cx + i * hr * 0.4, cy - hr * 1.7, cx + (i + 1) * hr * 0.2, cy - hr * 0.8);
       ctx.fill();
     }
   }
 
-  const eyeY = cy - hr * 0.1;
-  const eyeX = hr * 0.28;
-  const eyeS = hr * 0.11;
+  // 7. EYES
+  const eyeY = cy - hr * 0.15;
+  const eyeX = hr * 0.4;
+  const eyeS = hr * 0.15;
   ctx.fillStyle = '#1f2937';
 
   if (state.eyes === 'happy') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, Math.PI, 0); ctx.fill(); });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, Math.PI, 0); ctx.stroke(); });
   } else if (state.eyes === 'sleepy') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI); ctx.fill(); });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI); ctx.stroke(); });
   } else if (state.eyes === 'surprised') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS * 1.4, 0, Math.PI * 2); ctx.fill(); });
+    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS * 1.3, 0, Math.PI * 2); ctx.fill(); });
   } else if (state.eyes === 'wink') {
     ctx.beginPath(); ctx.arc(cx - eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = size * 0.025;
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = size * 0.02;
     ctx.beginPath(); ctx.moveTo(cx + eyeX - eyeS, eyeY); ctx.lineTo(cx + eyeX + eyeS, eyeY); ctx.stroke();
   } else if (state.eyes === 'cool') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.ellipse(cx + dir * eyeX, eyeY, eyeS * 1.5, eyeS * 0.7, 0, 0, Math.PI * 2); ctx.fill(); });
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(cx - eyeX * 1.6, eyeY - eyeS * 1.2, eyeX * 3.2, eyeS * 0.6);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(cx - eyeX * 1.6, eyeY - eyeS * 0.8, eyeX * 3.2, eyeS * 1.2);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(cx - eyeX * 1.6, eyeY - eyeS * 0.8, eyeX * 3.2, eyeS * 0.4);
   } else if (state.eyes === 'star') {
     ctx.fillStyle = '#f59e0b';
-    [-1, 1].forEach(dir => drawStar(ctx, cx + dir * eyeX, eyeY, 5, eyeS * 1.2, eyeS * 0.5));
+    [-1, 1].forEach(dir => drawStar(ctx, cx + dir * eyeX, eyeY, 5, eyeS * 1.4, eyeS * 0.6));
   } else if (state.eyes === 'heart') {
     ctx.fillStyle = '#ef4444';
-    [-1, 1].forEach(dir => drawHeart(ctx, cx + dir * eyeX, eyeY, eyeS * 1.1));
+    [-1, 1].forEach(dir => drawHeart(ctx, cx + dir * eyeX, eyeY, eyeS * 1.2));
   } else {
     [-1, 1].forEach(dir => {
       ctx.fillStyle = '#1f2937';
@@ -1285,45 +1330,59 @@ function drawMii(state, canvasId, size = 120) {
     });
   }
 
-  const mouthY = cy + hr * 0.35;
-  const mouthR = hr * 0.22;
+  // 8. MOUTH
+  const mouthY = cy + hr * 0.4;
+  const mouthR = hr * 0.3;
   ctx.strokeStyle = '#1f2937';
-  ctx.lineWidth = size * 0.025;
+  ctx.lineWidth = size * 0.02;
 
   if (state.mouth === 'grin') {
     ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
-    ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.strokeStyle = '#1f2937'; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.fillRect(cx - mouthR + 2, mouthY - 2, mouthR * 2 - 4, 6);
-  } else if (state.mouth === 'open') {
-    ctx.beginPath(); ctx.ellipse(cx, mouthY, mouthR * 0.7, mouthR * 0.5, 0, 0, Math.PI * 2);
     ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx - mouthR + 4, mouthY, mouthR * 2 - 8, 4);
+  } else if (state.mouth === 'open') {
+    ctx.beginPath(); ctx.ellipse(cx, mouthY, mouthR * 0.6, mouthR * 0.8, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#450a0a'; ctx.fill(); ctx.stroke();
   } else if (state.mouth === 'smirk') {
-    ctx.beginPath();
-    ctx.moveTo(cx - mouthR * 0.3, mouthY);
-    ctx.quadraticCurveTo(cx + mouthR * 0.3, mouthY - 4, cx + mouthR * 0.7, mouthY - 8);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - mouthR * 0.5, mouthY);
+    ctx.quadraticCurveTo(cx, mouthY + 5, cx + mouthR * 0.8, mouthY - 5); ctx.stroke();
   } else if (state.mouth === 'sad') {
-    ctx.beginPath(); ctx.arc(cx, mouthY + mouthR * 0.6, mouthR, Math.PI, 0); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, mouthY + mouthR * 0.5, mouthR, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
   } else if (state.mouth === 'rainbow') {
     ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6'].forEach((color, i) => {
-      ctx.strokeStyle = color; ctx.lineWidth = size * 0.018;
-      ctx.beginPath(); ctx.arc(cx, mouthY, mouthR + i * 3, 0, Math.PI); ctx.stroke();
+      ctx.strokeStyle = color; ctx.lineWidth = size * 0.015;
+      ctx.beginPath(); ctx.arc(cx, mouthY, mouthR - i * 2, 0, Math.PI); ctx.stroke();
     });
   } else if (state.mouth === 'fire') {
     ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
-    ctx.fillStyle = '#f59e0b'; ctx.fill(); ctx.strokeStyle = '#ef4444'; ctx.stroke();
+    ctx.fillStyle = '#f59e0b'; ctx.fill(); ctx.stroke();
     for (let i = -1; i <= 1; i++) {
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
-        ctx.moveTo(cx + i * 5, mouthY);
-        ctx.lineTo(cx + i * 5 - 3, mouthY + 8);
-        ctx.lineTo(cx + i * 5 + 3, mouthY + 8);
+        ctx.moveTo(cx + i * 8, mouthY);
+        ctx.lineTo(cx + i * 8 - 4, mouthY + 12);
+        ctx.lineTo(cx + i * 8 + 4, mouthY + 12);
         ctx.fill();
     }
   } else {
-    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR * 0.8, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
   }
 }
+
+// Helpers for 3D skin shading
+function lightenColor(col, amt) {
+    let usePound = false;
+    if (col[0] == "#") { col = col.slice(1); usePound = true; }
+    let num = parseInt(col, 16);
+    let r = (num >> 16) + amt;
+    if (r > 255) r = 255; else if (r < 0) r = 0;
+    let b = ((num >> 8) & 0x00FF) + amt;
+    if (b > 255) b = 255; else if (b < 0) b = 0;
+    let g = (num & 0x0000FF) + amt;
+    if (g > 255) g = 255; else if (g < 0) g = 0;
+    return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16);
+}
+function darkenColor(col, amt) { return lightenColor(col, -amt); }
 
 function drawStar(ctx, cx, cy, points, r, ir) {
   ctx.beginPath();
