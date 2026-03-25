@@ -865,17 +865,10 @@ app.post('/api/activities', auth, async (req, res) => {
     const co2 = calcCo2(type, kmVal, hoursVal);
     const points = calcPoints(type, kmVal, hoursVal);
 
-    // Photo verification required for transport activities
-    const PHOTO_REQUIRED = ['Bici', 'Treno', 'Bus', 'Carpooling'];
-    const photoProof = req.body.photo_proof || null;
-    if (PHOTO_REQUIRED.includes(type) && !photoProof) {
-      return res.status(400).json({ error: '📸 Foto di verifica obbligatoria per le attività di trasporto!' });
-    }
-
     await db.query(
-      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr,photo_proof)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean, photoProof]
+      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean]
     );
 
     // DAILY STREAK LOGIC

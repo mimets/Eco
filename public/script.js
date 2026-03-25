@@ -576,16 +576,6 @@ function selectActivityType(type, btn) {
   } else {
     carpoolGroup.style.display = 'none';
   }
-
-  // Show Photo Verification for transport activities
-  const photoGroup = document.getElementById('photoGroup');
-  const PHOTO_REQUIRED_TYPES = ['Bici', 'Treno', 'Bus', 'Carpooling'];
-  if (PHOTO_REQUIRED_TYPES.includes(type)) {
-    photoGroup.style.display = 'block';
-  } else {
-    photoGroup.style.display = 'none';
-    clearPhoto(); // Clear if switching to non-transport
-  }
 }
 window.selectActivityType = selectActivityType;
 
@@ -617,38 +607,9 @@ function updateActivityPreview() {
 }
 window.updateActivityPreview = updateActivityPreview;
 
-let currentPhotoBase64 = null;
-
-function openCamera() {
-  document.getElementById('photoInput').click();
-}
-window.openCamera = openCamera;
-
-async function handlePhotoUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(event) {
-    const img = document.getElementById('photoPreview');
-    img.src = event.target.result;
-    currentPhotoBase64 = event.target.result;
-    
-    document.getElementById('photoPlaceholder').style.display = 'none';
-    document.getElementById('photoPreviewContainer').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
-}
-window.handlePhotoUpload = handlePhotoUpload;
-
-function clearPhoto() {
-  currentPhotoBase64 = null;
-  document.getElementById('photoInput').value = '';
-  document.getElementById('photoPreview').src = '';
-  document.getElementById('photoPlaceholder').style.display = 'flex';
-  document.getElementById('photoPreviewContainer').style.display = 'none';
-}
-window.clearPhoto = clearPhoto;
+// ═══════════════════════════════════════════
+// SAVE ACTIVITY
+// ═══════════════════════════════════════════
 
 async function saveActivity() {
   if (!currentActivityType) { showNotification('Seleziona un tipo di attività', 'error'); return; }
@@ -665,20 +626,12 @@ async function saveActivity() {
 
   const carpoolUserId = document.getElementById('carpoolUserId')?.value || '';
 
-  // Mandatory photo check for transport
-  const PHOTO_REQUIRED_TYPES = ['Bici', 'Treno', 'Bus', 'Carpooling'];
-  if (PHOTO_REQUIRED_TYPES.includes(currentActivityType) && !currentPhotoBase64) {
-    showNotification('📸 Foto obbligatoria per confermare il mezzo!', 'error');
-    return;
-  }
-
   const data = await apiRequest('/api/activities', 'POST', {
     type: currentActivityType, km, hours,
     note: document.getElementById('actNote')?.value || '',
     from_addr: document.getElementById('fromAddr')?.value || '',
     to_addr: document.getElementById('toAddr')?.value || '',
-    carpool_user_id: carpoolUserId ? parseInt(carpoolUserId) : null,
-    photo_proof: currentPhotoBase64
+    carpool_user_id: carpoolUserId ? parseInt(carpoolUserId) : null
   });
 
   btn.disabled = false;
@@ -693,7 +646,6 @@ async function saveActivity() {
   ['actKm', 'actHours', 'actNote', 'fromAddr', 'toAddr'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  clearPhoto();
   document.getElementById('activitySummary').style.display = 'none';
   document.getElementById('saveActivityBtn').disabled = true;
   document.querySelectorAll('.activity-type-btn').forEach(b => b.classList.remove('active'));
@@ -724,7 +676,6 @@ async function loadActivities() {
         <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + escapeHtml(a.note) : ''} · ${timeAgo(a.date)}</small>
       </div>
       <div class="act-meta">
-        ${a.photo_proof ? '<span title="Foto verificata" style="color:var(--brand);margin-right:8px;">📸</span>' : ''}
         <div class="act-co2">-${a.co2_saved} kg</div>
         <div class="act-pts">+${a.points} pt</div>
       </div>
