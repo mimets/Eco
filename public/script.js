@@ -1187,6 +1187,15 @@ function syncMiiState(user) {
 }
 
 function drawMii(state, canvasId, size = 120) {
+  // Check for 3D container first
+  const container3d = document.getElementById(canvasId + '-3d');
+  if (container3d) {
+      if (typeof ThreeEngine !== 'undefined' && ThreeEngine.updateAvatar) {
+          ThreeEngine.updateAvatar(state, canvasId + '-3d');
+          return;
+      }
+  }
+
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');

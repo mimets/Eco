@@ -1717,14 +1717,18 @@ textarea::placeholder {
 }
 
 .shop-item:hover {
-  transform: translateY(-8px) rotateX(4deg) rotateY(-4deg);
+  transform: translateY(-12px) rotateX(10deg) rotateY(-10deg);
   border-color: var(--brand);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12), 0 0 15px rgba(22, 163, 74, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15), 0 0 20px rgba(22, 163, 74, 0.3);
 }
 
 .shop-item * {
-  transform: translateZ(20px);
+  transform: translateZ(50px);
+}
+
+.shop-item:hover .shop-item-emoji {
+  transform: scale(1.2) translateZ(80px);
 }
 
 .shop-item.owned {

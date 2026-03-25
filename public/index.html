@@ -23,6 +23,9 @@
     rel="stylesheet" />
 
   <link rel="stylesheet" href="style.css" />
+  
+  <!-- Three.js for REAL 3D -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
 </head>
 
 <body>
@@ -152,8 +155,11 @@
 
       <!-- Avatar + Info -->
       <div class="sidebar-profile">
-        <canvas id="sidebarAvatar" width="48" height="48"></canvas>
-        <div class="sidebar-profile-info">
+          <div class="user-avatar-container">
+            <canvas id="userAvatar" width="100" height="100"></canvas>
+            <div id="userAvatar-3d" style="width: 100px; height: 100px; position: absolute; top: 0; left: 0;"></div>
+          </div>
+          <div class="sidebar-profile-info">
           <span id="sidebarName">Utente</span>
           <span id="sidebarEmail" class="sidebar-email"></span>
         </div>
@@ -1136,6 +1142,7 @@
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
+  <script src="three-scene.js"></script>
 </body>
 
 </html>
