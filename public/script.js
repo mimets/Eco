@@ -1353,8 +1353,14 @@ async function loadAvatarSection() {
   if (!shopItems.length) { shopItems = await apiRequest('/api/shop'); }
 
   // Helper: is item unlocked
-  const hasItem = (name) => shopItems && Array.isArray(shopItems) &&
-    !!shopItems.find(i => i.name === name && owned.includes(i.id));
+  const hasItem = (name) => {
+    if (!shopItems || !Array.isArray(shopItems)) return false;
+    const item = shopItems.find(i => i.name === name);
+    if (!item) return false;
+    const isOwned = owned.some(id => Number(id) === Number(item.id));
+    console.log(`Matching item ${name} (ID: ${item.id}): owned? ${isOwned}`);
+    return isOwned;
+  };
 
   // COLORI SFONDO
   const baseColors = ['#16a34a', '#22c55e', '#3b82f6', '#6366f1', '#1e293b', '#64748b', '#ffffff'];
@@ -1378,7 +1384,7 @@ async function loadAvatarSection() {
 
   // CAPELLI
   const hairLabels = { none: '🚫 Nessuno', short: '💇 Corti', long: '💁 Lunghi', curly: '🦱 Ricci', spiky: '⚡ Spiky', bun: '🎀 Bun', flame: '🔥 Fire' };
-  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair', flame: 'Capelli Fiamma' };
+  const hairShopMap = { short: 'Capelli Corti', long: 'Capelli Lunghi', curly: 'Rainbow Hair', spiky: 'Gold Hair', bun: 'Galaxy Hair', flame: 'Flame Hair' };
   const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
