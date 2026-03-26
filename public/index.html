@@ -372,6 +372,17 @@
               </div>
 
               <div style="margin-top:14px;">
+                <label class="label-sm">📸 Foto Prova (obbligatoria)</label>
+                <div class="photo-upload-container">
+                  <input type="file" id="actPhoto" accept="image/*" capture="camera" onchange="previewPhoto(this)" />
+                  <div id="photoPreview" class="photo-preview" style="display:none;">
+                    <img id="previewImg" src="" alt="Anteprima" />
+                    <button type="button" class="remove-photo" onclick="removePhoto()">×</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:14px;">
                 <label class="label-sm">Data attività</label>
                 <input type="date" id="actDate" />
               </div>

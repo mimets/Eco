@@ -870,7 +870,7 @@ app.get('/api/activities', auth, async (req, res) => {
 
 app.post('/api/activities', auth, async (req, res) => {
   try {
-    const { type, km, hours, note, from_addr, to_addr } = req.body;
+    const { type, km, hours, note, from_addr, to_addr, date, carpool_user_id, photo_proof } = req.body;
     if (!type || !CO2_RATES[type])
       return res.status(400).json({ error: 'Tipo attività non valido' });
 
@@ -889,7 +889,7 @@ app.post('/api/activities', auth, async (req, res) => {
     let kmVal = parseFloat(km) || 0;
     let hoursVal = parseFloat(hours) || 0;
     const rate = CO2_RATES[type];
-    const limit = MAX_LIMITS[type] || { max: 9999 }; // Default fallback
+    const limit = MAX_LIMITS[type] || { max: 9999 };
 
     if (rate.type === 'km') {
       if (kmVal <= 0) return res.status(400).json({ error: 'Valore non valido (deve essere maggiore di 0)' });
@@ -912,8 +912,8 @@ app.post('/api/activities', auth, async (req, res) => {
     let activityDate = 'NOW()';
     let queryParams = [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean];
 
-    if (req.body.date) {
-      const d = new Date(req.body.date);
+    if (date) {
+      const d = new Date(date);
       if (!isNaN(d.getTime())) {
         if (d > new Date()) {
           return res.status(400).json({ error: 'Non puoi registrare attività nel futuro!' });
@@ -921,11 +921,17 @@ app.post('/api/activities', auth, async (req, res) => {
         activityDate = '$10';
         queryParams.push(d);
       }
+    } else {
+      queryParams.push(new Date());
+      activityDate = '$10';
     }
 
+    queryParams.push(photo_proof || null);
+    const photoParam = '$11';
+
     await db.query(
-      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr,date)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,${activityDate})`,
+      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr,date,photo_proof)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,${activityDate},${photoParam})`,
       queryParams
     );
 

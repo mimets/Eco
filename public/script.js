@@ -633,6 +633,30 @@ function updateActivityPreview() {
 }
 window.updateActivityPreview = updateActivityPreview;
 
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview = document.getElementById('photoPreview');
+    const img = document.getElementById('previewImg');
+    if (preview && img) {
+      img.src = e.target.result;
+      preview.style.display = 'inline-block';
+    }
+  };
+  reader.readAsDataURL(file);
+}
+window.previewPhoto = previewPhoto;
+
+function removePhoto() {
+  const input = document.getElementById('actPhoto');
+  const preview = document.getElementById('photoPreview');
+  if (input) input.value = '';
+  if (preview) preview.style.display = 'none';
+}
+window.removePhoto = removePhoto;
+
 // ═══════════════════════════════════════════
 // SAVE ACTIVITY
 // ═══════════════════════════════════════════
@@ -652,12 +676,31 @@ async function saveActivity() {
 
   const carpoolUserId = document.getElementById('carpoolUserId')?.value || '';
 
+  const photoInput = document.getElementById('actPhoto');
+  let photoProof = null;
+  if (photoInput && photoInput.files[0]) {
+    // Read photo as base64
+    photoProof = await new Promise(res => {
+      const reader = new FileReader();
+      reader.onload = e => res(e.target.result);
+      reader.readAsDataURL(photoInput.files[0]);
+    });
+  }
+
+  if (!photoProof) {
+    showNotification('Devi caricare una foto prova per questa attività!', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Salva attività';
+    return;
+  }
+
   const data = await apiRequest('/api/activities', 'POST', {
     type: currentActivityType, km, hours,
     note: document.getElementById('actNote')?.value || '',
     from_addr: document.getElementById('fromAddr')?.value || '',
     to_addr: document.getElementById('toAddr')?.value || '',
     date: document.getElementById('actDate')?.value || null,
+    photo_proof: photoProof,
     carpool_user_id: carpoolUserId ? parseInt(carpoolUserId) : null
   });
 
@@ -676,6 +719,7 @@ async function saveActivity() {
       else el.value = '';
     }
   });
+  removePhoto();
   document.getElementById('activitySummary').style.display = 'none';
   document.getElementById('saveActivityBtn').disabled = true;
   document.querySelectorAll('.activity-type-btn').forEach(b => b.classList.remove('active'));
@@ -710,6 +754,7 @@ async function loadActivities() {
         <strong>${escapeHtml(a.type)}</strong>
         <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + escapeHtml(a.note) : ''} · ${timeAgo(a.date)}</small>
         ${a.date ? `<br><small style="color:var(--gray-400)">${new Date(a.date).toLocaleDateString()}</small>` : ''}
+        ${a.photo_proof ? `<img src="${a.photo_proof}" class="activity-proof-img" onclick="window.open(this.src)" title="Vedi prova originale" />` : ''}
       </div>
       <div class="act-meta">
         <div class="act-co2">-${a.co2_saved} kg</div>
