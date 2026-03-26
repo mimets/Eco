@@ -679,7 +679,6 @@ async function saveActivity() {
   const photoInput = document.getElementById('actPhoto');
   let photoProof = null;
   if (photoInput && photoInput.files[0]) {
-    // Read photo as base64
     photoProof = await new Promise(res => {
       const reader = new FileReader();
       reader.onload = e => res(e.target.result);
@@ -687,8 +686,10 @@ async function saveActivity() {
     });
   }
 
-  if (!photoProof) {
-    showNotification('Devi caricare una foto prova per questa attività!', 'error');
+  // Comodità: la foto è obbligatoria solo per attività che danno molti punti (>20)
+  const pts = Math.round((['km', 'kg', 'count'].includes(rate.type) ? km : hours) * rate.points);
+  if (pts > 20 && !photoProof) {
+    showNotification('Foto prova obbligatoria per attività sopra i 20 punti!', 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> Salva attività';
     return;

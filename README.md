@@ -25,19 +25,25 @@ EcoTrack è una soluzione mobile (PWA) per il monitoraggio dell'impronta di carb
    npm install
    ```
 
-3. Configura le variabili d'ambiente (.env):
+## Configurazione Email (SMTP)
+
+Per inviare email di verifica e recupero password, hai due opzioni:
+
+### 1. Senza Dominio (Gmail - Demo/MVP)
+Puoi usare un account Gmail personale:
+1. Vai su [Google Account Security](https://myaccount.google.com/security).
+2. Attiva la **Verifica in due passaggi**.
+3. Cerca "Password per le app" e creane una per EcoTrack.
+4. Usa queste variabili in Render/.env:
    ```env
-   DATABASE_URL=postgres://user:pass@localhost:5432/ecotrack
-   JWT_SECRET=il_tuo_segreto
-   PORT=3000
-   ADMIN_PASSWORD=la_tua_password_admin
+   MAIL_USER=tua_email@gmail.com
+   MAIL_PASS=password_app_generata
    ```
 
-4. Avvia il server:
-   ```bash
-   npm start
-   ```
-   L'app sarà disponibile su `http://localhost:3000`.
+### 2. Con Dominio (Produzione)
+Usa un servizio come **Resend**, **SendGrid** o **Brevo**. Richiede l'aggiunta di record DNS (TXT/CNAME) al tuo dominio per verificare la proprietà e prevenire lo spam.
+
+---
 
 ## Documentazione
 - [Documentazione API](README_API.md)
