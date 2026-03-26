@@ -13,6 +13,7 @@ let allShopItems = [];
 let currentShopCategory = 'all';
 let tutorialStep = 1;
 let socket = null;
+let aiModel = null;
 
 window.confirmCallback = null;
 
@@ -633,27 +634,86 @@ function updateActivityPreview() {
 }
 window.updateActivityPreview = updateActivityPreview;
 
-function previewPhoto(input) {
+async function previewPhoto(input) {
   const file = input.files[0];
   if (!file) return;
+
+  const status = document.getElementById('aiStatus');
+  const msg = document.getElementById('aiMsg');
+  const icon = document.getElementById('aiIcon');
+  if (status) {
+    status.style.display = 'flex';
+    status.className = 'ai-status';
+    msg.textContent = 'Analisi AI in corso...';
+    icon.textContent = '⏳';
+  }
+
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const preview = document.getElementById('photoPreview');
     const img = document.getElementById('previewImg');
     if (preview && img) {
       img.src = e.target.result;
       preview.style.display = 'inline-block';
+
+      // RUN AI VERIFICATION
+      try {
+        if (!aiModel) {
+          msg.textContent = 'Caricamento modello AI...';
+          aiModel = await mobilenet.load();
+        }
+        
+        // Wait for image to load in DOM to get dimensions
+        img.onload = async () => {
+          const predictions = await aiModel.classify(img);
+          console.log('AI Predictions:', predictions);
+          const isMatch = checkAIMatch(predictions, currentActivityType);
+          
+          if (isMatch) {
+            status.className = 'ai-status success';
+            msg.textContent = 'Verificato: la foto corrisponde all\'attività! ✅';
+            icon.textContent = '🤖';
+          } else {
+            status.className = 'ai-status error';
+            msg.textContent = 'Attenzione: la foto non sembra corrispondere all\'attività. ⚠️';
+            icon.textContent = '🚫';
+          }
+        };
+      } catch (err) {
+        console.error('AI Error:', err);
+        msg.textContent = 'Errore verifica AI (ma puoi procedere)';
+      }
     }
   };
   reader.readAsDataURL(file);
 }
 window.previewPhoto = previewPhoto;
 
+const AI_KEYWORDS = {
+  'Bici': ['bicycle', 'bike', 'velocipede', 'mountain bike', 'cycling'],
+  'Treno': ['train', 'passenger car', 'locomotive', 'railway', 'subway', 'metro'],
+  'Bus': ['bus', 'school bus', 'trolleybus', 'minibus', 'shuttle'],
+  'Carpooling': ['car', 'automobile', 'cab', 'taxi', 'vehicle', 'van'],
+  'Pasto Veg': ['food', 'salad', 'vegetable', 'dish', 'plate', 'meal', 'fruit', 'soup'],
+  'Riciclo': ['bottle', 'plastic', 'trash', 'can', 'container', 'recycling', 'bin'],
+  'Energia': ['light', 'bulb', 'switch', 'solar', 'panel', 'battery', 'meter']
+};
+
+function checkAIMatch(predictions, type) {
+  if (!type || !AI_KEYWORDS[type]) return true; // Default to true if type not mapped
+  const keywords = AI_KEYWORDS[type];
+  return predictions.some(p => 
+    keywords.some(k => p.className.toLowerCase().includes(k))
+  );
+}
+
 function removePhoto() {
   const input = document.getElementById('actPhoto');
   const preview = document.getElementById('photoPreview');
+  const status = document.getElementById('aiStatus');
   if (input) input.value = '';
   if (preview) preview.style.display = 'none';
+  if (status) status.style.display = 'none';
 }
 window.removePhoto = removePhoto;
 
@@ -671,6 +731,17 @@ async function saveActivity() {
   if (rate.type === 'hours' && hours <= 0) { showNotification('Inserisci le ore', 'error'); return; }
 
   const btn = document.getElementById('saveActivityBtn');
+  const pts = Math.round((['km', 'kg', 'count'].includes(rate.type) ? km : hours) * rate.points);
+
+  const aiStatus = document.getElementById('aiStatus');
+  if (pts > 20 && aiStatus && aiStatus.classList.contains('error')) {
+    showNotification('La verifica AI ha fallito: la foto non corrisponde all\'attività. Prova con un\'altra foto!', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Salva attività';
+    return;
+  }
+
+  const btnText = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio...';
 
@@ -687,7 +758,6 @@ async function saveActivity() {
   }
 
   // Comodità: la foto è obbligatoria solo per attività che danno molti punti (>20)
-  const pts = Math.round((['km', 'kg', 'count'].includes(rate.type) ? km : hours) * rate.points);
   if (pts > 20 && !photoProof) {
     showNotification('Foto prova obbligatoria per attività sopra i 20 punti!', 'error');
     btn.disabled = false;
