@@ -909,10 +909,24 @@ app.post('/api/activities', auth, async (req, res) => {
     const co2 = calcCo2(type, kmVal, hoursVal);
     const points = calcPoints(type, kmVal, hoursVal);
 
+    let activityDate = 'NOW()';
+    let queryParams = [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean];
+
+    if (req.body.date) {
+      const d = new Date(req.body.date);
+      if (!isNaN(d.getTime())) {
+        if (d > new Date()) {
+          return res.status(400).json({ error: 'Non puoi registrare attività nel futuro!' });
+        }
+        activityDate = '$10';
+        queryParams.push(d);
+      }
+    }
+
     await db.query(
-      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [req.user.id, type, kmVal, hoursVal, co2, points, noteClean, fromAddrClean, toAddrClean]
+      `INSERT INTO activities (user_id,type,km,hours,co2_saved,points,note,from_addr,to_addr,date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,${activityDate})`,
+      queryParams
     );
 
     // DAILY STREAK LOGIC

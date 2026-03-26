@@ -374,7 +374,11 @@ async function showSection(section) {
 
   switch (section) {
     case 'dashboard': await loadDashboard(); break;
-    case 'activities': await loadActivities(); break;
+    case 'activities': 
+      const dt = document.getElementById('actDate');
+      if (dt && !dt.value) dt.value = new Date().toISOString().split('T')[0];
+      await loadActivities(); 
+      break;
     case 'challenges': await loadChallenges(); break;
     case 'leaderboard': await loadLeaderboard(); break;
     case 'social': await loadSocial(); break;
@@ -653,6 +657,7 @@ async function saveActivity() {
     note: document.getElementById('actNote')?.value || '',
     from_addr: document.getElementById('fromAddr')?.value || '',
     to_addr: document.getElementById('toAddr')?.value || '',
+    date: document.getElementById('actDate')?.value || null,
     carpool_user_id: carpoolUserId ? parseInt(carpoolUserId) : null
   });
 
@@ -665,8 +670,11 @@ async function saveActivity() {
   if (data.streakBonus) msg += ` (🔥 +${data.streakBonus} pt Streak!)`;
   showNotification(msg, 'success');
 
-  ['actKm', 'actHours', 'actNote', 'fromAddr', 'toAddr'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
+  ['actKm', 'actHours', 'actNote', 'fromAddr', 'toAddr', 'actDate'].forEach(id => {
+    const el = document.getElementById(id); if (el) {
+      if (id === 'actDate') el.value = new Date().toISOString().split('T')[0];
+      else el.value = '';
+    }
   });
   document.getElementById('activitySummary').style.display = 'none';
   document.getElementById('saveActivityBtn').disabled = true;
@@ -679,13 +687,18 @@ async function saveActivity() {
     updateSidebar(myProfile);
   }
   await loadActivities();
+  await loadDashboard(); // refresh dash too
 }
 window.saveActivity = saveActivity;
 
 async function loadActivities() {
-  const data = await apiRequest('/api/activities');
+  if (!token) return;
   const container = document.getElementById('actList');
   if (!container) return;
+  
+  container.innerHTML = `<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Caricamento...</div>`;
+
+  const data = await apiRequest('/api/activities');
   if (data.error || !data.length) {
     container.innerHTML = `<div class="empty-state"><span>🌱</span><p>Nessuna attività registrata</p></div>`;
     return;
@@ -696,6 +709,7 @@ async function loadActivities() {
       <div class="act-info">
         <strong>${escapeHtml(a.type)}</strong>
         <small>${a.km ? a.km + ' km' : ''}${a.hours ? a.hours + ' ore' : ''}${a.note ? ' · ' + escapeHtml(a.note) : ''} · ${timeAgo(a.date)}</small>
+        ${a.date ? `<br><small style="color:var(--gray-400)">${new Date(a.date).toLocaleDateString()}</small>` : ''}
       </div>
       <div class="act-meta">
         <div class="act-co2">-${a.co2_saved} kg</div>
