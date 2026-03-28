@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // ═══════════════════════════════════════════
 // GLOBALS
@@ -17,12 +17,15 @@ let aiModel = null;
 
 window.confirmCallback = null;
 
-let miiState = {
+const miiState = {
   color: '#16a34a',
   skin: '#fde68a',
   eyes: 'normal',
   mouth: 'smile',
-  hair: 'none'
+  hair: 'none',
+  top: 'none',
+  bottom: 'none',
+  shoes: 'none'
 };
 
 const CO2_RATES = {
@@ -142,6 +145,28 @@ function togglePassword(inputId, btn) {
   if (icon) icon.className = input.type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
 }
 window.togglePassword = togglePassword;
+
+const sections = [
+  'dashboard', 'activity', 'leaderboard', 'social', 'shop', 'settings',
+  'avatar', 'profile', 'admin', 'notifiche', 'teams', 'ai-advisor'
+];
+
+function showSection(id) {
+  sections.forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.style.display = (s === id) ? 'block' : 'none';
+  });
+  
+  // Sidebar links
+  document.querySelectorAll('.menu-link').forEach(link => {
+    link.classList.toggle('active', link.getAttribute('onclick')?.includes(`'${id}'`));
+  });
+
+  if (id === 'leaderboard') loadLeaderboard('global');
+  if (id === 'teams') loadMyTeam();
+  if (id === 'admin') loadAdminPanel();
+}
+window.showSection = showSection;
 
 function checkPasswordStrength(pw) {
   const ok = {
@@ -1329,149 +1354,108 @@ function syncMiiState(user) {
   miiState.eyes = user.avatar_eyes || 'normal';
   miiState.mouth = user.avatar_mouth || 'smile';
   miiState.hair = user.avatar_hair || 'none';
+  miiState.top = user.avatar_top || 'none';
+  miiState.bottom = user.avatar_bottom || 'none';
+  miiState.shoes = user.avatar_shoes || 'none';
+  
   drawMii(miiState, 'sidebarAvatar', 48);
-  if (document.getElementById('miiCanvas')) drawMii(miiState, 'miiCanvas', 200);
+  if (document.getElementById('miiCanvas')) drawMii(miiState, 'miiCanvas', 200, true);
 }
 
-function drawMii(state, canvasId, size = 120) {
-  // Check for 3D container first
-  const container3d = document.getElementById(canvasId + '-3d');
-  if (container3d) {
-      if (typeof ThreeEngine !== 'undefined' && ThreeEngine.updateAvatar) {
-          ThreeEngine.updateAvatar(state, canvasId + '-3d');
-          return;
-      }
-  }
-
+function drawMii(state, canvasId, size = 120, fullBody = false) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
+  
   canvas.width = size;
-  canvas.height = size;
-  const cx = size / 2, cy = size / 2;
-  const hr = size * 0.28; // Head radius slightly smaller to fit bust
-
-  ctx.clearRect(0, 0, size, size);
-
-  // 1. BACKGROUND CIRCLE
-  ctx.beginPath();
-  ctx.arc(cx, cy, size * 0.48, 0, Math.PI * 2);
-  ctx.fillStyle = state.color || '#16a34a';
-  ctx.fill();
-
-  // 2. SHOULDERS & NECK (The "Bust")
-  ctx.fillStyle = state.skin || '#fde68a';
+  canvas.height = fullBody ? size * 1.5 : size;
   
-  // Shoulders
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + hr * 1.6, hr * 1.5, hr * 0.8, 0, 0, Math.PI, true);
-  ctx.fill();
+  const cx = size / 2;
+  const hr = size * 0.22; 
+  const cy = fullBody ? hr * 1.2 : size / 2; 
   
-  // Neck
-  ctx.beginPath();
-  ctx.rect(cx - hr * 0.3, cy + hr * 0.5, hr * 0.6, hr * 0.6);
-  ctx.fill();
-  
-  // Neck Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.1)';
-  ctx.beginPath();
-  ctx.arc(cx, cy + hr * 0.8, hr * 0.4, 0, Math.PI, true);
-  ctx.fill();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 3. EARS
-  ctx.fillStyle = state.skin || '#fde68a';
-  [-1, 1].forEach(dir => {
+  // 1. BACKGROUND CIRCLE (only for bust)
+  if (!fullBody) {
     ctx.beginPath();
-    ctx.arc(cx + dir * hr * 1.05, cy + hr * 0.1, hr * 0.25, 0, Math.PI * 2);
+    ctx.arc(cx, size/2, size * 0.48, 0, Math.PI * 2);
+    ctx.fillStyle = state.color || '#16a34a';
     ctx.fill();
-  });
+  }
 
-  // 4. FACE (Head) with 3D Radial Gradient
+  // 2. FULL BODY (LEGS & FEET)
+  if (fullBody) {
+    ctx.fillStyle = state.skin || '#fde68a';
+    ctx.fillRect(cx - hr * 0.6, cy + hr * 2.8, hr * 0.45, hr * 1.2); // Leg L
+    ctx.fillRect(cx + hr * 0.15, cy + hr * 2.8, hr * 0.45, hr * 1.2); // Leg R
+    
+    if (state.bottom && state.bottom !== 'none') {
+        ctx.fillStyle = (state.bottom === 'Blue Jeans') ? '#3b82f6' : '#1e293b';
+        ctx.fillRect(cx - hr * 0.65, cy + hr * 2.3, hr * 1.3, hr * 0.8);
+        ctx.fillRect(cx - hr * 0.65, cy + hr * 2.4, hr * 0.5, hr * 1.5);
+        ctx.fillRect(cx + hr * 0.15, cy + hr * 2.4, hr * 0.5, hr * 1.5);
+    }
+    if (state.shoes && state.shoes !== 'none') {
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.roundRect(cx - hr * 0.8, cy + hr * 3.8, hr * 0.6, hr * 0.3, 5);
+        ctx.roundRect(cx + hr * 0.2, cy + hr * 3.8, hr * 0.6, hr * 0.3, 5);
+        ctx.fill();
+    }
+  }
+
+  // 3. TORSO
+  ctx.fillStyle = state.skin || '#fde68a';
+  if (fullBody) {
+    ctx.fillRect(cx - hr * 0.7, cy + hr * 0.8, hr * 1.4, hr * 1.8);
+    ctx.fillRect(cx - hr * 1.2, cy + hr * 1, hr * 0.4, hr * 1.5); // Arm L
+    ctx.fillRect(cx + hr * 0.8, cy + hr * 1, hr * 0.4, hr * 1.5); // Arm R
+  } else {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + hr * 1.6, hr * 1.5, hr * 0.8, 0, 0, Math.PI, true);
+    ctx.fill();
+    ctx.fillRect(cx - hr * 0.3, cy + hr * 0.5, hr * 0.6, hr * 0.6); // Neck
+  }
+  
+  if (state.top && state.top !== 'none') {
+      ctx.fillStyle = (state.top === 'T-Shirt Green') ? '#22c55e' : '#6366f1';
+      ctx.fillRect(cx - hr * 0.75, cy + hr * 0.9, hr * 1.5, hr * 1.6);
+      ctx.fillRect(cx - hr * 1.25, cy + hr * 0.95, hr * 0.45, hr * 0.8);
+      ctx.fillRect(cx + hr * 0.8, cy + hr * 0.95, hr * 0.45, hr * 0.8);
+  }
+
+  // 4. HEAD
   const faceGrad = ctx.createRadialGradient(cx - hr * 0.3, cy - hr * 0.3, hr * 0.1, cx, cy, hr * 1.2);
   faceGrad.addColorStop(0, lightenColor(state.skin || '#fde68a', 15));
-  faceGrad.addColorStop(0.7, state.skin || '#fde68a');
   faceGrad.addColorStop(1, darkenColor(state.skin || '#fde68a', 10));
-  
+  ctx.fillStyle = faceGrad;
   ctx.beginPath();
   ctx.arc(cx, cy, hr, 0, Math.PI * 2);
-  ctx.fillStyle = faceGrad;
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // 5. NOSE BRIDGE (Subtle shadow)
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - hr * 0.2);
-  ctx.lineTo(cx - hr * 0.1, cy + hr * 0.1);
-  ctx.lineTo(cx + hr * 0.1, cy + hr * 0.1);
   ctx.fill();
 
-  // 6. HAIR RENDERING (Detailed)
+  // 5. HAIR
   ctx.fillStyle = '#1f2937';
   if (state.hair === 'long') {
     ctx.beginPath();
     ctx.ellipse(cx, cy + hr * 0.3, hr * 1.1, hr * 1.4, 0, 0, Math.PI * 2);
     ctx.fill();
   } else if (state.hair === 'bun') {
-    ctx.beginPath();
-    ctx.arc(cx, cy - hr * 1.1, hr * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  if (state.hair === 'short') {
-    ctx.beginPath();
-    ctx.arc(cx, cy - hr * 0.3, hr * 1.1, Math.PI, 0);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy - hr * 1.1, hr * 0.4, 0, Math.PI * 2); ctx.fill();
+  } else if (state.hair === 'short') {
+    ctx.beginPath(); ctx.arc(cx, cy - hr * 0.3, hr * 1.1, Math.PI, 0); ctx.fill();
   } else if (state.hair === 'curly') {
     for (let i = -1.2; i <= 1.2; i += 0.4) {
-      ctx.beginPath();
-      ctx.arc(cx + i * hr * 0.8, cy - hr * 0.9, hr * 0.35, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (state.hair === 'spiky') {
-    ctx.beginPath();
-    for (let i = -3; i <= 3; i++) {
-        const x = cx + i * hr * 0.3;
-        const y = cy - hr * 0.8;
-        ctx.moveTo(x - hr * 0.15, y);
-        ctx.lineTo(x, y - hr * 0.5);
-        ctx.lineTo(x + hr * 0.15, y);
-    }
-    ctx.fill();
-  } else if (state.hair === 'flame') {
-    for (let i = -3; i <= 3; i++) {
-      ctx.fillStyle = i % 2 === 0 ? '#ef4444' : '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(cx + i * hr * 0.25, cy - hr * 0.6);
-      ctx.quadraticCurveTo(cx + i * hr * 0.4, cy - hr * 1.7, cx + (i + 1) * hr * 0.2, cy - hr * 0.8);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + i * hr * 0.8, cy - hr * 0.9, hr * 0.35, 0, Math.PI * 2); ctx.fill();
     }
   }
 
-  // 7. EYES
+  // 6. EYES
   const eyeY = cy - hr * 0.15;
   const eyeX = hr * 0.4;
   const eyeS = hr * 0.15;
   ctx.fillStyle = '#1f2937';
-
-  if (state.eyes === 'happy') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, Math.PI, 0); ctx.stroke(); });
-  } else if (state.eyes === 'sleepy') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI); ctx.stroke(); });
-  } else if (state.eyes === 'surprised') {
-    [-1, 1].forEach(dir => { ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS * 1.3, 0, Math.PI * 2); ctx.fill(); });
-  } else if (state.eyes === 'wink') {
-    ctx.beginPath(); ctx.arc(cx - eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = size * 0.02;
-    ctx.beginPath(); ctx.moveTo(cx + eyeX - eyeS, eyeY); ctx.lineTo(cx + eyeX + eyeS, eyeY); ctx.stroke();
-  } else if (state.eyes === 'cool') {
-    ctx.fillStyle = '#111';
-    ctx.fillRect(cx - eyeX * 1.6, eyeY - eyeS * 0.8, eyeX * 3.2, eyeS * 1.2);
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.fillRect(cx - eyeX * 1.6, eyeY - eyeS * 0.8, eyeX * 3.2, eyeS * 0.4);
-  } else if (state.eyes === 'star') {
+  if (state.eyes === 'star') {
     ctx.fillStyle = '#f59e0b';
     [-1, 1].forEach(dir => drawStar(ctx, cx + dir * eyeX, eyeY, 5, eyeS * 1.4, eyeS * 0.6));
   } else if (state.eyes === 'heart') {
@@ -1479,50 +1463,19 @@ function drawMii(state, canvasId, size = 120) {
     [-1, 1].forEach(dir => drawHeart(ctx, cx + dir * eyeX, eyeY, eyeS * 1.2));
   } else {
     [-1, 1].forEach(dir => {
-      ctx.fillStyle = '#1f2937';
       ctx.beginPath(); ctx.arc(cx + dir * eyeX, eyeY, eyeS, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.arc(cx + dir * eyeX - eyeS * 0.3, eyeY - eyeS * 0.3, eyeS * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1f2937';
     });
   }
 
-  // 8. MOUTH
+  // 7. MOUTH
   const mouthY = cy + hr * 0.4;
   const mouthR = hr * 0.3;
   ctx.strokeStyle = '#1f2937';
   ctx.lineWidth = size * 0.02;
-
-  if (state.mouth === 'grin') {
-    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
-    ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.fillRect(cx - mouthR + 4, mouthY, mouthR * 2 - 8, 4);
-  } else if (state.mouth === 'open') {
-    ctx.beginPath(); ctx.ellipse(cx, mouthY, mouthR * 0.6, mouthR * 0.8, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#450a0a'; ctx.fill(); ctx.stroke();
-  } else if (state.mouth === 'smirk') {
-    ctx.beginPath(); ctx.moveTo(cx - mouthR * 0.5, mouthY);
-    ctx.quadraticCurveTo(cx, mouthY + 5, cx + mouthR * 0.8, mouthY - 5); ctx.stroke();
-  } else if (state.mouth === 'sad') {
-    ctx.beginPath(); ctx.arc(cx, mouthY + mouthR * 0.5, mouthR, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke();
-  } else if (state.mouth === 'rainbow') {
-    ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6'].forEach((color, i) => {
-      ctx.strokeStyle = color; ctx.lineWidth = size * 0.015;
-      ctx.beginPath(); ctx.arc(cx, mouthY, mouthR - i * 2, 0, Math.PI); ctx.stroke();
-    });
-  } else if (state.mouth === 'fire') {
-    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR, 0, Math.PI);
-    ctx.fillStyle = '#f59e0b'; ctx.fill(); ctx.stroke();
-    for (let i = -1; i <= 1; i++) {
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 8, mouthY);
-        ctx.lineTo(cx + i * 8 - 4, mouthY + 12);
-        ctx.lineTo(cx + i * 8 + 4, mouthY + 12);
-        ctx.fill();
-    }
-  } else {
-    ctx.beginPath(); ctx.arc(cx, mouthY, mouthR * 0.8, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
-  }
+  ctx.beginPath(); ctx.arc(cx, mouthY, mouthR * 0.8, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke();
 }
 
 // Helpers for 3D skin shading
@@ -1612,6 +1565,24 @@ async function loadAvatarSection() {
     }).join('');
   }
 
+  // CLOTHING (Tops, Bottoms, Shoes)
+  const renderCat = (catId, field, shopList) => {
+    const el = document.getElementById(catId);
+    if (!el) return;
+    el.innerHTML = Object.entries(shopList).map(([key, label]) => {
+      const isFree = key === 'none';
+      const isOwned = isFree || hasItem(label);
+      if (isOwned) return `<button class="option-btn ${miiState[field] === label ? 'selected' : ''}" onclick="setAvatar${field.charAt(0).toUpperCase() + field.slice(1)}('${label}',this)">${label === 'none' ? '🚫 Niente' : label}</button>`;
+      return `<button class="option-btn" style="opacity:.4;cursor:not-allowed;">${label} 🔒</button>`;
+    }).join('');
+  };
+
+  renderCat('topOptions', 'top', { none: 'none', tshirt: 'T-Shirt Green', hoodie: 'Eco Hoodie' });
+  renderCat('bottomOptions', 'bottom', { none: 'none', jeans: 'Blue Jeans', shorts: 'Eco Shorts' });
+  renderCat('shoesOptions', 'shoes', { none: 'none', running: 'Running Shoes' });
+
+  drawMii(miiState, 'miiCanvas', 200, true);
+
   // OCCHI
   const eyeLabels = { normal: '😐 Normali', happy: '😊 Felici', sleepy: '😴 Assonnati', surprised: '😲 Sorpresi', wink: '😉 Occhiolino', cool: '😎 Cool', star: '⭐ Stella', heart: '❤️ Cuore' };
   const eyeShopMap = { star: 'Star Eyes', heart: 'Heart Eyes', cool: 'Laser Eyes', happy: 'Occhi Felici', sleepy: 'Occhi Assonnati', surprised: 'Occhi Sorpresi', wink: 'Occhi Occhiolino' };
@@ -1642,23 +1613,32 @@ async function loadAvatarSection() {
     }).join('');
   }
 
-  drawMii(miiState, 'miiCanvas', 200);
+  drawMii(miiState, 'miiCanvas', 200, true);
 }
 
 
 async function saveAvatar() {
-  const data = await apiRequest('/api/profile/avatar', 'PUT', {
-    color: miiState.color, skin: miiState.skin,
-    eyes: miiState.eyes, mouth: miiState.mouth, hair: miiState.hair
+  const data = await apiRequest('/api/profile', 'PUT', {
+    avatar_color: miiState.color, 
+    avatar_skin: miiState.skin,
+    avatar_eyes: miiState.eyes, 
+    avatar_mouth: miiState.mouth, 
+    avatar_hair: miiState.hair,
+    avatar_top: miiState.top,
+    avatar_bottom: miiState.bottom,
+    avatar_shoes: miiState.shoes
   });
   if (data.error) { showNotification(data.error, 'error'); return; }
   if (myProfile) {
-    myProfile.avatar_color = miiState.color; myProfile.avatar_skin = miiState.skin;
-    myProfile.avatar_eyes = miiState.eyes; myProfile.avatar_mouth = miiState.mouth;
-    myProfile.avatar_hair = miiState.hair;
+    Object.assign(myProfile, {
+      avatar_color: miiState.color, avatar_skin: miiState.skin,
+      avatar_eyes: miiState.eyes, avatar_mouth: miiState.mouth,
+      avatar_hair: miiState.hair, avatar_top: miiState.top,
+      avatar_bottom: miiState.bottom, avatar_shoes: miiState.shoes
+    });
+    updateSidebar(myProfile);
   }
   showNotification('✅ Avatar salvato!', 'success');
-  drawMii(miiState, 'sidebarAvatar', 48);
 }
 window.saveAvatar = saveAvatar;
 
@@ -1698,9 +1678,33 @@ function setAvatarMouth(val, btn) {
   miiState.mouth = val;
   document.querySelectorAll('#mouthOptions .option-btn').forEach(b => b.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
-  drawMii(miiState, 'miiCanvas', 200);
+  drawMii(miiState, 'miiCanvas', 200, true);
 }
 window.setAvatarMouth = setAvatarMouth;
+
+function setAvatarTop(val, btn) {
+  miiState.top = val;
+  document.querySelectorAll('#topOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200, true);
+}
+window.setAvatarTop = setAvatarTop;
+
+function setAvatarBottom(val, btn) {
+  miiState.bottom = val;
+  document.querySelectorAll('#bottomOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200, true);
+}
+window.setAvatarBottom = setAvatarBottom;
+
+function setAvatarShoes(val, btn) {
+  miiState.shoes = val;
+  document.querySelectorAll('#shoesOptions .option-btn').forEach(b => b.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+  drawMii(miiState, 'miiCanvas', 200, true);
+}
+window.setAvatarShoes = setAvatarShoes;
 
 // ═══════════════════════════════════════════
 // PROFILE
@@ -1838,9 +1842,15 @@ async function loadAdminPanel() {
 function switchAdminTab(tab) {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
-  document.querySelector(`.admin-tab[onclick*="${tab}"]`)?.classList.add('active');
-  document.getElementById(`adminTab${tab.charAt(0).toUpperCase() + tab.slice(1)}`)?.classList.add('active');
+  // Find button by onclick content
+  document.querySelectorAll('.admin-tab').forEach(btn => {
+      if (btn.getAttribute('onclick')?.includes(`'${tab}'`)) btn.classList.add('active');
+  });
+  const content = document.getElementById(`adminTab${tab.charAt(0).toUpperCase() + tab.slice(1)}`);
+  if (content) content.classList.add('active');
+  
   if (tab === 'users') loadAdminUsers();
+  if (tab === 'reports') loadAdminReports();
   if (tab === 'activities') loadAdminActivities();
   if (tab === 'posts') loadAdminPosts();
 }
@@ -1858,17 +1868,17 @@ async function loadAdminUsers() {
       <td style="font-size:12px;">${escapeHtml(u.email)}</td>
       <td>${u.points || 0}</td>
       <td>${parseFloat(u.co2_saved || 0).toFixed(1)}</td>
-      <td>${u.activity_count || 0}</td>
+      <td><span class="badge ${u.report_count >= 3 ? 'badge-danger' : u.report_count > 0 ? 'badge-warn' : ''}">${u.report_count || 0} / 3</span></td>
       <td><span class="badge-admin ${u.is_admin ? 'admin' : 'user'}">${u.is_admin ? '👑 Admin' : '👤 User'}</span></td>
-      <td><span class="badge-admin ${u.is_banned ? 'banned' : 'active'}">${u.is_banned ? '🔨 Bannato' : '✅ Attivo'}</span></td>
+      <td><span class="badge-admin ${u.is_locked ? 'banned' : 'active'}">${u.is_locked ? '🔒 Bloccato' : '✅ Attivo'}</span></td>
       <td>
         <div class="admin-actions">
-          <button class="btn-sm" onclick="openEditUser(${u.id})">✏️</button>
-          ${!u.is_banned
-      ? `<button class="btn-sm red" onclick="openBanModal(${u.id})">🔨 Ban</button>`
-      : `<button class="btn-sm green" onclick="unbanUser(${u.id})">✅ Unban</button>`
+          <button class="btn-sm" onclick="openEditUser(${u.id})" title="Modifica">✏️</button>
+          ${!u.is_locked
+      ? `<button class="btn-sm red" onclick="adminReportActionForUser(${u.id}, 'lock')" title="Blocca">🔒</button>`
+      : `<button class="btn-sm green" onclick="adminReportActionForUser(${u.id}, 'unlock')" title="Sblocca">🔓</button>`
     }
-          ${u.id !== myProfile?.id ? `<button class="btn-sm red" onclick="deleteUser(${u.id})">🗑️</button>` : ''}
+          ${u.id !== myProfile?.id ? `<button class="btn-sm red" onclick="deleteUser(${u.id})" title="Elimina">🗑️</button>` : ''}
         </div>
       </td>
     </tr>
@@ -2533,6 +2543,22 @@ async function createRide() {
 }
 window.createRide = createRide;
 
+async function createTeamItem() {
+    const name = document.getElementById('teamItemName').value;
+    const emoji = document.getElementById('teamItemEmoji').value;
+    const cost = document.getElementById('teamItemCost').value;
+    if (!name || !emoji || !cost) { showNotification('Riepli tutti i campi', 'error'); return; }
+    
+    const res = await apiRequest('/api/teams/items', 'POST', { name, emoji, cost: parseInt(cost) });
+    if (res.error) showNotification(res.error, 'error');
+    else {
+        showNotification('✅ Oggetto team creato!', 'success');
+        document.getElementById('teamItemName').value = '';
+        allShopItems = []; // Force refresh
+    }
+}
+window.createTeamItem = createTeamItem;
+
 async function joinRide(rideId) {
   if (!currentTeamId) return;
   const data = await apiRequest(`/api/teams/${currentTeamId}/rides/${rideId}/join`, 'POST');
@@ -2578,19 +2604,19 @@ function setupWebSockets() {
     if (postEl) postEl.textContent = likes_count;
   });
 
-  socket.on('update_comments', ({ id, comments_count }) => {
-    const postEl = document.querySelector(`.post-card[data-id="${id}"] .btn-comment span`);
-    if (postEl) postEl.textContent = comments_count;
-  });
-
   socket.on('new_team_message', ({ team_id, message }) => {
-    if (currentTeamId === team_id) {
-       // Se siamo nella chat del team, ricarica
-       loadTeamMessages(team_id);
+    if (window.currentTeamId === team_id) {
+      const chatList = document.getElementById('teamChatList');
+      if (chatList) {
+        const item = document.createElement('div');
+        item.className = 'chat-message';
+        item.innerHTML = '<strong>' + escapeHtml(message.author_name) + ':</strong> ' + escapeHtml(message.content);
+        chatList.appendChild(item);
+        chatList.scrollTop = chatList.scrollHeight;
+      }
     }
-    showNotification(`💬 Nuovo messaggio nel team da ${message.author_name}`, 'info');
+    showNotification('Nuovo messaggio nel team!', 'info');
   });
-
   socket.on('new_ride', ({ team_id, ride }) => {
     if (currentTeamId === team_id) {
        loadRides(team_id);
@@ -2605,7 +2631,139 @@ function setupWebSockets() {
   });
 }
 
+// ═══════════════════════════════════════════
+// TEAMS LOGIC
+// ═══════════════════════════════════════════
+async function loadMyTeam() {
+  const team = await apiRequest('/api/teams/my');
+  const noView = document.getElementById('no-team-view');
+  const infoView = document.getElementById('team-info-view');
+  const leaderCtrls = document.getElementById('leaderControls');
+  
+  if (team && noView && infoView) {
+    noView.style.display = 'none';
+    infoView.style.display = 'block';
+    document.getElementById('myTeamName').textContent = team.name;
+    document.getElementById('myTeamEmoji').textContent = team.emoji || '👥';
+    document.getElementById('teamMembers').textContent = team.member_count;
+    window.currentTeamId = team.id;
+    if (socket) socket.emit('join_team', team.id);
+    // Show leader controls if owner
+    if (myProfile && team.owner_id === myProfile.id) {
+        if (leaderCtrls) leaderCtrls.style.display = 'block';
+    } else {
+        if (leaderCtrls) leaderCtrls.style.display = 'none';
+    }
+  } else if (noView && infoView) {
+    noView.style.display = 'block';
+    infoView.style.display = 'none';
+  }
+}
+
+async function openTeamModal(type) {
+  const name = prompt(type === 'create' ? 'Nome del tuo nuovo team (min 3 car):' : 'Cerca il nome del team:');
+  if (!name) return;
+  
+  if (type === 'create') {
+    const res = await apiRequest('/api/teams', 'POST', { name });
+    if (res.id) {
+      showNotification('Team creato con successo! 🌱');
+      loadMyTeam();
+    }
+  } else {
+    const teams = await apiRequest(`/api/teams/search?q=${name}`);
+    if (teams.length) {
+      const confirmJoin = confirm(`Vuoi unirti al team ${teams[0].name}?`);
+      if (confirmJoin) {
+        await apiRequest('/api/teams/join', 'POST', { teamId: teams[0].id });
+        showNotification('Ti sei unito al team! 👥');
+        loadMyTeam();
+      }
+    } else {
+      showNotification('Nessun team trovato.', 'error');
+    }
+  }
+}
+window.openTeamModal = openTeamModal;
+
+async function loadLeaderboard(type = 'global', btn = null) {
+  const list = document.getElementById('leaderboardList');
+  if (!list) return;
+  list.innerHTML = '<div class="loading-spinner"></div>';
+  
+  if (btn) {
+    document.querySelectorAll('.lb-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  const endpoint = type === 'teams' ? '/api/leaderboard/teams' : '/api/leaderboard';
+  const data = await apiRequest(endpoint);
+  
+  if (!data.length) {
+    list.innerHTML = '<div class="empty-state"><span>🏆</span><p>Nessun dato</p></div>';
+    return;
+  }
+
+  list.innerHTML = data.map((item, i) => `
+    <div class="leaderboard-item">
+      <div class="lb-rank top${i+1}">${i+1}</div>
+      <div class="lb-info">
+        <strong>${item.name || item.username} ${item.emoji || ''}</strong>
+        <small>${type === 'teams' ? 'Team Collaborativo' : 'Individuale'}</small>
+      </div>
+      <div class="lb-stats">
+        <span class="lb-co2">${(item.total_co2 || item.co2_saved || 0).toFixed(1)}kg CO₂</span>
+        <span class="lb-pts">${Math.round(item.total_points || item.points || 0)}pt</span>
+      </div>
+    </div>
+  `).join('');
+}
+window.loadLeaderboard = loadLeaderboard;
+
+// ADMIN REPORTS
+async function loadAdminReports() {
+  const res = await apiRequest('/api/admin/reports');
+  const list = document.getElementById('adminReportsList'); // Match index.html
+  if (!list || res.error) return;
+  
+  list.innerHTML = res.map(r => `
+    <tr>
+      <td><strong>${escapeHtml(r.user_username)}</strong></td>
+      <td>AI Flag: ${escapeHtml(r.reason)}</td>
+      <td><span class="status-badge ${r.status}">${r.status}</span></td>
+      <td>${new Date(r.created_at).toLocaleString()}</td>
+      <td>
+        ${r.status === 'pending' ? `
+          <button class="btn-sm" style="background:#22c55e;color:#fff;border:none;margin-right:5px;cursor:pointer;padding:4px 8px;border-radius:4px;" onclick="adminReportAction(${r.id}, 'approve')">Accetta</button>
+          <button class="btn-sm" style="background:#ef4444;color:#fff;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;" onclick="adminReportAction(${r.id}, 'reject')">Rifiuta</button>
+        ` : '—'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function adminReportAction(id, action) {
+  if (!confirm(`Sei sicuro di voler ${action === 'approve' ? 'APPROVARE' : 'RIFIUTARE'} questo report?`)) return;
+  await apiRequest(`/api/admin/reports/${id}/action`, 'POST', { action });
+  loadAdminReports();
+}
+window.adminReportAction = adminReportAction;
+
+async function adminReportActionForUser(userId, action) {
+  const label = action === 'lock' ? 'BLOCCARE' : 'SBLOCCARE';
+  if (!confirm(`Sei sicuro di voler ${label} questo utente?`)) return;
+  
+  // Use existing strike-based logic or a direct lock
+  if (action === 'lock') {
+      await apiRequest(`/api/admin/users/${userId}/lock`, 'POST');
+  } else {
+      await apiRequest(`/api/admin/users/${userId}/unlock`, 'POST');
+  }
+  loadAdminUsers();
+}
+window.adminReportActionForUser = adminReportActionForUser;
+
 // Inizializzazione al caricamento
 document.addEventListener('DOMContentLoaded', () => {
   setupWebSockets();
-});
+});

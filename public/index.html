@@ -400,7 +400,6 @@
                 <input type="text" id="actNote" placeholder="Descrizione breve..." />
               </div>
 
-              <!-- Mappa -->
               <div id="mapSection" style="display:none;margin-top:18px;">
                 <label class="label-sm">📍 Partenza</label>
                 <div class="addr-wrap">
@@ -498,13 +497,18 @@
       <!-- ══════════════════════════ LEADERBOARD ══════════════════════════ -->
       <section id="leaderboard" class="tab-pane">
         <div class="section-header">
-          <h2>🏆 Classifica globale</h2>
+          <h2>🏆 Classifica</h2>
         </div>
         <div class="card">
-          <div class="card-body" id="lbList">
-            <div class="empty-state"><span>🏆</span>
-              <p>Nessun utente</p>
+          <div class="card-header">
+            <h3>Classifiche</h3>
+            <div class="lb-toggle">
+              <button class="active" onclick="loadLeaderboard('global', this)">Global</button>
+              <button onclick="loadLeaderboard('teams', this)">Team</button>
             </div>
+          </div>
+          <div class="card-body" id="leaderboardList">
+            <div class="loading-spinner"></div>
           </div>
         </div>
       </section>
@@ -551,12 +555,14 @@
           <span class="points-badge">⭐ <span id="shopPoints">0</span> pt</span>
         </div>
 
-        <!-- Categorie -->
         <div class="shop-categories">
           <button class="shop-cat-btn active" onclick="filterShop('all', this)">Tutti</button>
           <button class="shop-cat-btn" onclick="filterShop('hair', this)">💇 Capelli</button>
           <button class="shop-cat-btn" onclick="filterShop('eyes', this)">👀 Occhi</button>
           <button class="shop-cat-btn" onclick="filterShop('mouth', this)">👄 Bocca</button>
+          <button class="shop-cat-btn" onclick="filterShop('top', this)">👕 Maglie</button>
+          <button class="shop-cat-btn" onclick="filterShop('bottom', this)">👖 Pantaloni</button>
+          <button class="shop-cat-btn" onclick="filterShop('shoes', this)">👟 Scarpe</button>
           <button class="shop-cat-btn" onclick="filterShop('color', this)">🎨 Colori</button>
           <button class="shop-cat-btn" onclick="filterShop('accessory', this)">👑 Accessori</button>
         </div>
@@ -618,10 +624,26 @@
             </div>
             <div class="card">
               <div class="card-header">
-                <h3>👄 Bocca</h3>
+                <h3>👕 Maglie</h3>
               </div>
               <div class="card-body">
-                <div class="option-grid" id="mouthOptions"></div>
+                <div class="option-grid" id="topOptions"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>👖 Pantaloni</h3>
+              </div>
+              <div class="card-body">
+                <div class="option-grid" id="bottomOptions"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>👟 Scarpe</h3>
+              </div>
+              <div class="card-body">
+                <div class="option-grid" id="shoesOptions"></div>
               </div>
             </div>
           </div>
@@ -782,11 +804,34 @@
             <div style="display:flex;align-items:center;gap:12px;">
               <button class="btn-sm" onclick="backToTeams()"><i class="fas fa-arrow-left"></i> Indietro</button>
               <div>
-                <h2 id="teamDetailName">Team</h2>
-                <p id="teamDetailDesc" style="color:#64748b;font-size:13px;margin:0;"></p>
+                <h2 id="teamDetailName">Il Mio Team</h2>
+                <div style="display:flex; gap:8px; align-items:center;">
+                   <span id="myTeamEmoji" style="font-size:24px;">👥</span>
+                   <code id="teamInviteCode" style="background:#f1f5f9; padding:2px 6px; border-radius:4px;">CODE</code>
+                </div>
               </div>
             </div>
             <button id="teamLeaveBtn" class="btn-sm red">🚪 Lascia</button>
+          </div>
+
+          <!-- Leader Controls -->
+          <div id="leaderControls" class="card" style="display:none; margin-bottom:20px; border:2px solid var(--primary-light);">
+             <div class="card-header"><h3>👑 Gestione Leader</h3></div>
+             <div class="card-body">
+                <p style="font-size:14px; color:#64748b; margin-bottom:12px;">Crea oggetti esclusivi per i membri del tuo team!</p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <input type="text" id="teamItemName" placeholder="Nome oggetto (es. Corona Eco)">
+                  <input type="text" id="teamItemEmoji" placeholder="Emoji (es. 👑)">
+                  <input type="number" id="teamItemCost" placeholder="Costo in punti">
+                  <select id="teamItemCategory">
+                      <option value="accessory">Accessorio</option>
+                      <option value="top">Maglia</option>
+                      <option value="bottom">Pantaloni</option>
+                      <option value="shoes">Scarpe</option>
+                  </select>
+                </div>
+                <button class="btn-primary" onclick="createTeamItem()" style="width:100%; margin-top:12px;">Crea Oggetto Team</button>
+             </div>
           </div>
           <div class="stats-grid" style="margin-bottom:20px;">
             <div class="stat-card green">
@@ -902,7 +947,8 @@
             </div>
           </div>
         </div>
-      </div>
+          </div>
+        </div>
     </section>
 
       <!-- ══════════════════════════ ADMIN ══════════════════════════ -->
@@ -917,9 +963,35 @@
         <!-- Admin Tabs -->
         <div class="admin-tabs">
           <button class="admin-tab active" onclick="switchAdminTab('users')"><i class="fas fa-users"></i> Utenti</button>
+          <button class="admin-tab" onclick="switchAdminTab('reports')"><i class="fas fa-flag"></i> Segnalazioni</button>
           <button class="admin-tab" onclick="switchAdminTab('activities')"><i class="fas fa-leaf"></i> Attività</button>
           <button class="admin-tab" onclick="switchAdminTab('posts')"><i class="fas fa-newspaper"></i> Post</button>
           <button class="btn-sm" style="margin-left:auto;background:#3b82f6;color:#fff;" onclick="exportAdminCsv()"><i class="fas fa-download"></i> Export Storico</button>
+        </div>
+
+        <!-- Segnalazioni -->
+        <div id="adminTabReports" class="admin-tab-content">
+          <div class="card">
+            <div class="card-header">
+                <h3>🚩 Storico Segnalazioni & Strike</h3>
+            </div>
+            <div class="card-body">
+              <div class="table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Utente</th>
+                      <th>Motivo / AI Flag</th>
+                      <th>Strike / Stato</th>
+                      <th>Data</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminReportsList"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Utenti -->
