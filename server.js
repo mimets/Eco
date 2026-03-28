@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 require('dotenv').config();
 const express    = require('express');
 const cors       = require('cors');
@@ -478,7 +478,8 @@ async function auth(req, res, next) {
       return res.status(403).json({ error: 'Il tuo account è stato bloccato a causa di violazioni dei termini (3+ report confermati). ✨' });
     }
     next();
-  } catch {
+  } catch (err) {
+    console.warn(`🔒 Auth failed for ${req.ip}: ${err.message}`);
     return res.status(401).json({ error: 'Token non valido' });
   }
 }
