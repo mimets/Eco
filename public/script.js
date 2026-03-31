@@ -257,7 +257,7 @@ async function handleLogin(e) {
   await loadNotificationCount();
 
   if (!data.user.tutorial_done) setTimeout(() => showTutorial(), 800);
-  setInterval(loadNotificationCount, 30000);
+  realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 30000);
 
   showNotification(`Bentornato ${data.user.name || data.user.username}! 🌱`, 'success');
 }
@@ -333,6 +333,7 @@ window.handleResetPassword = handleResetPassword;
 
 function logout() {
   showConfirm('Logout', 'Sei sicuro di voler uscire?', () => {
+    stopAllRealtime();
     token = null; myProfile = null;
     localStorage.removeItem('ecotoken');
     document.getElementById('authContainer').style.display = 'flex';
@@ -2344,7 +2345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       syncMiiState(data);
       await loadDashboard();
       await loadNotificationCount();
-      setInterval(loadNotificationCount, 30000);
+      realtimeIntervals['notifCount'] = setInterval(loadNotificationCount, 30000);
     } else {
       token = null;
       localStorage.removeItem('ecotoken');
