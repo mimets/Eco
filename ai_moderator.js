@@ -31,18 +31,27 @@ class NaiveBayes {
   classify(text) {
     const tokens = this.tokenize(text);
     const vocabSize = this.vocab.size;
-    let bestLabel = null, bestScore = -Infinity;
+    let hasKnown = false;
+    for (const t of tokens) {
+      if (this.vocab.has(t)) hasKnown = true;
+    }
+    if (!hasKnown) return 'clean';
 
+    let scores = {};
     for (const [label, data] of Object.entries(this.classes)) {
       let score = Math.log(data.count / this.totalDocs);
       for (const t of tokens) {
+        if (!this.vocab.has(t)) continue;
         const count = data.wordCounts[t] || 0;
-        // Laplace smoothing
         score += Math.log((count + 1) / (data.totalWords + vocabSize));
       }
-      if (score > bestScore) { bestScore = score; bestLabel = label; }
+      scores[label] = score;
     }
-    return bestLabel;
+
+    if (scores['toxic'] > scores['clean']) {
+      return 'toxic';
+    }
+    return 'clean';
   }
 }
 
@@ -68,7 +77,10 @@ const cleanSamples = [
   "buonasera", "grazie mille", "molto interessante",
   "che bel treno", "mi piace correre", "la natura e bellissima", "buona fortuna",
   "ottima idea", "sono daccordo", "possiamo farcela", "grande lavoro",
-  "ho salvato co2 oggi", "bella esperienza nel parco"
+  "ho salvato co2 oggi", "bella esperienza nel parco",
+  "questo è un test", "sei un amico", "un bel progetto", "una bella cosa",
+  "il lo la i gli le un uno una", "di a da in con su per tra fra",
+  "che cosa chi come quando dove perche"
 ];
 
 toxicSamples.forEach(s => classifier.addDocument(s, 'toxic'));
