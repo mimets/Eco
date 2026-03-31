@@ -9,6 +9,7 @@ const nodemailer = require('nodemailer');
 const { Pool }   = require('pg');
 const path       = require('path');
 const http       = require('http');
+const { isProfane, sanitize } = require('./moderator');
 const { Server } = require('socket.io');
 
 // ═══════════════════════════════════════════
@@ -525,21 +526,12 @@ function isValidUsername(u) {
   return u && /^[a-z0-9_]{3,30}$/.test(u);
 }
 
-const BAD_WORDS = ['cazzo', 'merda', 'puttana', 'stronz', 'vaffanculo', 'bastard', 'troia', 'coglione', 'pompino', 'segone', 'frocio', 'negro', 'handicappato', 'ritardato'];
 function filterText(text) {
-  if (!text) return text;
-  let filtered = text;
-  for (const bw of BAD_WORDS) {
-    const reg = new RegExp('\\b' + bw + '[a-z]*\\b', 'gi');
-    filtered = filtered.replace(reg, '*'.repeat(bw.length));
-  }
-  return filtered;
+  return sanitize(text);
 }
 
 function hasInappropriateContent(text) {
-  if (!text) return false;
-  const t = text.toLowerCase();
-  return BAD_WORDS.some(bw => t.includes(bw));
+  return isProfane(text);
 }
 
 // ═══════════════════════════════════════════
