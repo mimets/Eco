@@ -867,6 +867,9 @@ app.get('/api/activities', auth, async (req, res) => {
 app.post('/api/activities', auth, async (req, res) => {
   try {
     const { type, km, hours, note, from_addr, to_addr, date, carpool_user_id, photo_proof } = req.body;
+    if ((note && isProfane(note)) || (from_addr && isProfane(from_addr)) || (to_addr && isProfane(to_addr))) {
+      return res.status(400).json({ error: 'Il contenuto contiene termini inappropriati.' });
+    }
     if (!type || !CO2_RATES[type])
       return res.status(400).json({ error: 'Tipo attività non valido' });
 
@@ -1182,6 +1185,9 @@ app.get('/api/challenges', auth, async (req, res) => {
 app.post('/api/challenges', auth, async (req, res) => {
   try {
     const { title, description, co2_target, points_reward, end_date, is_public } = req.body;
+    if ((title && isProfane(title)) || (description && isProfane(description))) {
+      return res.status(400).json({ error: 'Il contenuto contiene termini inappropriati.' });
+    }
     if (!title || title.trim().length < 3)
       return res.status(400).json({ error: 'Titolo troppo corto (min 3 caratteri)' });
     if (title.length > 100)
@@ -1242,6 +1248,9 @@ app.post('/api/social/posts', auth, async (req, res) => {
     const { content, image_url } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Contenuto mancante' });
     if (content.length > 1000) return res.status(400).json({ error: 'Post troppo lungo (max 1000 caratteri)' });
+    if (isProfane(content)) {
+      return res.status(400).json({ error: 'Il post contiene termini inappropriati o blasfemi.' });
+    }
     const { rows } = await db.query(
       "INSERT INTO posts (user_id,content,image_url,likes) VALUES ($1,$2,$3,'[]') RETURNING *",
       [req.user.id, filterText(content.trim()), (image_url || '').slice(0, 500)]
