@@ -10,6 +10,7 @@ const { Pool }   = require('pg');
 const path       = require('path');
 const http       = require('http');
 const { isProfane, sanitize } = require('./moderator');
+const { analyzePhoto } = require('./photo_moderator');
 const { Server } = require('socket.io');
 
 // ═══════════════════════════════════════════
@@ -941,6 +942,14 @@ app.post('/api/activities', auth, async (req, res) => {
       activityDate = '$10';
     }
 
+    // AI photo check for proof images
+    if (photo_proof) {
+      const photoCheck = await analyzePhoto(photo_proof);
+      if (!photoCheck.safe) {
+        return res.status(400).json({ error: `Foto prova non consentita: ${photoCheck.reason}` });
+      }
+    }
+
     queryParams.push(photo_proof || null);
     const photoParam = '$11';
 
@@ -1250,6 +1259,13 @@ app.post('/api/social/posts', auth, async (req, res) => {
     if (content.length > 1000) return res.status(400).json({ error: 'Post troppo lungo (max 1000 caratteri)' });
     if (isProfane(content)) {
       return res.status(400).json({ error: 'Il post contiene termini inappropriati o blasfemi.' });
+    }
+    // AI photo check
+    if (image_url) {
+      const photoCheck = await analyzePhoto(image_url);
+      if (!photoCheck.safe) {
+        return res.status(400).json({ error: `Immagine non consentita: ${photoCheck.reason}` });
+      }
     }
     const { rows } = await db.query(
       "INSERT INTO posts (user_id,content,image_url,likes) VALUES ($1,$2,$3,'[]') RETURNING *",
