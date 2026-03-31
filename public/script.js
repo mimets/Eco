@@ -700,8 +700,9 @@ const AI_KEYWORDS = {
 };
 
 function checkAIMatch(predictions, type) {
-  if (!type || !AI_KEYWORDS[type]) return true; // Default to true if type not mapped
+  if (!type || !AI_KEYWORDS[type]) return false; // Strict: if type not mapped, fail
   const keywords = AI_KEYWORDS[type];
+  // Check if any prediction label contains any of the required keywords
   return predictions.some(p => 
     keywords.some(k => p.className.toLowerCase().includes(k))
   );
@@ -734,8 +735,9 @@ async function saveActivity() {
   const pts = Math.round((['km', 'kg', 'count'].includes(rate.type) ? km : hours) * rate.points);
 
   const aiStatus = document.getElementById('aiStatus');
-  if (pts > 20 && aiStatus && aiStatus.classList.contains('error')) {
-    showNotification('La verifica AI ha fallito: la foto non corrisponde all\'attività. Prova con un\'altra foto!', 'error');
+  // Strict Photo Verification: Blocking ANY activity if AI says it doesn't match
+  if (photoInput && photoInput.files[0] && aiStatus && aiStatus.classList.contains('error')) {
+    showNotification('⚠️ Verifica AI fallita: la foto non sembra corrispondere all\'attività selezionata. Carica una foto valida per procedere!', 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> Salva attività';
     return;

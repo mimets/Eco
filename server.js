@@ -212,6 +212,7 @@ async function initDB() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_expiry BIGINT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token TEXT`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS verified INTEGER DEFAULT 1`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_activity_count INTEGER DEFAULT 0`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS from_addr TEXT DEFAULT ''`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS to_addr TEXT DEFAULT ''`,
     `ALTER TABLE activities ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''`,
@@ -524,15 +525,21 @@ function isValidUsername(u) {
   return u && /^[a-z0-9_]{3,30}$/.test(u);
 }
 
-const BAD_WORDS = ['cazzo', 'merda', 'puttana', 'stronz', 'vaffanculo', 'bastard', 'troia', 'coglione'];
+const BAD_WORDS = ['cazzo', 'merda', 'puttana', 'stronz', 'vaffanculo', 'bastard', 'troia', 'coglione', 'pompino', 'segone', 'frocio', 'negro', 'handicappato', 'ritardato'];
 function filterText(text) {
   if (!text) return text;
   let filtered = text;
   for (const bw of BAD_WORDS) {
-    const reg = new RegExp(bw, 'gi');
+    const reg = new RegExp('\\b' + bw + '[a-z]*\\b', 'gi');
     filtered = filtered.replace(reg, '*'.repeat(bw.length));
   }
   return filtered;
+}
+
+function hasInappropriateContent(text) {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return BAD_WORDS.some(bw => t.includes(bw));
 }
 
 // ═══════════════════════════════════════════
@@ -871,6 +878,22 @@ app.post('/api/activities', auth, async (req, res) => {
     if (!type || !CO2_RATES[type])
       return res.status(400).json({ error: 'Tipo attività non valido' });
 
+    if (hasInappropriateContent(note)) {
+      return res.status(400).json({ error: 'La nota contiene termini inappropriati.' });
+    }
+
+    // Anti-cheat: Limite giornaliero (max 10 attività)
+    const { rows: userCheck } = await db.query(
+      "SELECT daily_activity_count, TO_CHAR(last_activity_date, 'YYYY-MM-DD') as last_date FROM users WHERE id=$1",
+      [req.user.id]
+    );
+    const today = new Date().toISOString().split('T')[0];
+    const uCount = (userCheck[0].last_date === today) ? userCheck[0].daily_activity_count : 0;
+    
+    if (uCount >= 10) {
+      return res.status(429).json({ error: 'Limite giornaliero raggiunto (max 10 attività/giorno). Torna domani! 🌱' });
+    }
+
     const MAX_LIMITS = {
       'Bici': { max: 150 },
       'Treno': { max: 1500 },
@@ -955,9 +978,10 @@ app.post('/api/activities', auth, async (req, res) => {
     }
     const finalPoints = points + streakBonus;
 
+    const newCount = uCount + 1;
     await db.query(
-      `UPDATE users SET co2_saved=co2_saved+$1, points=points+$2, total_activities=total_activities+1, last_activity_date=CURRENT_DATE, current_streak=$3 WHERE id=$4`,
-      [co2, finalPoints, streak, req.user.id]
+      `UPDATE users SET co2_saved=co2_saved+$1, points=points+$2, total_activities=total_activities+1, daily_activity_count=$3, last_activity_date=CURRENT_DATE, current_streak=$4 WHERE id=$5`,
+      [co2, finalPoints, newCount, streak, req.user.id]
     );
     checkBadges(req.user.id).catch(console.error);
 
@@ -1295,6 +1319,9 @@ app.post('/api/social/posts/:id/comments', auth, async (req, res) => {
     const postId = parseInt(req.params.id);
     const { rows: post } = await db.query('SELECT user_id FROM posts WHERE id=$1', [postId]);
     if (!post.length) return res.status(404).json({ error: 'Post non trovato' });
+    if (hasInappropriateContent(content)) {
+       return res.status(400).json({ error: 'Il commento contiene termini inappropriati.' });
+    }
     await db.query('INSERT INTO comments (post_id,user_id,content) VALUES ($1,$2,$3)',
       [postId, req.user.id, filterText(content.trim())]);
     if (post[0].user_id !== req.user.id) {
@@ -1564,9 +1591,12 @@ app.post('/api/teams/:id/messages', auth, async (req, res) => {
       'SELECT id FROM team_members WHERE team_id=$1 AND user_id=$2', [teamId, req.user.id]
     );
     if (!memberCheck.length) return res.status(403).json({ error: 'Non sei membro' });
+    if (hasInappropriateContent(content)) {
+      return res.status(400).json({ error: 'Il messaggio contiene termini inappropriati.' });
+    }
     const { rows } = await db.query(
       'INSERT INTO team_messages (team_id,user_id,content) VALUES ($1,$2,$3) RETURNING *',
-      [teamId, req.user.id, content.trim()]
+      [teamId, req.user.id, filterText(content.trim())]
     );
     const msg = { ...rows[0], author_name: req.user.name, author_username: req.user.username };
     emitToAll('new_team_message', { team_id: teamId, message: msg });
