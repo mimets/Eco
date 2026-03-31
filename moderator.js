@@ -1,7 +1,4 @@
-/**
- * DeepModerator - Advanced AI-like content moderation for Italian
- * Handles: Profanity, Blasphemy, Leet-speak, Spacing Bypasses, and Phonetic Variations.
- */
+const { getToxicityResult } = require('./ai_moderator');
 
 const RELIGIOUS_SUBJECTS = ['dio', 'madonna', 'gesu', 'cristo', 'padrepio', 'spiritosanto', 'papa', 'allah', 'maometto'];
 const INSULTS = ['porco', 'cane', 'maiale', 'boia', 'ladro', 'schifoso', 'lurido', 'bestia', 'stronzo', 'cazzo', 'merda', 'puttana', 'troia', 'schifo'];
@@ -71,6 +68,11 @@ function isProfane(text) {
     'frocio', 'negro', 'ricchion', 'pompino', 'bocchino', 'bastardo'
   ];
   if (normalizedBanned.some(b => norm.includes(b))) return true;
+
+  // 4. Neural AI Semantic Check (True AI)
+  // Catch insults that don't use banned words (semantic toxicity)
+  const aiResult = getToxicityResult(text);
+  if (aiResult.isToxic) return true;
 
   return false;
 }
