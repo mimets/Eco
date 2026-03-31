@@ -24,6 +24,9 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // Solo le richieste GET sono supportate per la cache nativa
+  if (e.request.method !== 'GET') return;
+
   if (e.request.url.includes('/api/')) {
     // Network-first for API calls
     e.respondWith(
@@ -34,8 +37,11 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(e.request)
         .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+          // Put in cache solo se status è ok o type è opaque
+          if (res && (res.status === 200 || res.type === 'opaque')) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone)).catch(err => console.log('SW put error:', err));
+          }
           return res;
         })
         .catch(() => caches.match(e.request))
