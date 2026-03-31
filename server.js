@@ -565,18 +565,22 @@ app.post('/api/register', authLimiter, async (req, res) => {
       [name.trim(), username.toLowerCase(), email.toLowerCase(), hash, vTok]
     );
 
+    let emailSent = true;
     try {
       await sendVerifyEmail(email.toLowerCase(), vTok);
     } catch (err) {
-      await db.query('DELETE FROM users WHERE id=$1', [rows[0].id]);
-      console.error('Email di verifica non inviata:', err);
-      return res.status(500).json({ error: "Errore invio email. Configura MAIL_USER e MAIL_PASS (Password app Gmail) su Render." });
+      emailSent = false;
+      console.error('Email di verifica non inviata:', err.message);
     }
 
     await db.query(
       "INSERT INTO notifications (user_id,type,message,icon) VALUES ($1,'welcome',$2,'👋')",
       [rows[0].id, 'Benvenuto su EcoTrack! 🌱 Verifica la tua email per iniziare.']
     );
+
+    if (!emailSent) {
+      return res.json({ ok: true, message: 'Registrazione completata! Email di verifica NON inviata (configura MAIL_USER/MAIL_PASS su Render). Contatta l\'admin.', emailWarning: true });
+    }
     return res.json({ ok: true, message: 'Registrazione completata! Controlla la tua email per verificare l\'account.' });
   } catch (err) {
     console.error('Register error:', err);

@@ -235,7 +235,14 @@ async function handleLogin(e) {
   btn.disabled = false;
   btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Accedi';
 
-  if (data.error) { showNotification(data.error, 'error'); return; }
+  if (data.error) {
+    if (data.needsVerify) {
+      showNotification(`📧 Email non verificata. Controlla la tua casella e-mail oppure <a href="#" onclick="resendVerifyEmail('${identifier}');return false;" style="color:#22c55e;font-weight:700">clicca qui per rinviare</a> la email di verifica.`, 'error');
+    } else {
+      showNotification(data.error, 'error');
+    }
+    return;
+  }
 
   token = data.token;
   myProfile = data.user;
@@ -255,6 +262,18 @@ async function handleLogin(e) {
   showNotification(`Bentornato ${data.user.name || data.user.username}! 🌱`, 'success');
 }
 window.handleLogin = handleLogin;
+
+async function resendVerifyEmail(emailOrUsername) {
+  // Try to get the email from the input if it looks like a username
+  const email = emailOrUsername.includes('@') ? emailOrUsername : document.getElementById('loginIdentifier')?.value.trim();
+  const data = await apiRequest('/api/resend-verify', 'POST', { email });
+  if (data.ok) {
+    showNotification('📧 Email di verifica inviata! Controlla la casella.', 'success');
+  } else {
+    showNotification(data.error || 'Errore invio email', 'error');
+  }
+}
+window.resendVerifyEmail = resendVerifyEmail;
 
 async function handleRegister(e) {
   e.preventDefault();
