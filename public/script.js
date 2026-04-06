@@ -846,8 +846,8 @@ async function previewPhoto(input) {
   if (status) {
     status.style.display = 'flex';
     status.className = 'ai-status';
-    msg.textContent = 'Analisi AI in corso...';
-    icon.textContent = '⏳';
+    msg.textContent = 'Foto caricata! ✅';
+    icon.textContent = '📷';
   }
 
   const reader = new FileReader();
@@ -857,51 +857,11 @@ async function previewPhoto(input) {
     if (preview && img) {
       img.src = e.target.result;
       preview.style.display = 'inline-block';
-
-      img.onload = async () => {
-        try {
-          if (typeof mobilenet === 'undefined' || typeof mobilenet.load !== 'function') {
-            if (msg) msg.textContent = 'AI non disponibile (procedi pure)';
-            if (status) status.className = 'ai-status warning';
-            return;
-          }
-          
-          if (!aiModel) {
-            msg.textContent = 'Caricamento modello AI...';
-            aiModel = await mobilenet.load({ version: 2, alpha: 1.0 });
-          }
-          
-          if (!img.complete || img.naturalWidth === 0) {
-            console.warn('Image not fully loaded');
-            if (msg) msg.textContent = 'Immagine non caricata, riprova';
-            if (status) status.className = 'ai-status warning';
-            return;
-          }
-          
-          const predictions = await aiModel.classify(img);
-          const isMatch = checkAIMatch(predictions, currentActivityType);
-          
-          if (isMatch) {
-            status.className = 'ai-status success';
-            msg.textContent = 'Verificato: la foto corrisponde! ✅';
-            icon.textContent = '🤖';
-          } else {
-            status.className = 'ai-status warning';
-            msg.textContent = 'Foto caricata. Puoi procedere comunque.';
-            icon.textContent = '⚠️';
-          }
-        } catch (err) {
-          console.warn('AI preview error:', err.message);
-          if (msg) msg.textContent = 'AI non disponibile (procedi pure)';
-          if (status) status.className = 'ai-status warning';
-        }
-      };
       
-      img.onerror = () => {
-        console.warn('Image load error');
-        if (msg) msg.textContent = 'Immagine non valida';
-        if (status) status.className = 'ai-status error';
-      };
+      if (status) {
+        status.className = 'ai-status success';
+        msg.textContent = 'Foto caricata! ✅ Puoi procedere.';
+      }
     }
   };
   reader.readAsDataURL(file);
