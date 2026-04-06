@@ -1592,6 +1592,12 @@ async function loadAvatarSection() {
   const owned = (myProfile?.owned_items || []).map(id => Number(id));
   const isOwned = (itemId) => owned.includes(Number(itemId));
 
+  // Mappings from shop name to internal drawMii value
+  const hairMap = { 'Capelli Corti': 'short', 'Capelli Lunghi': 'long', 'Rainbow Hair': 'curly', 'Gold Hair': 'spiky', 'Galaxy Hair': 'bun', 'Flame Hair': 'flame' };
+  const eyeMap = { 'Star Eyes': 'star', 'Heart Eyes': 'heart', 'Laser Eyes': 'cool', 'Occhi Felici': 'happy', 'Occhi Assonnati': 'sleepy', 'Occhi Sorpresi': 'surprised', 'Occhi Occhiolino': 'wink' };
+  const mouthMap = { 'Rainbow Mouth': 'rainbow', 'Fire Mouth': 'fire', 'Bocca Sorridente': 'grin', 'Bocca Aperta': 'open', 'Bocca Triste': 'sad' };
+  const colorMap = { 'Viola Reale': '#8b5cf6', 'Rosso Fuoco': '#ef4444', 'Oro Puro': '#f59e0b' };
+
   // COLORI SFONDO
   const baseColors = ['#16a34a', '#22c55e', '#3b82f6', '#6366f1', '#1e293b', '#64748b', '#ffffff'];
   const colorItems = allShopItems.filter(i => i.category === 'color');
@@ -1600,7 +1606,7 @@ async function loadAvatarSection() {
     let html = baseColors.map(c => `<div class="color-swatch ${miiState.color === c ? 'selected' : ''}" style="background:${c};border:2px solid ${c === '#ffffff' ? '#e2e8f0' : 'transparent'};" onclick="setAvatarColor('${c}',this)"></div>`).join('');
     colorItems.forEach(item => {
       const isUnlocked = isOwned(item.id);
-      const colorCode = item.emoji === '🟣' ? '#8b5cf6' : item.emoji === '🔴' ? '#ef4444' : item.emoji === '🟡' ? '#f59e0b' : '#8b5cf6';
+      const colorCode = colorMap[item.name] || '#8b5cf6';
       html += isUnlocked 
         ? `<div class="color-swatch ${miiState.color === colorCode ? 'selected' : ''}" style="background:${colorCode};border:2px solid ${colorCode === '#ffffff' ? '#e2e8f0' : 'transparent'};" onclick="setAvatarColor('${colorCode}',this)" title="${item.name}"></div>`
         : `<div class="color-swatch" title="${item.name} — ${item.cost}pt" style="background:${colorCode};opacity:.3;cursor:not-allowed;position:relative;"><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;">🔒</span></div>`;
@@ -1608,7 +1614,7 @@ async function loadAvatarSection() {
     colorOpts.innerHTML = html;
   }
 
-  // CARNAGIONE - sempre libera
+  // CARNAGIONE
   const skinOpts = document.getElementById('skinOptions');
   if (skinOpts) {
     skinOpts.innerHTML = SKIN_COLORS.map(c => `<div class="color-swatch ${miiState.skin === c ? 'selected' : ''}" style="background:${c};" onclick="setAvatarSkin('${c}',this)"></div>`).join('');
@@ -1616,15 +1622,14 @@ async function loadAvatarSection() {
 
   // CAPELLI
   const hairItems = allShopItems.filter(i => i.category === 'hair');
-  const freeHairs = ['none'];
   const hairOpts = document.getElementById('hairOptions');
   if (hairOpts) {
-    let html = freeHairs.map(h => `<button class="option-btn ${miiState.hair === h ? 'selected' : ''}" onclick="setAvatarHair('${h}',this)">🚫 Nessuno</button>`).join('');
+    let html = `<button class="option-btn ${miiState.hair === 'none' ? 'selected' : ''}" onclick="setAvatarHair('none',this)">🚫 Nessuno</button>`;
     hairItems.forEach(item => {
-      const optValue = item.name.toLowerCase().replace(/ /g, '');
+      const internalVal = hairMap[item.name] || 'short';
       const isUnlocked = isOwned(item.id);
       html += isUnlocked 
-        ? `<button class="option-btn ${miiState.hair === optValue ? 'selected' : ''}" onclick="setAvatarHair('${optValue}',this)">${item.emoji || '💇'} ${item.name}</button>`
+        ? `<button class="option-btn ${miiState.hair === internalVal ? 'selected' : ''}" onclick="setAvatarHair('${internalVal}',this)">${item.emoji || '💇'} ${item.name}</button>`
         : `<button class="option-btn" title="${item.name} — ${item.cost}pt" style="opacity:.4;cursor:not-allowed;">${item.emoji || '💇'} ${item.name} 🔒</button>`;
     });
     hairOpts.innerHTML = html;
@@ -1632,15 +1637,14 @@ async function loadAvatarSection() {
 
   // OCCHI
   const eyeItems = allShopItems.filter(i => i.category === 'eyes');
-  const freeEyes = ['normal'];
   const eyeOpts = document.getElementById('eyeOptions');
   if (eyeOpts) {
-    let html = freeEyes.map(e => `<button class="option-btn ${miiState.eyes === e ? 'selected' : ''}" onclick="setAvatarEyes('${e}',this)">😐 Normali</button>`).join('');
+    let html = `<button class="option-btn ${miiState.eyes === 'normal' ? 'selected' : ''}" onclick="setAvatarEyes('normal',this)">😐 Normali</button>`;
     eyeItems.forEach(item => {
-      const optValue = item.name.toLowerCase().replace(/ /g, '');
+      const internalVal = eyeMap[item.name] || 'normal';
       const isUnlocked = isOwned(item.id);
       html += isUnlocked 
-        ? `<button class="option-btn ${miiState.eyes === optValue ? 'selected' : ''}" onclick="setAvatarEyes('${optValue}',this)">${item.emoji || '👀'} ${item.name}</button>`
+        ? `<button class="option-btn ${miiState.eyes === internalVal ? 'selected' : ''}" onclick="setAvatarEyes('${internalVal}',this)">${item.emoji || '👀'} ${item.name}</button>`
         : `<button class="option-btn" title="${item.name} — ${item.cost}pt" style="opacity:.4;cursor:not-allowed;">${item.emoji || '👀'} ${item.name} 🔒</button>`;
     });
     eyeOpts.innerHTML = html;
@@ -1648,15 +1652,14 @@ async function loadAvatarSection() {
 
   // BOCCA
   const mouthItems = allShopItems.filter(i => i.category === 'mouth');
-  const freeMouths = ['smile', 'smirk'];
   const mouthOpts = document.getElementById('mouthOptions');
   if (mouthOpts) {
-    let html = freeMouths.map(m => `<button class="option-btn ${miiState.mouth === m ? 'selected' : ''}" onclick="setAvatarMouth('${m}',this)">${m === 'smile' ? '😊 Sorriso' : '😏 Smorfia'}</button>`).join('');
+    let html = `<button class="option-btn ${miiState.mouth === 'smile' ? 'selected' : ''}" onclick="setAvatarMouth('smile',this)">😊 Sorriso</button>`;
     mouthItems.forEach(item => {
-      const optValue = item.name.toLowerCase().replace(/ /g, '');
+      const internalVal = mouthMap[item.name] || 'smile';
       const isUnlocked = isOwned(item.id);
       html += isUnlocked 
-        ? `<button class="option-btn ${miiState.mouth === optValue ? 'selected' : ''}" onclick="setAvatarMouth('${optValue}',this)">${item.emoji || '👄'} ${item.name}</button>`
+        ? `<button class="option-btn ${miiState.mouth === internalVal ? 'selected' : ''}" onclick="setAvatarMouth('${internalVal}',this)">${item.emoji || '👄'} ${item.name}</button>`
         : `<button class="option-btn" title="${item.name} — ${item.cost}pt" style="opacity:.4;cursor:not-allowed;">${item.emoji || '👄'} ${item.name} 🔒</button>`;
     });
     mouthOpts.innerHTML = html;
