@@ -25,6 +25,226 @@ let miiState = {
   hair: 'none'
 };
 
+// ═══════════════════════════════════════════
+// 3D AVATAR ENGINE (Three.js)
+// ═══════════════════════════════════════════
+let avatar3D = {
+  scene: null, camera: null, renderer: null, avatar: null, animationId: null
+};
+
+function initAvatar3D(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || typeof THREE === 'undefined') return;
+  
+  const w = container.clientWidth || 200;
+  const h = container.clientHeight || 200;
+  
+  // Scene
+  avatar3D.scene = new THREE.Scene();
+  avatar3D.scene.background = new THREE.Color(0x1e293b);
+  
+  // Camera
+  avatar3D.camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
+  avatar3D.camera.position.set(0, 0, 5);
+  
+  // Renderer
+  avatar3D.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  avatar3D.renderer.setSize(w, h);
+  avatar3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(avatar3D.renderer.domElement);
+  
+  // Lights
+  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+  avatar3D.scene.add(ambient);
+  
+  const key = new THREE.DirectionalLight(0xffffff, 0.8);
+  key.position.set(2, 2, 5);
+  avatar3D.scene.add(key);
+  
+  const fill = new THREE.DirectionalLight(0x88ccff, 0.4);
+  fill.position.set(-2, 0, 3);
+  avatar3D.scene.add(fill);
+  
+  // Create avatar
+  createAvatar3D();
+  
+  // Animation loop
+  function animate() {
+    avatar3D.animationId = requestAnimationFrame(animate);
+    if (avatar3D.avatar) {
+      avatar3D.avatar.rotation.y += 0.005;
+    }
+    avatar3D.renderer.render(avatar3D.scene, avatar3D.camera);
+  }
+  animate();
+}
+
+function createAvatar3D() {
+  if (avatar3D.avatar) avatar3D.scene.remove(avatar3D.avatar);
+  
+  const group = new THREE.Group();
+  
+  // Head
+  const headGeo = new THREE.SphereGeometry(1, 32, 32);
+  const skinMat = new THREE.MeshStandardMaterial({ 
+    color: new THREE.Color(miiState.skin || '#fde68a'),
+    roughness: 0.5,
+    metalness: 0.1
+  });
+  const head = new THREE.Mesh(headGeo, skinMat);
+  group.add(head);
+  
+  // Eyes
+  const eyeY = 0.1;
+  const eyeX = 0.35;
+  const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const pupilGeo = new THREE.SphereGeometry(0.08, 16, 16);
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x1f2937 });
+  
+  [-1, 1].forEach(dir => {
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.position.set(dir * eyeX, eyeY, 0.85);
+    group.add(eye);
+    
+    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+    pupil.position.set(dir * eyeX, eyeY, 0.95);
+    group.add(pupil);
+    
+    // Special eye effects
+    if (miiState.eyes === 'star') {
+      const starGeo = new THREE.CircleGeometry(0.1, 5);
+      const starMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide });
+      const star = new THREE.Mesh(starGeo, starMat);
+      star.position.set(dir * eyeX, eyeY, 0.98);
+      group.add(star);
+    } else if (miiState.eyes === 'heart') {
+      const heartGeo = new THREE.CircleGeometry(0.1, 4);
+      const heartMat = new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide });
+      const heart = new THREE.Mesh(heartGeo, heartMat);
+      heart.position.set(dir * eyeX, eyeY, 0.98);
+      group.add(heart);
+    }
+  });
+  
+  // Mouth
+  const mouthY = -0.3;
+  if (miiState.mouth === 'smile') {
+    const mouthGeo = new THREE.TorusGeometry(0.2, 0.05, 8, 16, Math.PI);
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, mouthY, 0.85);
+    mouth.rotation.x = Math.PI;
+    group.add(mouth);
+  } else if (miiState.mouth === 'grin') {
+    const mouthGeo = new THREE.CapsuleGeometry(0.15, 0.3, 4, 8);
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, mouthY, 0.9);
+    group.add(mouth);
+  } else if (miiState.mouth === 'rainbow') {
+    const mouthGeo = new THREE.TorusGeometry(0.2, 0.05, 8, 16, Math.PI);
+    const colors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x0000ff, 0x800080];
+    colors.forEach((c, i) => {
+      const mouthMat = new THREE.MeshStandardMaterial({ color: c });
+      const mouth = new THREE.Mesh(mouthGeo.clone(), mouthMat);
+      mouth.position.set(0, mouthY - i * 0.02, 0.85 + i * 0.02);
+      mouth.rotation.x = Math.PI;
+      mouth.scale.set(1 - i * 0.1, 1 - i * 0.1, 1);
+      group.add(mouth);
+    });
+  } else if (miiState.mouth === 'fire') {
+    for (let i = -2; i <= 2; i++) {
+      const flameGeo = new THREE.ConeGeometry(0.08, 0.3, 8);
+      const flameMat = new THREE.MeshStandardMaterial({ 
+        color: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
+        emissive: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
+        emissiveIntensity: 0.3
+      });
+      const flame = new THREE.Mesh(flameGeo, flameMat);
+      flame.position.set(i * 0.1, mouthY - 0.1, 0.85);
+      flame.rotation.x = Math.PI;
+      group.add(flame);
+    }
+  }
+  
+  // Hair
+  if (miiState.hair === 'short') {
+    const hairGeo = new THREE.SphereGeometry(1.05, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2.5);
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x1f2937 });
+    const hair = new THREE.Mesh(hairGeo, hairMat);
+    hair.position.y = 0.2;
+    group.add(hair);
+  } else if (miiState.hair === 'long') {
+    const hairGeo = new THREE.CylinderGeometry(1.1, 1.3, 1.5, 32, 1, true);
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x7c3aed, side: THREE.DoubleSide });
+    const hair = new THREE.Mesh(hairGeo, hairMat);
+    hair.position.y = -0.3;
+    group.add(hair);
+  } else if (miiState.hair === 'bun') {
+    const bunGeo = new THREE.SphereGeometry(0.4, 16, 16);
+    const bunMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.2 });
+    const bun = new THREE.Mesh(bunGeo, bunMat);
+    bun.position.set(0, 1.2, 0);
+    group.add(bun);
+  } else if (miiState.hair === 'spiky') {
+    for (let i = -3; i <= 3; i++) {
+      const spikeGeo = new THREE.ConeGeometry(0.15, 0.6, 8);
+      const spikeMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.3 });
+      const spike = new THREE.Mesh(spikeGeo, spikeMat);
+      spike.position.set(i * 0.3, 1.1, 0.2);
+      spike.rotation.z = i * 0.2;
+      group.add(spike);
+    }
+  } else if (miiState.hair === 'flame') {
+    for (let i = -3; i <= 3; i++) {
+      const flameGeo = new THREE.ConeGeometry(0.15, 0.5, 8);
+      const flameMat = new THREE.MeshStandardMaterial({ 
+        color: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
+        emissive: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
+        emissiveIntensity: 0.4
+      });
+      const flame = new THREE.Mesh(flameGeo, flameMat);
+      flame.position.set(i * 0.25, 1.2, 0);
+      flame.rotation.z = i * 0.15;
+      group.add(flame);
+    }
+  } else if (miiState.hair === 'curly') {
+    for (let i = -2; i <= 2; i++) {
+      const curlGeo = new THREE.TorusGeometry(0.2, 0.1, 8, 16);
+      const curlMat = new THREE.MeshStandardMaterial({ color: 0xec4899 });
+      const curl = new THREE.Mesh(curlGeo, curlMat);
+      curl.position.set(i * 0.4, 1.1, 0.1);
+      curl.rotation.x = Math.PI / 2;
+      group.add(curl);
+    }
+  }
+  
+  // Background circle
+  const bgGeo = new THREE.CircleGeometry(2.5, 32);
+  const bgMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(miiState.color || '#16a34a') });
+  const bg = new THREE.Mesh(bgGeo, bgMat);
+  bg.position.z = -1.5;
+  group.add(bg);
+  
+  avatar3D.avatar = group;
+  avatar3D.scene.add(group);
+}
+
+function updateAvatar3D() {
+  if (avatar3D.scene && avatar3D.avatar) {
+    createAvatar3D();
+  }
+}
+
+function renderAvatar3D(containerId) {
+  if (typeof THREE === 'undefined') {
+    console.warn('Three.js not loaded');
+    return;
+  }
+  initAvatar3D(containerId);
+}
+
 const CO2_RATES = {
   'Bici': { type: 'km', co2: 0.15, points: 5 },
   'Treno': { type: 'km', co2: 0.04, points: 2 },
@@ -1666,6 +1886,7 @@ async function loadAvatarSection() {
   }
 
   drawMii(miiState, 'miiCanvas', 200);
+  renderAvatar3D('avatar3d-preview');
 }
 
 
@@ -1682,6 +1903,7 @@ async function saveAvatar() {
   }
   showNotification('✅ Avatar salvato!', 'success');
   drawMii(miiState, 'userAvatar', 48);
+  updateAvatar3D();
 }
 window.saveAvatar = saveAvatar;
 
@@ -1690,6 +1912,7 @@ function setAvatarColor(val, btn) {
   document.querySelectorAll('#colorOptions .color-swatch').forEach(b => b.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
   drawMii(miiState, 'miiCanvas', 200);
+  updateAvatar3D();
 }
 window.setAvatarColor = setAvatarColor;
 
@@ -1698,6 +1921,7 @@ function setAvatarSkin(val, btn) {
   document.querySelectorAll('#skinOptions .color-swatch').forEach(b => b.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
   drawMii(miiState, 'miiCanvas', 200);
+  updateAvatar3D();
 }
 window.setAvatarSkin = setAvatarSkin;
 
@@ -1706,6 +1930,7 @@ function setAvatarHair(val, btn) {
   document.querySelectorAll('#hairOptions .option-btn').forEach(b => b.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
   drawMii(miiState, 'miiCanvas', 200);
+  updateAvatar3D();
 }
 window.setAvatarHair = setAvatarHair;
 
@@ -1714,6 +1939,7 @@ function setAvatarEyes(val, btn) {
   document.querySelectorAll('#eyeOptions .option-btn').forEach(b => b.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
   drawMii(miiState, 'miiCanvas', 200);
+  updateAvatar3D();
 }
 window.setAvatarEyes = setAvatarEyes;
 
@@ -1722,6 +1948,7 @@ function setAvatarMouth(val, btn) {
   document.querySelectorAll('#mouthOptions .option-btn').forEach(b => b.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
   drawMii(miiState, 'miiCanvas', 200);
+  updateAvatar3D();
 }
 window.setAvatarMouth = setAvatarMouth;
 
@@ -1750,6 +1977,7 @@ async function loadProfile() {
 
   syncMiiState(profile);
   await loadBadges();
+  renderAvatar3D('profile-avatar-3d');
 }
 window.loadProfile = loadProfile;
 
