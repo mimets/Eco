@@ -1061,7 +1061,7 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
     const q = question.toLowerCase();
 
     const ECO_KEYWORDS = ['co2', 'carbon', 'bici', 'bus', 'treno', 'carpooling', 'remoto', 'videocall',
-      'eco', 'green', 'sostenib', 'ambient', 'impronta', 'emissione', 'punti', 'streak',
+      'eco', 'green', 'sostenib', 'ambient', 'impronta', 'emissione', 'emissioni', 'punti', 'streak',
       'clima', 'trasport', 'lavoro', 'risparmio', 'energia', 'migliora', 'consiglio', 'consigli',
       'attivi', 'classifica', 'sfida', 'badge', 'progressi', 'settimana', 'giorno', 'mese',
       'team', 'compagno', 'social', 'post', 'amico', 'seguire', 'seguito', 'vegetariano',
@@ -1070,7 +1070,10 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
       'elettrico', 'scooter', 'monopattino', 'piedi', 'camminare', 'orto', 'giardino', 'pianta',
       'plastica', 'vetro', 'carta', 'umido', 'raccolta', 'differenziata', 'isola', 'ecocentro',
       'ipcc', 'climate', 'COP', 'accordo', 'parigi', '2030', 'obiettivo', 'sostenibile', 'sdg',
-      'ODS', 'agenda', '2030', 'economia', 'circolare', 'rigenera', 'impatto', 'footprint'];
+      'ODS', 'agenda', '2030', 'economia', 'circolare', 'rigenera', 'impatto', 'footprint',
+      'ridurre', 'riduzione', 'diminuire', 'abbattere', 'quanto', 'quanti', 'quanta', 'come',
+      'perché', 'perche', 'cosa', 'qualche', 'consigli', 'suggerimento', 'tips', 'aiuto',
+      'riduco', 'riduci', 'riduzione'];
 
     const isOnTopic = ECO_KEYWORDS.some(k => q.includes(k));
     if (!isOnTopic) {
@@ -1187,6 +1190,10 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
       answer += `4. 🚗 **Carpooling** — condividi punti con passeggeri\n`;
       answer += `5. 📱 Pubblica nel **Social** per motivare altri\n`;
       answer += `\n📊 **Stats:** ${u.points} pt | ${co2} kg CO₂ | ${u.total_activities} attività`;
+    }
+
+    else if (q.includes('ridurre') || q.includes('riduco') || q.includes('riduci') || q.includes('riduzione')) {
+      answer = `🌍 **Come ridurre le emissioni**\n\n**1. Trasporti (il più efficace)**\n🚴 Bici per tragitti <10 km — risparmia 0.15 kg CO₂/km\n🏠 Smart working — 0.5 kg CO₂/ora\n🚗 Carpooling — condividi i viaggi\n🚂 Preferisci treno all'aereo\n\n**2. Energia**\n💡 LED: -80% consumo\n🔌 Stacca standby —10% bolletta\n🌡️ 20°C in casa\n\n**3. Alimentazione**\n🥗 Meno carne = -2.5 kg CO₂/giorno\n🚫 Zero sprechi\n\n**4. Il tuo impatto su EcoTrack:**\n📊 ${co2} kg CO₂ già risparmiati!\n\n💡 Ogni piccolo gesto si somma — continua così!`;
     }
 
     else if (q.includes('cosa puoi fare') || q.includes('cosa sai fare') || q.includes('capac')) {
