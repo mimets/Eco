@@ -1594,9 +1594,7 @@ async function loadAvatarSection() {
     if (!shopItems || !Array.isArray(shopItems)) return false;
     const item = shopItems.find(i => i.name === name);
     if (!item) return false;
-    const isOwned = owned.some(id => Number(id) === Number(item.id));
-    console.log(`Matching item ${name} (ID: ${item.id}): owned? ${isOwned}`);
-    return isOwned;
+    return owned.includes(Number(item.id));
   };
 
   // COLORI SFONDO
