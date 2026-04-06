@@ -1034,94 +1034,167 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
       return res.status(400).json({ error: 'Domanda non valida' });
 
     const { rows: userRows } = await db.query(
-      'SELECT name, points, co2_saved, total_activities, current_streak FROM users WHERE id=$1',
+      'SELECT name, points, co2_saved, total_activities, current_streak, created_at FROM users WHERE id=$1',
       [req.user.id]
     );
     const u = userRows[0];
     if (!u) return res.status(404).json({ error: 'Utente non trovato' });
 
+    const { rows: recentActs } = await db.query(
+      `SELECT type, km, hours, co2_saved, points, date FROM activities 
+       WHERE user_id=$1 ORDER BY date DESC LIMIT 10`,
+      [req.user.id]
+    );
+
+    const { rows: weekStats } = await db.query(
+      `SELECT SUM(co2_saved) as co2_week, SUM(points) as pts_week, COUNT(*) as acts_week
+       FROM activities WHERE user_id=$1 AND date >= CURRENT_DATE - INTERVAL '7 days'`,
+      [req.user.id]
+    );
+
+    const { rows: monthStats } = await db.query(
+      `SELECT SUM(co2_saved) as co2_month, SUM(points) as pts_month
+       FROM activities WHERE user_id=$1 AND date >= CURRENT_DATE - INTERVAL '30 days'`,
+      [req.user.id]
+    );
+
     const q = question.toLowerCase();
 
-    // Off-topic guard — only eco/sustainability topics allowed
     const ECO_KEYWORDS = ['co2', 'carbon', 'bici', 'bus', 'treno', 'carpooling', 'remoto', 'videocall',
       'eco', 'green', 'sostenib', 'ambient', 'impronta', 'emissione', 'punti', 'streak',
       'clima', 'trasport', 'lavoro', 'risparmio', 'energia', 'migliora', 'consiglio', 'consigli',
       'attivi', 'classifica', 'sfida', 'badge', 'progressi', 'settimana', 'giorno', 'mese',
       'team', 'compagno', 'social', 'post', 'amico', 'seguire', 'seguito', 'vegetariano',
-      'vegano', 'cibo', 'riciclo', 'rifiuti', 'plastica', 'acqua', 'energia', 'solare', 'bulbo'];
+      'vegano', 'cibo', 'riciclo', 'rifiuti', 'plastica', 'acqua', 'solare', 'bulbo', 'albero',
+      'weekend', 'viaggio', 'vacanza', 'aereo', 'treen', 'macchina', 'auto', 'metano', 'gpl',
+      'elettrico', 'scooter', 'monopattino', 'piedi', 'camminare', 'orto', 'giardino', 'pianta',
+      'plastica', 'vetro', 'carta', 'umido', 'raccolta', 'differenziata', 'isola', 'ecocentro',
+      'ipcc', 'climate', 'COP', 'accordo', 'parigi', '2030', 'obiettivo', 'sostenibile', 'sdg',
+      'ODS', 'agenda', '2030', 'economia', 'circolare', 'rigenera', 'impatto', 'footprint'];
 
     const isOnTopic = ECO_KEYWORDS.some(k => q.includes(k));
     if (!isOnTopic) {
-      return res.json({ answer: `🤖 Sono il tuo consulente ecologico personale! Posso risponderti solo su temi legati alla sostenibilità, alle tue attività green e al tuo impatto ambientale. Prova a chiedermi come ridurre le emissioni o come migliorare il tuo punteggio!` });
+      return res.json({ answer: `🤖 Sono il tuo consulente ecologico personale! 🌱\n\nPosso risponderti solo su temi legati alla sostenibilità, alle tue attività green e al tuo impatto ambientale.\n\n💡 Prova a chiedermi:\n- "Come riduco le emissioni?"\n- "Come miglioro il mio punteggio?"\n- "Consigli per la bici"\n- "Come funziona lo streak?"\n- "Cos'è il carpooling?"` });
     }
 
-    // ── Question-specific answers (priority) ──
     let answer = '';
     const co2 = parseFloat(u.co2_saved || 0).toFixed(1);
     const streak = u.current_streak || 0;
+    const weekCo2 = parseFloat(weekStats[0]?.co2_week || 0).toFixed(1);
+    const weekPts = parseInt(weekStats[0]?.pts_week || 0);
+    const monthCo2 = parseFloat(monthStats[0]?.co2_month || 0).toFixed(1);
+    const monthPts = parseInt(monthStats[0]?.pts_month || 0);
 
-    if (q.includes('streak') || q.includes('bonus')) {
-      answer = `🔥 **Come funziona lo Streak**\n\nOgni giorno consecutivo in cui registri almeno un'attività, il tuo streak cresce di 1. Dal **2° giorno in poi** ottieni **+20 punti bonus** automatici su ogni attività!\n\n📊 **Il tuo streak attuale:** ${streak} giorni\n\nConsiglio: anche un'attività piccola (es. una videocall) basta per mantenere lo streak attivo. Non saltare neanche un giorno!`;
+    const daysSinceJoin = Math.floor((Date.now() - new Date(u.created_at).getTime()) / (1000 * 60 * 60 * 24));
+    const avgCo2PerDay = daysSinceJoin > 0 ? (co2 / daysSinceJoin).toFixed(2) : co2;
+
+    const topActivity = recentActs.length > 0 
+      ? recentActs.reduce((a, b) => (a.points || 0) > (b.points || 0) ? a : b)
+      : null;
+
+    const lastActivity = recentActs[0];
+
+    if (q.includes('ciao') || q.includes('salve') || q.includes('come stai') || q.includes('eccoti')) {
+      answer = `👋 **Ciao ${u.name}!** Sono il tuo assistente green!\n\nIl tuo impatto finora:\n- 📊 **${u.points} punti**\n- 🌱 **${co2} kg CO₂** risparmiata\n- 🔥 Streak: **${streak} giorni**\n- 📅 Attività: **${u.total_activities}**\n\n💡 Chiedimi anything about eco-sostenibilità!`;
     }
 
-    else if (q.includes('punti') || q.includes('attività') || q.includes('attivita') || q.includes('guadagn')) {
-      answer = `⭐ **Classifica attività per punti/km o ora:**\n\n🏠 **Remoto** — 10 pt/ora + 0.5 kg CO₂/ora (il migliore!)\n💻 **Videocall** — 8 pt/ora + 0.1 kg CO₂/ora\n🚴 **Bici** — 5 pt/km + 0.15 kg CO₂/km\n🚗 **Carpooling** — 3 pt/km + 0.06 kg CO₂/km\n🚂 **Treno** — 2 pt/km + 0.04 kg CO₂/km\n🚌 **Bus** — 1.5 pt/km + 0.08 kg CO₂/km\n\n💡 Per massimizzare: registra le ore di smart working e usa la bici per spostamenti brevi. Con lo streak attivo (+20 bonus) i punti salgono velocemente!`;
+    else if (q.includes('streak') || q.includes('bonus') || q.includes('consecuti')) {
+      answer = `🔥 **Come funziona lo Streak**\n\nOgni giorno consecutivo con almeno un'attività:\n• Lo streak cresce di +1\n• **Dal 2° giorno**: +20 punti bonus automatici!\n\n📊 **Il tuo streak attuale:** ${streak} giorni\n${streak > 0 ? `💪 Incredibile, stai andando forte!` : '🚀 Inizia oggi il tuo streak!'}\n\n💡 **Consiglio:** Anche una sola videocall da 1 ora basta per mantenere lo streak!`;
     }
 
-    else if (q.includes('bici') || q.includes('bike') || q.includes('ciclismo')) {
-      answer = `🚴 **Consigli per ridurre CO₂ con la bici**\n\nOgni km in bici ti fa risparmiare **0.15 kg di CO₂** rispetto all'auto e guadagnare **5 punti**.\n\n📏 Esempio: un tragitto casa-lavoro di 10 km = **1.5 kg CO₂** risparmiata e **50 punti** al giorno!\n\n🗓️ Se lo fai 5 giorni a settimana:\n- 7.5 kg CO₂ a settimana\n- 250 punti + bonus streak\n- ~30 kg CO₂ al mese\n\n💪 Il tuo totale attuale: **${co2} kg CO₂** risparmiata. Continua così!`;
+    else if (q.includes('punti') || q.includes(' Guadagn') || q.includes('guadagnare') || q.includes('punti')) {
+      if (q.includes('oggi') || q.includes('questo') || q.includes('settimana')) {
+        answer = `📈 **I tuoi punti recenti**\n\nQuesta settimana:\n• **${weekPts} punti** guadagnati\n• **${weekCo2} kg CO₂** risparmiata\n\nQuesto mese:\n• **${monthPts} punti**\n• **${monthCo2} kg CO₂**\n\n${topActivity ? `🏆 La tua attività top: **${topActivity.type}** (${topActivity.points} pt)` : '💡 Inizia a registrare attività!'}`;
+      } else {
+        answer = `⭐ **Classifica punti per attività:**\n\n🏠 **Remoto** — 10 pt/ora + 0.5 kg CO₂/ora ⭐ Migliore!\n💻 **Videocall** — 8 pt/ora + 0.1 kg CO₂/ora\n🚴 **Bici** — 5 pt/km + 0.15 kg CO₂/km\n🚗 **Carpooling** — 3 pt/km + 0.06 kg CO₂/km\n🚂 **Treno** — 2 pt/km + 0.04 kg CO₂/km\n🚌 **Bus** — 1.5 pt/km + 0.08 kg CO₂/km\n\n💡 Con streak attivo hai **+20 pt bonus** su ogni attività!`;
+      }
     }
 
-    else if (q.includes('carpooling') || q.includes('condivi')) {
-      answer = `🚗 **Come funziona il Carpooling su EcoTrack**\n\nQuando registri un'attività Carpooling:\n- Guadagni **3 pt/km** e **0.06 kg CO₂/km**\n- Puoi **selezionare un passeggero** dal menu a tendina\n- Il passeggero riceve automaticamente **metà dei tuoi punti** e CO₂!\n\n🤝 Esempio: 20 km di carpooling = 60 pt per te + 30 pt per il passeggero, entrambi risparmiate CO₂.\n\nÈ l'unica attività collaborativa — usala per far salire in classifica anche i tuoi colleghi!`;
+    else if (q.includes('bici') || q.includes('bike') || q.includes('cicli') || q.includes('pedal')) {
+      const bikeKm = recentActs.filter(a => a.type === 'Bici').reduce((sum, a) => sum + (a.km || 0), 0);
+      answer = `🚴 **Consigli Bici**\n\nOgni km in bici:\n• Risparmia **0.15 kg CO₂** (vs auto)\n• Guadagna **5 punti**\n\n📏 **Esempio:** 10 km = 1.5 kg CO₂ + 50 pt!\n\n🗓️ **Se pedali 5 giorni/semana:**\n• 7.5 kg CO₂/settimana\n• ~250 punti + streak bonus\n• ~30 kg CO₂/mese\n\n🚲 **I tuoi km in bici:** ${bikeKm.toFixed(1)} km\n💪 ${bikeKm > 100 ? 'Sei un vero cicloturista!' : bikeKm > 20 ? 'Ottimo progresso!' : 'Inizia oggi!'}`;
     }
 
-    else if (q.includes('remoto') || q.includes('smart working') || q.includes('casa') || q.includes('lavoro')) {
-      answer = `🏠 **Smart Working e impatto ambientale**\n\nOgni ora di lavoro da remoto evita in media **0.5 kg CO₂** (niente spostamenti auto!) e ti dà **10 punti**.\n\n📊 Una giornata intera (8 ore):\n- 4 kg CO₂ risparmiata\n- 80 punti + bonus streak\n\nÈ equivalente a non guidare per ~30 km! Se combini smart working + bici nei giorni in ufficio, l'impatto diventa enorme.\n\n💼 Il tuo totale: **${co2} kg CO₂** risparmiata finora.`;
+    else if (q.includes('carpooling') || q.includes('condivi') || q.includes('passegger')) {
+      const carpoolKm = recentActs.filter(a => a.type === 'Carpooling').reduce((sum, a) => sum + (a.km || 0), 0);
+      answer = `🚗 **Carpooling su EcoTrack**\n\nQuando registri carpooling:\n• guadagni **3 pt/km** + **0.06 kg CO₂/km**\n• puoi selezionare un **passeggero**\n• il passeggero riceve **metà dei tuoi punti**!\n\n🤝 **Esempio:** 20 km = 60 pt per te + 30 pt per il passeggero\n\n🚙 **I tuoi km in carpooling:** ${carpoolKm.toFixed(1)} km\n\n💡 È l'unica attività collaborativa — invita un collega!`;
     }
 
-    else if (q.includes('classifica') || q.includes('leader')) {
-      answer = `🏆 **Come scalare la classifica**\n\n1. **Registra attività ogni giorno** per il bonus streak (+20 pt)\n2. **Usa il Remoto** quando puoi (10 pt/ora, il più redditizio)\n3. **Bici per spostamenti** (5 pt/km)\n4. **Carpooling** per condividere punti col passeggero\n\n📊 I tuoi stats: **${u.points} punti**, **${co2} kg CO₂**, streak: **${streak} giorni**\n\nPunta a mantenere lo streak attivo — il bonus di 20 pt su ogni attività fa la differenza in classifica!`;
+    else if (q.includes('remoto') || q.includes('smart working') || q.includes('lavoro da cas') || q.includes('home office')) {
+      const remoteHours = recentActs.filter(a => a.type === 'Remoto').reduce((sum, a) => sum + (a.hours || 0), 0);
+      answer = `🏠 **Smart Working = Impatto Zero!**\n\nOgni ora da remoto:\n• Risparmia **0.5 kg CO₂** (niente auto!)\n• Guadagna **10 punti** ⭐\n\n📊 **Giornata intera (8h):**\n• 4 kg CO₂ risparmiata\n• 80 punti + streak bonus\n• = ~30 km di auto NON usata!\n\n📅 **Le tue ore remote:** ${remoteHours.toFixed(1)} ore\n💼 ${remoteHours > 40 ? 'Grande! Lavoro green!' : remoteHours > 10 ? 'Buon inizio!' : 'Prova lo smart working!'}`;
     }
 
-    else if (q.includes('sfida') || q.includes('challenge') || q.includes('badge')) {
-      answer = `🏅 **Badge e sfide**\n\nI badge si sbloccano automaticamente raggiungendo soglie:\n- 🌱 **Prima Volta** — prima attività registrata\n- 🌍 **10 kg CO₂** — 10 kg risparmiata\n- 🌍 **50 kg CO₂** — 50 kg risparmiata\n- 🏆 **100 kg CO₂** — 100 kg risparmiata\n\n📊 Il tuo progresso: **${co2} kg CO₂** — ${parseFloat(co2) >= 100 ? 'tutti sbloccati! 🎉' : `prossimo badge a ${parseFloat(co2) < 10 ? '10' : parseFloat(co2) < 50 ? '50' : '100'} kg`}`;
+    else if (q.includes('treno') || q.includes('bus') || q.includes('metro') || q.includes('transit')) {
+      answer = `🚂 **Trasporto Pubblico**\n\n🚂 **Treno:** 2 pt/km + 0.04 kg CO₂/km\n🚌 **Bus:** 1.5 pt/km + 0.08 kg CO₂/km\n🚇 **Metro:** simile al treno\n\n💡 **Perché usare i mezzi?**\n• Meno CO₂ = più verde\n• Puoi lavorare/leggere durante il viaggio\n• Eviti lo stress della guida\n\n🌍 Ogni km sui mezzi pubblici invece dell'auto fa la differenza!`;
     }
 
-    else if (q.includes('migliora') || q.includes('consiglio') || q.includes('consigli') || q.includes('suggerim')) {
-      answer = `🌿 **Consigli personalizzati per ${u.name}**\n\n`;
-      if (streak < 3) answer += `1. 🔥 **Attiva lo streak!** Registra un'attività al giorno per ottenere +20 punti bonus automatici.\n`;
-      else answer += `1. 🔥 **Ottimo streak di ${streak} giorni!** Non fermarti — ogni giorno conta.\n`;
-      answer += `2. 🚴 **Usa la bici** per tragitti sotto 10 km — è l'attività con il miglior rapporto CO₂/punti per km.\n`;
-      answer += `3. 🏠 **Smart working** vale 10 pt/ora — il più redditizio in assoluto.\n`;
-      answer += `4. 🚗 **Carpooling** con un collega: metà dei punti vanno anche a lui!\n`;
-      answer += `5. 📱 Condividi i tuoi progressi nella sezione Social per motivare gli altri.\n`;
-      answer += `\n📊 Attualmente: **${u.points} pt**, **${co2} kg CO₂**, **${u.total_activities} attività**`;
+    else if (q.includes('classifica') || q.includes('leaderboard') || q.includes('rank') || q.includes('posizione')) {
+      answer = `🏆 **Classifica e Come Scalarla**\n\n**Strategie vincenti:**\n1. 📅 **Streak giornaliero** → +20 pt bonus/attività\n2. 🏠 **Smart working** → 10 pt/ora (il migliore!)\n3. 🚴 **Bici** → 5 pt/km per tragitti <10 km\n4. 🚗 **Carpooling** → condividi punti coi colleghi\n\n📊 **I tuoi numeri:**\n• ${u.points} punti totali\n• ${co2} kg CO₂ risparmiata\n• ${streak} giorni di streak\n\n🔥 Mantieni lo streak — il bonus fa la differenza!`;
     }
 
-    else if (q.includes('co2') || q.includes('carbon') || q.includes('emissioni') || q.includes('impronta')) {
-      answer = `🌍 **La tua impronta ecologica su EcoTrack**\n\nHai risparmiato **${co2} kg di CO₂** con **${u.total_activities} attività**.\n\n📏 Per darti un'idea:\n- ${co2} kg CO₂ = circa **${Math.round(parseFloat(co2) / 0.15)} km percorsi in bici** invece che in auto\n- Equivale a **${Math.round(parseFloat(co2) / 22)} alberi piantati** (un albero assorbe ~22 kg CO₂/anno)\n\n💡 Per ridurre ancora di più: combina bici + smart working + treno per i viaggi lunghi. Ogni piccola azione si somma!`;
-    }
-
-    else if (q.includes('team') || q.includes('squadra') || q.includes('gruppo')) {
-      answer = `👥 **Team e Squadre**\n\nI team ti permettono di:\n- Unirti a una squadra verde e competere insieme\n- Creare sfide di team\n- Chiacchierare nella chat di gruppo\n- Condividere i progressi con i compagni\n\n💡 Per entrare in un team, cerca il codice invito da un compagno o creane uno nuovo nella sezione Team!`;
+    else if (q.includes('sfida') || q.includes('challenge')) {
+      answer = `🎯 **Sfide su EcoTrack**\n\n**Sfide personali:**\n• Creane una con obiettivo CO₂ e scadenza\n• Se raggiungi l'obiettivo, guadagni punti extra!\n\n**Sfide di team:**\n• Lavorate insieme verso un obiettivo comune\n• Chat di gruppo per motivarsi\n\n💡 Le sfide sono un ottimo modo per restare motivati!`;
     }
 
     else if (q.includes('badge') || q.includes('medaglia') || q.includes('trofeo') || q.includes('achievement')) {
-      answer = `🏅 **Badge e Traguardi**\n\nI badge si sbloccano raggiungendo soglie:\n- 🌱 **Prima Volta** — prima attività\n- 🌍 **10 kg CO₂** — 10 kg risparmiati\n- 🌳 **50 kg CO₂** — 50 kg risparmiati  \n- 🏆 **100 kg CO₂** — 100 kg risparmiati\n- 🔥 **Streak Master** — 30 giorni consecutivi\n- 🚴 **Ciclista** — 100 km in bici\n\n📊 Il tuo totale: **${co2} kg CO₂**`;
+      const nextBadge = parseFloat(co2) < 10 ? '10kg CO₂' : parseFloat(co2) < 50 ? '50kg CO₂' : parseFloat(co2) < 100 ? '100kg CO₂' : 'TUTTI!';
+      answer = `🏅 **Badge e Traguardi**\n\n**Badge disponibili:**\n• 🌱 **Prima Volta** — 1ª attività\n• ♻️ **Eco x5** — 5 attività\n• 🌿 **Eco x10** — 10 attività\n• 🌳 **Eco x50** — 50 attività\n• 🌍 **10kg CO₂** — 10 kg risparmiati\n• 🏆 **100kg CO₂** — 100 kg risparmiati\n• 🔥 **Streak Master** — 30 giorni consecutivi\n\n📊 Il tuo progresso: **${co2} kg CO₂**\n🎯 Prossimo badge: **${nextBadge}**${parseFloat(co2) >= 100 ? ' 🎉' : ''}`;
     }
 
-    else if (q.includes('vegetariano') || q.includes('vegano') || q.includes('cibo') || q.includes('past') || q.includes('aliment')) {
-      answer = `🥗 **Alimentazione Sostenibile**\n\nAnche il cibo ha un impatto! Ecco一些 consigli:\n- 🥬 **Vegetariano/Vegano**: riduce fino a 2.5 kg CO₂/giorno\n- 🚫 **Evita sprechi**: pianifica i pasti\n- 🏠 **Acquista locale**: meno trasporto = meno emissioni\n- 💧 **Risparmia acqua**: chiudi il rubinetto\n\n💡 Su EcoTrack presto potrai registrare anche attività food!`;
+    else if (q.includes('team') || q.includes('squadra') || q.includes('gruppo')) {
+      answer = `👥 **Team e Squadre**\n\n**Perché unirti a un team:**\n• Competere insieme in classifica\n• Creare sfide di team\n• Chat di gruppo\n• Condividere progressi\n\n**Come funziona:**\n• Creane uno nuovo o entra con codice invito\n• Ogni membro contribuisce ai punti team\n• L'amministratore può creare sfide\n\n💡 I team rendono tutto più divertente!`;
     }
 
-    else if (q.includes('riciclo') || q.includes('rifiuti') || q.includes('plastica') || q.includes('vetro') || q.includes('carta')) {
-      answer = `♻️ **Riciclo e Rifiuti**\n\nDifferenziare fa la differenza!\n- 📦 **Carta/Plastica**: riciclabili\n- 🥫 **Alluminio/Vetro**: riciclo al 100%\n- 🧪 **Pericolosi**: pile, electronics\n\n📊 Un kg di plastica riciclata risparmia ~6 kg CO₂!\nProva a registrare le tue attività di riciclo presto su EcoTrack!`;
+    else if (q.includes('social') || q.includes('post') || q.includes('seguire') || q.includes('amico')) {
+      answer = `📱 **Social e Community**\n\n**Funzionalità:**\n• Pubblica **post** per la community\n• Reagisci con like e commenti\n• **Segui** altri utenti green\n• Costruisci la tua rete eco!\n\n💡 Condividere i progressi motiva te e gli altri!`;
+    }
+
+    else if (q.includes('vegetariano') || q.includes('vegano') || q.includes('veggie') || q.includes('piant') || q.includes('cibo')) {
+      answer = `🥗 **Cibo e Sostenibilità**\n\n**Impatto alimentare:**\n• 🥬 **Vegetariano**: -2.5 kg CO₂/giorno\n• 🌱 **Vegano**: -3 kg CO₂/giorno\n• 🥩 **Carne rossa**: alto impatto\n\n**Consigli:**\n• 🚫 Evita sprechi alimentari\n• 🏠Compra locale e di stagione\n• 💧 Risparmia acqua\n• 🌱 Pianta erbe aromatiche\n\n💡 Il cibo rappresenta ~25% della tua impronta!`;
+    }
+
+    else if (q.includes('riciclo') || q.includes('rifiuti') || q.includes('plastica') || q.includes('differenziata')) {
+      answer = `♻️ **Riciclo e Rifiuti**\n\n**Guida al riciclo:**\n• 📦 **Carta/Cartone** → bidone blu\n• 🥤 **Plastica/Metallo** → bidone giallo\n• 🫙 **Vetro** → bidone verde\n• 🍎 **Umido** → compostiera\n• 🧪 **Pericolosi** → ecocentro\n\n📊 Un kg di plastica riciclata = ~6 kg CO₂ risparmiati!\n\n💡 Differenziare fa la differenza!`;
+    }
+
+    else if (q.includes('acqua') || q.includes('idrico') || q.includes('bev') || q.includes('potabile')) {
+      answer = `💧 **Risparmio Idrico**\n\n**Consigli acqua:**\n• 🚿 Docce brevi (5 minuti)\n• 🚰 Chiudi il rubinetto mentre lavi i denti\n• 🍽️ Lava i piatti con ciotola, non acqua corrente\n• 🌱 Innaffia piante di sera\n\n💧 Un rubinetto che gocciola spreca 5.000 lt/anno!\n\n🌍 L'acqua potabile è preziosa — non sprecarla!`;
+    }
+
+    else if (q.includes('energia') || q.includes('luce') || q.includes('bolletta') || q.includes('elettrico')) {
+      answer = `⚡ **Risparmio Energetico**\n\n**Consigli energia:**\n• 💡 LED al posto delle vecchie lampadine\n• 🔌 Stacca i dispositivi in standby\n• 🌡️ Termostato a 20°C\n• ☀️ Approfitta della luce naturale\n• 🧣 Vestiti a strati invece del riscaldamento\n\n📊 Standby = 10% della bolletta!\n\n💡 Piccoli gesti = grandi risparmi!`;
+    }
+
+    else if (q.includes('albero') || q.includes('pianta') || q.includes('foresta') || q.includes('verde')) {
+      answer = `🌳 **Verde e Piante**\n\n**Perché gli alberi contano:**\n• Un albero assorbe ~22 kg CO₂/anno\n• Migliorano aria e umore\n• Aumentano biodiversità\n\n**Cosa puoi fare:**\n• Pianta alberi/nelle nel tuo giardino\n• Cura piante in balcone\n• Partecipa a tree planting\n• Supporta progetti di riforestazione\n\n🌱 Ogni pianta conta per un futuro verde!`;
+    }
+
+    else if (q.includes('viaggio') || q.includes('vacanza') || q.includes('aereo') || q.includes('flight')) {
+      answer = `✈️ **Viaggi Sostenibili**\n\n**Impatto trasporti:**\n• 🌍 Aereo: alto impatto\n• 🚗 Auto: medio-alto\n• 🚂 Trene: basso impatto\n\n**Consigli:**\n• Preferisci il treno per viaggi <4h\n• Compensa le emissioni di voli\n• Vacanze locali = meno CO₂\n• Staycation: resta a casa!\n\n💡 Un volo Roma-Milano = ~150 kg CO₂, il treno ~3 kg!`;
+    }
+
+    else if (q.includes('co2') || q.includes('carbon') || q.includes('emissioni') || q.includes('impronta') || q.includes('footprint')) {
+      answer = `🌍 **La tua impronta ecologica**\n\n📊 **Il tuo impatto su EcoTrack:**\n• **${co2} kg CO₂** risparmiata\n• **${u.total_activities} attività**\n• Media: **${avgCo2PerDay} kg/giorno**\n\n📏 **Equivalenze:**\n• ${co2} kg = ~${Math.round(parseFloat(co2) / 0.15)} km in bici\n• = ~${Math.round(parseFloat(co2) / 22)} alberi piantati/anno\n• = ~${Math.round(parseFloat(co2) / 50)} notti senza riscaldamento\n\n💡 ${parseFloat(co2) > 100 ? '🌟 Impressionante! Sei un eco warrior!' : 'Continua così, ogni kg conta!'} Keep going!`;
+    }
+
+    else if (q.includes('migliora') || q.includes('consiglio') || q.includes('suggerim') || q.includes('come fare')) {
+      answer = `🌿 **Consigli per ${u.name}**\n\n`;
+      if (streak < 3) answer += `1. 🔥 **Attiva lo streak!** +20 pt bonus/attività\n`;
+      else answer += `1. 🔥 **Streak di ${streak} giorni!** Incredibile, non fermarti!\n`;
+      answer += `2. 🚴 **Usa la bici** per tragitti <10 km — miglior rapporto pt/CO₂\n`;
+      answer += `3. 🏠 **Smart working** 10 pt/ora — il più redditizio!\n`;
+      answer += `4. 🚗 **Carpooling** — condividi punti con passeggeri\n`;
+      answer += `5. 📱 Pubblica nel **Social** per motivare altri\n`;
+      answer += `\n📊 **Stats:** ${u.points} pt | ${co2} kg CO₂ | ${u.total_activities} attività`;
+    }
+
+    else if (q.includes('cosa puoi fare') || q.includes('cosa sai fare') || q.includes('capac')) {
+      answer = `🤖 **Cosa posso fare per te:**\n\n💡 **Posso rispondere a:**\n• Come funziona lo streak e i punti\n• Consigli per ogni attività (bici, treno, smart working...)\n• La tua impronta ecologica\n• Come funziona carpooling, team, sfide\n• Badge e obiettivi\n• Alimentazione sostenibile\n• Risparmio energetico/idrico\n• E tanto altro su eco-sostenibilità!\n\n🔒 Rispondo solo su temi green!`;
     }
 
     else {
-      // Fallback generico ma comunque personalizzato
-      answer = `🌿 **Ciao ${u.name}!** Ecco il tuo riepilogo:\n\n📊 **${u.points} punti** | **${co2} kg CO₂ risparmiata** | **${u.total_activities} attività** | 🔥 Streak: **${streak} giorni**\n\nProva a chiedermi qualcosa di specifico:\n- \"Quali attività danno più punti?\"\n- \"Come funziona lo streak?\"\n- \"Consigli sulla bici\"\n- \"Come funziona il carpooling?\"`;
+      answer = `🌿 **Ciao ${u.name}!** Ecco il tuo riepilogo:\n\n📊 **${u.points} punti** | **${co2} kg CO₂** risparmiata\n📅 **${u.total_activities} attività** | 🔥 Streak: **${streak} giorni**\n\n📈 Questa settimana: ${weekPts} pt, ${weekCo2} kg CO₂\n\n💡 Chiedimi qualcosa di specifico:\n• "Quali attività danno più punti?"\n• "Come funziona lo streak?"\n• "Consigli per la bici"\n• "Come ridurre l'impronta"\n• "Cos'è il carpooling?"`;
     }
 
     return res.json({ answer });
