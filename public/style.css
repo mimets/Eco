@@ -64,8 +64,29 @@
 .ai-chat-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 760px;
+  gap: 16px;
+  width: 100%;
+}
+
+.ai-chat-container .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.ai-messages {
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  min-height: 300px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
 .ai-chat-container .section-header {
@@ -193,13 +214,10 @@
   }
 }
 
-/* Preset chips */
-.ai-presets {
-  background: #fff;
-  border: 1px solid var(--gray-100);
-  border-radius: var(--radius-lg);
-  padding: 16px 18px;
-  box-shadow: var(--shadow-xs);
+.ai-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .ai-preset-chips {
@@ -209,11 +227,11 @@
 }
 
 .ai-chip {
-  padding: 5px 10px;
+  padding: 8px 14px;
   background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
@@ -225,7 +243,17 @@
   background: var(--brand);
   border-color: var(--brand);
   color: #fff;
-  transform: scale(1.02);
+  transform: scale(1.03);
+}
+
+.ai-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-presets {
+  margin: 8px 0;
 }
 
 .ai-preset-chips {
@@ -237,20 +265,26 @@
 /* Input row */
 .ai-input-row {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  gap: 10px;
+  align-items: stretch;
+  width: 100%;
 }
 
 .ai-input-row input {
   flex: 1;
   border-radius: var(--radius-lg) !important;
-  padding: 14px 20px !important;
-  font-size: 15px;
+  padding: 16px 20px !important;
+  font-size: 16px !important;
+  height: auto;
 }
 
 .ai-input-row .btn-primary {
-  padding: 14px 24px;
-  font-size: 15px;
+  padding: 16px 28px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 html {
