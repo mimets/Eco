@@ -284,8 +284,8 @@
 .ai-input-row input {
   flex: 1;
   border-radius: var(--radius-lg) !important;
-  padding: 18px 22px !important;
-  font-size: 18px !important;
+  padding: 22px 26px !important;
+  font-size: 20px !important;
   height: auto;
   background: #fff;
   color: #1e293b;
@@ -296,11 +296,11 @@
 }
 
 .ai-input-row .btn-primary {
-  padding: 18px 32px;
-  font-size: 17px;
+  padding: 16px 20px;
+  font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   white-space: nowrap;
 }
 
