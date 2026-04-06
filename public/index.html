@@ -1023,7 +1023,6 @@
           <div id="aiMessages" class="ai-messages"></div>
 
           <div class="ai-presets">
-            <p class="label-sm" style="margin-bottom:8px;color:var(--gray-500);">Domande rapide:</p>
             <div class="ai-preset-chips" id="aiQuickButtons">
               <button class="ai-chip" onclick="askAI('Come funziona lo streak?')">🔥 Streak</button>
               <button class="ai-chip" onclick="askAI('Quali attività danno più punti?')">⭐ Punti</button>
@@ -1032,13 +1031,13 @@
               <button class="ai-chip" onclick="askAI('Smart working e impatto')">🏠 Smart</button>
               <button class="ai-chip" onclick="askAI('La mia impronta CO2')">🌍 CO₂</button>
               <button class="ai-chip" onclick="askAI('Come risparmiare energia?')">⚡ Energia</button>
-              <button class="ai-chip" onclick="askAI('Cosa puoi fare?')">🤖 Cosa sai fare?</button>
+              <button class="ai-chip" onclick="askAI('Cosa puoi fare?')">🤖 Info</button>
             </div>
           </div>
 
           <div class="ai-input-row">
-            <input type="text" id="aiInput" placeholder="Scrivi una domanda eco..." onkeydown="if(event.key==='Enter') sendAI()" />
-            <button class="btn-primary" onclick="sendAI()" id="aiSendBtn">
+            <input type="text" id="aiInput" placeholder="Scrivi una domanda eco..." onkeydown="if(event.key==='Enter') sendAI()" style="flex:1;" />
+            <button class="btn-primary" onclick="sendAI()" id="aiSendBtn" style="white-space:nowrap;">
               <i class="fas fa-paper-plane"></i> Chiedi
             </button>
           </div>
