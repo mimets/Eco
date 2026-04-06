@@ -2432,6 +2432,7 @@ function initAIChat() {
 function appendAIMessage(role, text, typing = false) {
   const container = document.getElementById('aiMessages');
   if (!container) return;
+  const div = document.createElement('div');
   div.className = `ai-msg ${role}`;
   const avatar = document.createElement('div');
   avatar.className = 'ai-avatar';
