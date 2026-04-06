@@ -14,6 +14,8 @@ let currentShopCategory = 'all';
 let tutorialStep = 1;
 let socket = null;
 let aiModel = null;
+let currentTeamId = null;
+let teamMessagesInterval = null;
 
 window.confirmCallback = null;
 
@@ -25,188 +27,7 @@ let miiState = {
   hair: 'none'
 };
 
-// ═══════════════════════════════════════════
-// 3D AVATAR ENGINE - Ready Player Me (Free Avatars)
-// ═══════════════════════════════════════════
-let avatar3D = {
-  scene: null, camera: null, renderer: null, avatar: null, animationId: null,
-  containers: {}, mixer: null, clock: null
-};
-
-const RPM_AVATAR_URL = 'https://models.readyplayer.me/64d3e4a3a41d07654f98db21.glb';
-
-function initAvatar3D(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container || typeof THREE === 'undefined') return;
-  
-  container.innerHTML = '';
-  
-  const w = container.clientWidth || 200;
-  const h = container.clientHeight || 200;
-  
-  avatar3D.scene = new THREE.Scene();
-  avatar3D.scene.background = new THREE.Color(0x1e293b);
-  
-  avatar3D.camera = new THREE.PerspectiveCamera(40, w/h, 0.1, 100);
-  avatar3D.camera.position.set(0, 0.5, 4);
-  
-  if (avatar3D.renderer) avatar3D.renderer.dispose();
-  avatar3D.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  avatar3D.renderer.setSize(w, h);
-  avatar3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  avatar3D.renderer.outputEncoding = THREE.sRGBEncoding;
-  avatar3D.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  avatar3D.renderer.toneMappingExposure = 1.2;
-  container.appendChild(avatar3D.renderer.domElement);
-  
-  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-  avatar3D.scene.add(ambient);
-  
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  keyLight.position.set(3, 3, 5);
-  avatar3D.scene.add(keyLight);
-  
-  const fillLight = new THREE.DirectionalLight(0x88ccff, 0.5);
-  fillLight.position.set(-3, 0, 3);
-  avatar3D.scene.add(fillLight);
-  
-  const rimLight = new THREE.DirectionalLight(0x22d3ee, 0.4);
-  rimLight.position.set(0, 2, -3);
-  avatar3D.scene.add(rimLight);
-  
-  avatar3D.clock = new THREE.Clock();
-  
-  loadRPMAvatar(RPM_AVATAR_URL);
-  
-  function animate() {
-    avatar3D.animationId = requestAnimationFrame(animate);
-    const delta = avatar3D.clock.getDelta();
-    if (avatar3D.mixer) avatar3D.mixer.update(delta);
-    if (avatar3D.avatar) {
-      avatar3D.avatar.rotation.y = Math.sin(avatar3D.clock.elapsedTime * 0.5) * 0.15;
-    }
-    avatar3D.renderer.render(avatar3D.scene, avatar3D.camera);
-  }
-  animate();
-  avatar3D.containers[containerId] = true;
-}
-
-function loadRPMAvatar(url) {
-  const loader = new THREE.GLTFLoader();
-  loader.load(url, (gltf) => {
-    if (avatar3D.avatar) avatar3D.scene.remove(avatar3D.avatar);
-    
-    avatar3D.avatar = gltf.scene;
-    avatar3D.avatar.scale.set(2, 2, 2);
-    avatar3D.avatar.position.y = -1.5;
-    
-    avatar3D.avatar.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-    
-    avatar3D.scene.add(avatar3D.avatar);
-    
-    if (gltf.animations && gltf.animations.length) {
-      avatar3D.mixer = new THREE.AnimationMixer(avatar3D.avatar);
-      const idle = avatar3D.mixer.clipAction(gltf.animations[0]);
-      idle.play();
-    }
-  }, undefined, (err) => {
-    console.error('RPM Avatar load error:', err);
-  });
-}
-
-function updateAvatar3D() {
-  // Custom colors applied via material modifications
-  if (avatar3D.avatar) {
-    avatar3D.avatar.traverse((child) => {
-      if (child.isMesh && child.name.toLowerCase().includes('skin')) {
-        child.material.color = new THREE.Color(miiState.skin || '#fde68a');
-      }
-      if (child.isMesh && child.name.toLowerCase().includes('hair')) {
-        child.material.color = new THREE.Color(miiState.color || '#1f2937');
-      }
-    });
-  }
-  if (avatar3D.scene && avatar3D.scene.background) {
-    avatar3D.scene.background = new THREE.Color(miiState.color || '#16a34a');
-  }
-}
-
-function renderAvatar3D(containerId) {
-  if (typeof THREE === 'undefined') {
-    console.warn('Three.js not loaded');
-    return;
-  }
-  if (avatar3D.containers[containerId]) {
-    updateAvatar3D();
-    return;
-  }
-  initAvatar3D(containerId);
-}
-  
-  // Camera
-  avatar3D.camera = new THREE.PerspectiveCamera(40, w/h, 0.1, 100);
-  avatar3D.camera.position.set(0, 0.3, 4.5);
-  
-  // Renderer
-  if (avatar3D.renderer) {
-    avatar3D.renderer.dispose();
-    container.removeChild(avatar3D.renderer.domElement);
-  }
-  avatar3D.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  avatar3D.renderer.setSize(w, h);
-  avatar3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  avatar3D.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  avatar3D.renderer.toneMappingExposure = 1.2;
-  container.appendChild(avatar3D.renderer.domElement);
-  
-  // Premium lighting
-  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-  avatar3D.scene.add(ambient);
-  
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  keyLight.position.set(3, 3, 5);
-  avatar3D.scene.add(keyLight);
-  
-  const fillLight = new THREE.DirectionalLight(0x88ccff, 0.4);
-  fillLight.position.set(-3, 0, 3);
-  avatar3D.scene.add(fillLight);
-  
-  const rimLight = new THREE.DirectionalLight(0x22d3ee, 0.3);
-  rimLight.position.set(0, 2, -3);
-  avatar3D.scene.add(rimLight);
-  
-  // Create avatar
-  createAvatar3D();
-  
-  // Smooth idle animation (no spin)
-  let time = 0;
-  function animate() {
-    avatar3D.animationId = requestAnimationFrame(animate);
-    time += 0.016;
-    if (avatar3D.avatar) {
-      avatar3D.avatar.rotation.y = Math.sin(time * 0.5) * 0.1;
-      avatar3D.avatar.position.y = Math.sin(time * 2) * 0.02;
-    }
-    avatar3D.renderer.render(avatar3D.scene, avatar3D.camera);
-  }
-  animate();
-function renderAvatar3D(containerId) {
-  if (typeof THREE === 'undefined') {
-    console.warn('Three.js not loaded');
-    return;
-  }
-  if (avatar3D.containers[containerId]) {
-    updateAvatar3D();
-    return;
-  }
-  initAvatar3D(containerId);
-}
-
+// CONSTANTS - Must be before any function that uses them
 const CO2_RATES = {
   'Bici': { type: 'km', co2: 0.15, points: 5 },
   'Treno': { type: 'km', co2: 0.04, points: 2 },
@@ -223,8 +44,7 @@ const ACTIVITY_ICONS = {
 
 const BG_COLORS = [
   '#16a34a', '#22c55e', '#3b82f6', '#6366f1', '#8b5cf6',
-  '#ec4899', '#ef4444', '#f59e0b', '#06b6d4', '#14b8a6',
-  '#84cc16', '#f97316', '#1e293b', '#64748b', '#ffffff'
+  '#ec4899', '#14b8a6', '#f97316', '#ef4444'
 ];
 
 const SKIN_COLORS = [
@@ -235,6 +55,19 @@ const SKIN_COLORS = [
 const HAIR_OPTIONS = ['none', 'short', 'long', 'curly', 'spiky', 'bun', 'flame'];
 const EYE_OPTIONS = ['normal', 'happy', 'sleepy', 'surprised', 'wink', 'cool', 'star', 'heart'];
 const MOUTH_OPTIONS = ['smile', 'grin', 'open', 'smirk', 'sad', 'rainbow', 'fire'];
+
+// ═══════════════════════════════════════════
+// 3D AVATAR ENGINE (Simplified - uses 2D canvas)
+// ═══════════════════════════════════════════
+function renderAvatar3D(containerId) {
+  drawMii(miiState, 'miiCanvas', 200);
+  drawMii(miiState, 'userAvatar', 48);
+}
+
+function updateAvatar3D() {
+  drawMii(miiState, 'miiCanvas', 200);
+  drawMii(miiState, 'userAvatar', 48);
+}
 
 // ═══════════════════════════════════════════
 // REAL-TIME POLLING — aggiornamento più lento per evitare sovraccarico server aziendale
@@ -2204,8 +2037,6 @@ window.adminDeletePost = adminDeletePost;
 // ═══════════════════════════════════════════
 // TEAMS
 // ═══════════════════════════════════════════
-let currentTeamId = null;
-let teamMessagesInterval = null;
 
 async function loadTeams() {
   const [data, lb] = await Promise.all([

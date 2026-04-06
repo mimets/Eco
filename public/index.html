@@ -24,10 +24,15 @@
 
   <link rel="stylesheet" href="style.css" />
   
-  <!-- Three.js for REAL 3D -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
-  <!-- GLTFLoader for Ready Player Me avatars -->
-  <script src="https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js"></script>
+  <!-- Three.js for REAL 3D (ES Module version) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
   <!-- AI IMAGE RECOGNITION (TF.js + MobileNet) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
