@@ -66,6 +66,8 @@
   flex-direction: column;
   gap: 16px;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .ai-chat-container .section-header {
@@ -80,12 +82,21 @@
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-xl);
   padding: 20px;
-  min-height: 300px;
+  min-height: 400px;
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-bubble {
+  max-width: 85%;
+  padding: 18px 22px;
+  border-radius: var(--radius-xl);
+  font-size: 17px;
+  line-height: 1.7;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1026,7 +1037,13 @@ textarea::placeholder {
 }
 
 .tab-pane.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 180px);
+}
+
+#ai-advisor {
+  height: 100%;
 }
 
 @keyframes fadeInUp {
