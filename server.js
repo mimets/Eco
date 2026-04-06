@@ -1046,7 +1046,9 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
     const ECO_KEYWORDS = ['co2', 'carbon', 'bici', 'bus', 'treno', 'carpooling', 'remoto', 'videocall',
       'eco', 'green', 'sostenib', 'ambient', 'impronta', 'emissione', 'punti', 'streak',
       'clima', 'trasport', 'lavoro', 'risparmio', 'energia', 'migliora', 'consiglio', 'consigli',
-      'attivi', 'classifica', 'sfida', 'badge', 'progressi', 'settimana', 'giorno', 'mese'];
+      'attivi', 'classifica', 'sfida', 'badge', 'progressi', 'settimana', 'giorno', 'mese',
+      'team', 'compagno', 'social', 'post', 'amico', 'seguire', 'seguito', 'vegetariano',
+      'vegano', 'cibo', 'riciclo', 'rifiuti', 'plastica', 'acqua', 'energia', 'solare', 'bulbo'];
 
     const isOnTopic = ECO_KEYWORDS.some(k => q.includes(k));
     if (!isOnTopic) {
@@ -1099,6 +1101,22 @@ app.post('/api/ai-advisor', auth, async (req, res) => {
 
     else if (q.includes('co2') || q.includes('carbon') || q.includes('emissioni') || q.includes('impronta')) {
       answer = `🌍 **La tua impronta ecologica su EcoTrack**\n\nHai risparmiato **${co2} kg di CO₂** con **${u.total_activities} attività**.\n\n📏 Per darti un'idea:\n- ${co2} kg CO₂ = circa **${Math.round(parseFloat(co2) / 0.15)} km percorsi in bici** invece che in auto\n- Equivale a **${Math.round(parseFloat(co2) / 22)} alberi piantati** (un albero assorbe ~22 kg CO₂/anno)\n\n💡 Per ridurre ancora di più: combina bici + smart working + treno per i viaggi lunghi. Ogni piccola azione si somma!`;
+    }
+
+    else if (q.includes('team') || q.includes('squadra') || q.includes('gruppo')) {
+      answer = `👥 **Team e Squadre**\n\nI team ti permettono di:\n- Unirti a una squadra verde e competere insieme\n- Creare sfide di team\n- Chiacchierare nella chat di gruppo\n- Condividere i progressi con i compagni\n\n💡 Per entrare in un team, cerca il codice invito da un compagno o creane uno nuovo nella sezione Team!`;
+    }
+
+    else if (q.includes('badge') || q.includes('medaglia') || q.includes('trofeo') || q.includes('achievement')) {
+      answer = `🏅 **Badge e Traguardi**\n\nI badge si sbloccano raggiungendo soglie:\n- 🌱 **Prima Volta** — prima attività\n- 🌍 **10 kg CO₂** — 10 kg risparmiati\n- 🌳 **50 kg CO₂** — 50 kg risparmiati  \n- 🏆 **100 kg CO₂** — 100 kg risparmiati\n- 🔥 **Streak Master** — 30 giorni consecutivi\n- 🚴 **Ciclista** — 100 km in bici\n\n📊 Il tuo totale: **${co2} kg CO₂**`;
+    }
+
+    else if (q.includes('vegetariano') || q.includes('vegano') || q.includes('cibo') || q.includes('past') || q.includes('aliment')) {
+      answer = `🥗 **Alimentazione Sostenibile**\n\nAnche il cibo ha un impatto! Ecco一些 consigli:\n- 🥬 **Vegetariano/Vegano**: riduce fino a 2.5 kg CO₂/giorno\n- 🚫 **Evita sprechi**: pianifica i pasti\n- 🏠 **Acquista locale**: meno trasporto = meno emissioni\n- 💧 **Risparmia acqua**: chiudi il rubinetto\n\n💡 Su EcoTrack presto potrai registrare anche attività food!`;
+    }
+
+    else if (q.includes('riciclo') || q.includes('rifiuti') || q.includes('plastica') || q.includes('vetro') || q.includes('carta')) {
+      answer = `♻️ **Riciclo e Rifiuti**\n\nDifferenziare fa la differenza!\n- 📦 **Carta/Plastica**: riciclabili\n- 🥫 **Alluminio/Vetro**: riciclo al 100%\n- 🧪 **Pericolosi**: pile, electronics\n\n📊 Un kg di plastica riciclata risparmia ~6 kg CO₂!\nProva a registrare le tue attività di riciclo presto su EcoTrack!`;
     }
 
     else {

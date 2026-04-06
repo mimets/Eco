@@ -68,6 +68,13 @@
   max-width: 760px;
 }
 
+.ai-chat-container .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
 .ai-messages {
   background: #fff;
   border: 1px solid var(--gray-100);

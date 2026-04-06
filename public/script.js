@@ -424,7 +424,7 @@ async function showSection(section) {
     case 'notifiche': await loadNotifications(); break;
     case 'teams': await loadTeams(); break;
     case 'admin': if (myProfile?.is_admin) await loadAdminPanel(); break;
-    case 'ai-advisor': break; // AI section is self-contained, no async load needed
+    case 'ai-advisor': initAIChat(); break; // AI section is self-contained, no async load needed
   }
 }
 window.showSection = showSection;
@@ -2411,9 +2411,27 @@ window.sharePost = sharePost;
 // ═══════════════════════════════════════════
 // AI ECO-ADVISOR
 // ═══════════════════════════════════════════
+const AI_WELCOME = `Ciao! Sono il tuo consulente ecologico personale 🌱<br>Chiedimi come ridurre la tua CO₂, migliorare il punteggio o qualsiasi consiglio green!`;
+
+function initAIChat() {
+  const container = document.getElementById('aiMessages');
+  if (!container) return;
+  if (container.children.length > 0) return;
+  
+  const saved = localStorage.getItem('ecotalk_history');
+  if (saved) {
+    try {
+      const history = JSON.parse(saved);
+      history.forEach(msg => appendAIMessage(msg.role, msg.text));
+      return;
+    } catch (e) { localStorage.removeItem('ecotalk_history'); }
+  }
+  appendAIMessage('bot', AI_WELCOME);
+}
+
 function appendAIMessage(role, text, typing = false) {
   const container = document.getElementById('aiMessages');
-  const div = document.createElement('div');
+  if (!container) return;
   div.className = `ai-msg ${role}`;
   const avatar = document.createElement('div');
   avatar.className = 'ai-avatar';
@@ -2431,6 +2449,15 @@ function appendAIMessage(role, text, typing = false) {
   container.scrollTop = container.scrollHeight;
   return bubble;
 }
+
+function clearAIChat() {
+  const container = document.getElementById('aiMessages');
+  if (!container) return;
+  container.innerHTML = '';
+  appendAIMessage('bot', AI_WELCOME);
+  localStorage.removeItem('ecotalk_history');
+}
+window.clearAIChat = clearAIChat;
 
 async function askAI(question) {
   document.getElementById('aiInput').value = question;
@@ -2453,15 +2480,33 @@ async function sendAI() {
   const data = await apiRequest('/api/ai-advisor', 'POST', { question: q });
 
   sendBtn.disabled = false;
+  let replyText = 'Nessuna risposta.';
   if (data.error) {
-    typingBubble.textContent = '\u274c Errore: ' + data.error;
+    replyText = '\u274c Errore: ' + data.error;
   } else {
-    const text = data.answer || 'Nessuna risposta.';
-    typingBubble.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+    replyText = data.answer || 'Nessuna risposta.';
   }
+  typingBubble.innerHTML = replyText.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
   document.getElementById('aiMessages').scrollTop = document.getElementById('aiMessages').scrollHeight;
+  
+  saveAIHistory();
 }
 window.sendAI = sendAI;
+
+function saveAIHistory() {
+  const container = document.getElementById('aiMessages');
+  if (!container) return;
+  const msgs = [];
+  container.querySelectorAll('.ai-msg').forEach(msg => {
+    const role = msg.classList.contains('user') ? 'user' : 'bot';
+    const bubble = msg.querySelector('.ai-bubble');
+    let text = bubble ? bubble.innerHTML.replace(/<br>/g, '\n').replace(/<strong>(.+?)<\/strong>/g, '**$1**') : '';
+    const typing = bubble && bubble.querySelector('.ai-typing');
+    if (!typing) msgs.push({ role, text });
+  });
+  if (msgs.length > 20) msgs.splice(0, msgs.length - 20);
+  localStorage.setItem('ecotalk_history', JSON.stringify(msgs));
+}
 
 async function loadRides(teamId) {
   const data = await apiRequest(`/api/teams/${teamId}/rides`);
