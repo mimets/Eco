@@ -364,7 +364,7 @@ function updateSidebar(user) {
   const adminNav = document.getElementById('adminNavItem');
   if (adminNav) adminNav.style.display = user.is_admin ? 'flex' : 'none';
 
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'userAvatar', 48);
   const soc = document.getElementById('socialAvatar');
   if (soc) drawMii(miiState, 'socialAvatar', 36);
   
@@ -1351,7 +1351,7 @@ function syncMiiState(user) {
   miiState.eyes = user.avatar_eyes || 'normal';
   miiState.mouth = user.avatar_mouth || 'smile';
   miiState.hair = user.avatar_hair || 'none';
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'userAvatar', 48);
   if (document.getElementById('miiCanvas')) drawMii(miiState, 'miiCanvas', 200);
 }
 
@@ -1680,7 +1680,7 @@ async function saveAvatar() {
     myProfile.avatar_hair = miiState.hair;
   }
   showNotification('✅ Avatar salvato!', 'success');
-  drawMii(miiState, 'sidebarAvatar', 48);
+  drawMii(miiState, 'userAvatar', 48);
 }
 window.saveAvatar = saveAvatar;
 
