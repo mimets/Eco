@@ -1582,17 +1582,19 @@ function drawHeart(ctx, cx, cy, size) {
 }
 
 async function loadAvatarSection() {
-  const profile = await apiRequest('/api/profile');
+  const [profile, items] = await Promise.all([
+    apiRequest('/api/profile'),
+    allShopItems.length ? Promise.resolve(allShopItems) : apiRequest('/api/shop')
+  ]);
   if (!profile.error) { myProfile = { ...myProfile, ...profile }; syncMiiState(profile); }
+  if (items && !items.error) allShopItems = items;
 
-  const owned = myProfile?.owned_items || [];
-  let shopItems = allShopItems;
-  if (!shopItems.length) { shopItems = await apiRequest('/api/shop'); }
+  const owned = (myProfile?.owned_items || []).map(id => Number(id));
 
   // Helper: is item unlocked
   const hasItem = (name) => {
-    if (!shopItems || !Array.isArray(shopItems)) return false;
-    const item = shopItems.find(i => i.name === name);
+    if (!allShopItems || !Array.isArray(allShopItems)) return false;
+    const item = allShopItems.find(i => i.name === name);
     if (!item) return false;
     return owned.includes(Number(item.id));
   };
