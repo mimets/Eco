@@ -26,57 +26,84 @@ let miiState = {
 };
 
 // ═══════════════════════════════════════════
-// 3D AVATAR ENGINE (Three.js)
+// 3D AVATAR ENGINE (Three.js) - PREMIUM
 // ═══════════════════════════════════════════
 let avatar3D = {
-  scene: null, camera: null, renderer: null, avatar: null, animationId: null
+  scene: null, camera: null, renderer: null, avatar: null, animationId: null,
+  containers: {}
 };
 
 function initAvatar3D(containerId) {
   const container = document.getElementById(containerId);
   if (!container || typeof THREE === 'undefined') return;
   
+  // Clean container
+  container.innerHTML = '';
+  
   const w = container.clientWidth || 200;
   const h = container.clientHeight || 200;
   
-  // Scene
+  // Scene with gradient background
   avatar3D.scene = new THREE.Scene();
-  avatar3D.scene.background = new THREE.Color(0x1e293b);
+  
+  // Gradient background sphere
+  const bgGeo = new THREE.SphereGeometry(10, 32, 32);
+  const bgMat = new THREE.MeshBasicMaterial({ 
+    color: new THREE.Color(miiState.color || '#16a34a'),
+    side: THREE.BackSide
+  });
+  const bgSphere = new THREE.Mesh(bgGeo, bgMat);
+  avatar3D.scene.add(bgSphere);
+  avatar3D.bgSphere = bgSphere;
   
   // Camera
-  avatar3D.camera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
-  avatar3D.camera.position.set(0, 0, 5);
+  avatar3D.camera = new THREE.PerspectiveCamera(40, w/h, 0.1, 100);
+  avatar3D.camera.position.set(0, 0.3, 4.5);
   
   // Renderer
+  if (avatar3D.renderer) {
+    avatar3D.renderer.dispose();
+    container.removeChild(avatar3D.renderer.domElement);
+  }
   avatar3D.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   avatar3D.renderer.setSize(w, h);
   avatar3D.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  avatar3D.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  avatar3D.renderer.toneMappingExposure = 1.2;
   container.appendChild(avatar3D.renderer.domElement);
   
-  // Lights
-  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+  // Premium lighting
+  const ambient = new THREE.AmbientLight(0xffffff, 0.5);
   avatar3D.scene.add(ambient);
   
-  const key = new THREE.DirectionalLight(0xffffff, 0.8);
-  key.position.set(2, 2, 5);
-  avatar3D.scene.add(key);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  keyLight.position.set(3, 3, 5);
+  avatar3D.scene.add(keyLight);
   
-  const fill = new THREE.DirectionalLight(0x88ccff, 0.4);
-  fill.position.set(-2, 0, 3);
-  avatar3D.scene.add(fill);
+  const fillLight = new THREE.DirectionalLight(0x88ccff, 0.4);
+  fillLight.position.set(-3, 0, 3);
+  avatar3D.scene.add(fillLight);
+  
+  const rimLight = new THREE.DirectionalLight(0x22d3ee, 0.3);
+  rimLight.position.set(0, 2, -3);
+  avatar3D.scene.add(rimLight);
   
   // Create avatar
   createAvatar3D();
   
-  // Animation loop
+  // Smooth idle animation (no spin)
+  let time = 0;
   function animate() {
     avatar3D.animationId = requestAnimationFrame(animate);
+    time += 0.016;
     if (avatar3D.avatar) {
-      avatar3D.avatar.rotation.y += 0.005;
+      avatar3D.avatar.rotation.y = Math.sin(time * 0.5) * 0.1;
+      avatar3D.avatar.position.y = Math.sin(time * 2) * 0.02;
     }
     avatar3D.renderer.render(avatar3D.scene, avatar3D.camera);
   }
   animate();
+  avatar3D.containers[containerId] = true;
 }
 
 function createAvatar3D() {
@@ -84,154 +111,237 @@ function createAvatar3D() {
   
   const group = new THREE.Group();
   
-  // Head
-  const headGeo = new THREE.SphereGeometry(1, 32, 32);
+  // === BODY (shoulders) ===
+  const bodyGeo = new THREE.CapsuleGeometry(0.9, 1.2, 8, 16);
   const skinMat = new THREE.MeshStandardMaterial({ 
     color: new THREE.Color(miiState.skin || '#fde68a'),
-    roughness: 0.5,
-    metalness: 0.1
+    roughness: 0.6,
+    metalness: 0.05
   });
-  const head = new THREE.Mesh(headGeo, skinMat);
+  const body = new THREE.Mesh(bodyGeo, skinMat);
+  body.position.y = -1.3;
+  group.add(body);
+  
+  // === NECK ===
+  const neckGeo = new THREE.CylinderGeometry(0.3, 0.35, 0.5, 16);
+  const neck = new THREE.Mesh(neckGeo, skinMat);
+  neck.position.y = -0.5;
+  group.add(neck);
+  
+  // === HEAD (detailed sphere) ===
+  const headGeo = new THREE.SphereGeometry(0.85, 64, 64);
+  const headMat = new THREE.MeshStandardMaterial({ 
+    color: new THREE.Color(miiState.skin || '#fde68a'),
+    roughness: 0.5,
+    metalness: 0.05
+  });
+  const head = new THREE.Mesh(headGeo, headMat);
   group.add(head);
   
-  // Eyes
-  const eyeY = 0.1;
-  const eyeX = 0.35;
-  const eyeGeo = new THREE.SphereGeometry(0.15, 16, 16);
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-  const pupilGeo = new THREE.SphereGeometry(0.08, 16, 16);
+  // === EARS ===
+  const earGeo = new THREE.SphereGeometry(0.15, 16, 16);
+  [-1, 1].forEach(dir => {
+    const ear = new THREE.Mesh(earGeo, skinMat);
+    ear.position.set(dir * 0.9, 0.1, 0);
+    ear.scale.set(0.6, 1, 0.8);
+    group.add(ear);
+  });
+  
+  // === EYES ===
+  const eyeY = 0.15;
+  const eyeX = 0.32;
+  const eyeGeo = new THREE.SphereGeometry(0.18, 32, 32);
+  const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const pupilGeo = new THREE.SphereGeometry(0.1, 16, 16);
   const pupilMat = new THREE.MeshStandardMaterial({ color: 0x1f2937 });
+  const shineGeo = new THREE.SphereGeometry(0.04, 8, 8);
+  const shineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   
   [-1, 1].forEach(dir => {
-    const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.position.set(dir * eyeX, eyeY, 0.85);
-    group.add(eye);
+    const eyeWhite = new THREE.Mesh(eyeGeo, eyeWhiteMat);
+    eyeWhite.position.set(dir * eyeX, eyeY, 0.75);
+    group.add(eyeWhite);
     
     const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-    pupil.position.set(dir * eyeX, eyeY, 0.95);
+    pupil.position.set(dir * eyeX, eyeY, 0.82);
     group.add(pupil);
     
-    // Special eye effects
+    const shine = new THREE.Mesh(shineGeo, shineMat);
+    shine.position.set(dir * eyeX - 0.05, eyeY + 0.05, 0.88);
+    group.add(shine);
+    
+    // Special eye styles
     if (miiState.eyes === 'star') {
-      const starGeo = new THREE.CircleGeometry(0.1, 5);
-      const starMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide });
-      const star = new THREE.Mesh(starGeo, starMat);
-      star.position.set(dir * eyeX, eyeY, 0.98);
-      group.add(star);
+      for (let i = 0; i < 5; i++) {
+        const starGeo = new THREE.ConeGeometry(0.06, 0.15, 5);
+        const starMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.5 });
+        const star = new THREE.Mesh(starGeo, starMat);
+        const angle = (i / 5) * Math.PI * 2;
+        star.position.set(dir * eyeX + Math.cos(angle) * 0.15, eyeY + Math.sin(angle) * 0.15, 0.88);
+        star.rotation.z = angle;
+        group.add(star);
+      }
     } else if (miiState.eyes === 'heart') {
-      const heartGeo = new THREE.CircleGeometry(0.1, 4);
-      const heartMat = new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide });
+      const heartShape = new THREE.Shape();
+      heartShape.moveTo(0, 0.1);
+      heartShape.bezierCurveTo(0.1, 0.15, 0.15, 0.1, 0, -0.05);
+      heartShape.bezierCurveTo(-0.15, 0.1, -0.1, 0.15, 0, 0.1);
+      const heartGeo = new THREE.ShapeGeometry(heartShape);
+      const heartMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 0.3, side: THREE.DoubleSide });
       const heart = new THREE.Mesh(heartGeo, heartMat);
-      heart.position.set(dir * eyeX, eyeY, 0.98);
+      heart.position.set(dir * eyeX, eyeY, 0.88);
+      heart.scale.set(1.2, 1.2, 1);
       group.add(heart);
+    } else if (miiState.eyes === 'cool') {
+      const lidGeo = new THREE.BoxGeometry(0.4, 0.05, 0.1);
+      const lidMat = new THREE.MeshStandardMaterial({ color: 0x1f2937 });
+      const lid = new THREE.Mesh(lidGeo, lidMat);
+      lid.position.set(dir * eyeX, eyeY + 0.1, 0.78);
+      group.add(lid);
     }
   });
   
-  // Mouth
-  const mouthY = -0.3;
+  // === EYEBROWS ===
+  const browGeo = new THREE.CapsuleGeometry(0.08, 0.25, 4, 8);
+  const browMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46 });
+  [-1, 1].forEach(dir => {
+    const brow = new THREE.Mesh(browGeo, browMat);
+    brow.position.set(dir * eyeX, eyeY + 0.35, 0.78);
+    brow.rotation.z = dir * 0.1;
+    group.add(brow);
+  });
+  
+  // === NOSE ===
+  const noseGeo = new THREE.ConeGeometry(0.08, 0.2, 16);
+  const nose = new THREE.Mesh(noseGeo, skinMat);
+  nose.position.set(0, -0.05, 0.85);
+  nose.rotation.x = Math.PI;
+  group.add(nose);
+  
+  // === MOUTH ===
+  const mouthY = -0.35;
   if (miiState.mouth === 'smile') {
-    const mouthGeo = new THREE.TorusGeometry(0.2, 0.05, 8, 16, Math.PI);
+    const mouthGeo = new THREE.TorusGeometry(0.15, 0.04, 8, 16, Math.PI);
     const mouthMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
     const mouth = new THREE.Mesh(mouthGeo, mouthMat);
-    mouth.position.set(0, mouthY, 0.85);
+    mouth.position.set(0, mouthY, 0.78);
     mouth.rotation.x = Math.PI;
     group.add(mouth);
   } else if (miiState.mouth === 'grin') {
-    const mouthGeo = new THREE.CapsuleGeometry(0.15, 0.3, 4, 8);
+    const mouthGeo = new THREE.CapsuleGeometry(0.12, 0.25, 4, 8);
     const mouthMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
     const mouth = new THREE.Mesh(mouthGeo, mouthMat);
-    mouth.position.set(0, mouthY, 0.9);
+    mouth.position.set(0, mouthY, 0.8);
     group.add(mouth);
   } else if (miiState.mouth === 'rainbow') {
-    const mouthGeo = new THREE.TorusGeometry(0.2, 0.05, 8, 16, Math.PI);
     const colors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x0000ff, 0x800080];
     colors.forEach((c, i) => {
-      const mouthMat = new THREE.MeshStandardMaterial({ color: c });
-      const mouth = new THREE.Mesh(mouthGeo.clone(), mouthMat);
-      mouth.position.set(0, mouthY - i * 0.02, 0.85 + i * 0.02);
+      const mouthGeo = new THREE.TorusGeometry(0.12 - i * 0.015, 0.03, 8, 16, Math.PI);
+      const mouthMat = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.2 });
+      const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+      mouth.position.set(0, mouthY - i * 0.02, 0.78 + i * 0.02);
       mouth.rotation.x = Math.PI;
-      mouth.scale.set(1 - i * 0.1, 1 - i * 0.1, 1);
       group.add(mouth);
     });
   } else if (miiState.mouth === 'fire') {
     for (let i = -2; i <= 2; i++) {
-      const flameGeo = new THREE.ConeGeometry(0.08, 0.3, 8);
+      const flameGeo = new THREE.ConeGeometry(0.06, 0.25, 8);
       const flameMat = new THREE.MeshStandardMaterial({ 
         color: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
         emissive: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
-        emissiveIntensity: 0.3
+        emissiveIntensity: 0.5
       });
       const flame = new THREE.Mesh(flameGeo, flameMat);
-      flame.position.set(i * 0.1, mouthY - 0.1, 0.85);
-      flame.rotation.x = Math.PI;
+      flame.position.set(i * 0.08, mouthY - 0.15, 0.78);
+      flame.rotation.z = i * 0.1;
       group.add(flame);
     }
+  } else if (miiState.mouth === 'open') {
+    const mouthGeo = new THREE.CircleGeometry(0.15, 16);
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0x1f0a0a });
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, mouthY, 0.78);
+    group.add(mouth);
+  } else if (miiState.mouth === 'sad') {
+    const mouthGeo = new THREE.TorusGeometry(0.12, 0.03, 8, 16, Math.PI);
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, mouthY - 0.05, 0.78);
+    group.add(mouth);
   }
   
-  // Hair
+  // === HAIR ===
+  const hairColor = 0x1f2937;
+  const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.8 });
+  
   if (miiState.hair === 'short') {
-    const hairGeo = new THREE.SphereGeometry(1.05, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2.5);
-    const hairMat = new THREE.MeshStandardMaterial({ color: 0x1f2937 });
+    const hairGeo = new THREE.SphereGeometry(0.9, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2.5);
     const hair = new THREE.Mesh(hairGeo, hairMat);
-    hair.position.y = 0.2;
+    hair.position.y = 0.25;
     group.add(hair);
   } else if (miiState.hair === 'long') {
-    const hairGeo = new THREE.CylinderGeometry(1.1, 1.3, 1.5, 32, 1, true);
-    const hairMat = new THREE.MeshStandardMaterial({ color: 0x7c3aed, side: THREE.DoubleSide });
+    const hairGeo = new THREE.CylinderGeometry(0.95, 1.1, 1.8, 32, 1, true);
     const hair = new THREE.Mesh(hairGeo, hairMat);
-    hair.position.y = -0.3;
+    hair.position.y = -0.4;
     group.add(hair);
+    const hairTopGeo = new THREE.SphereGeometry(0.9, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    const hairTop = new THREE.Mesh(hairTopGeo, hairMat);
+    hairTop.position.y = 0.2;
+    group.add(hairTop);
   } else if (miiState.hair === 'bun') {
-    const bunGeo = new THREE.SphereGeometry(0.4, 16, 16);
-    const bunMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.2 });
+    const bunGeo = new THREE.SphereGeometry(0.35, 16, 16);
+    const bunMat = new THREE.MeshStandardMaterial({ color: 0x6366f1, emissive: 0x6366f1, emissiveIntensity: 0.2, roughness: 0.3 });
     const bun = new THREE.Mesh(bunGeo, bunMat);
-    bun.position.set(0, 1.2, 0);
+    bun.position.set(0, 1.05, 0);
     group.add(bun);
+    const hairBase = new THREE.Mesh(new THREE.SphereGeometry(0.88, 32, 32, 0, Math.PI * 2, 0, Math.PI / 3), hairMat);
+    hairBase.position.y = 0.25;
+    group.add(hairBase);
   } else if (miiState.hair === 'spiky') {
-    for (let i = -3; i <= 3; i++) {
-      const spikeGeo = new THREE.ConeGeometry(0.15, 0.6, 8);
-      const spikeMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.3 });
+    for (let i = -4; i <= 4; i++) {
+      const spikeGeo = new THREE.ConeGeometry(0.12, 0.5, 8);
+      const spikeMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xfacc15, emissiveIntensity: 0.4, roughness: 0.2 });
       const spike = new THREE.Mesh(spikeGeo, spikeMat);
-      spike.position.set(i * 0.3, 1.1, 0.2);
-      spike.rotation.z = i * 0.2;
+      spike.position.set(i * 0.2, 1.0, 0.15);
+      spike.rotation.z = i * 0.15;
       group.add(spike);
     }
   } else if (miiState.hair === 'flame') {
     for (let i = -3; i <= 3; i++) {
-      const flameGeo = new THREE.ConeGeometry(0.15, 0.5, 8);
+      const flameGeo = new THREE.ConeGeometry(0.1, 0.45, 8);
       const flameMat = new THREE.MeshStandardMaterial({ 
         color: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
         emissive: i % 2 === 0 ? 0xef4444 : 0xf59e0b,
-        emissiveIntensity: 0.4
+        emissiveIntensity: 0.5
       });
       const flame = new THREE.Mesh(flameGeo, flameMat);
-      flame.position.set(i * 0.25, 1.2, 0);
-      flame.rotation.z = i * 0.15;
+      flame.position.set(i * 0.18, 1.15, 0);
+      flame.rotation.z = i * 0.12;
       group.add(flame);
     }
   } else if (miiState.hair === 'curly') {
     for (let i = -2; i <= 2; i++) {
-      const curlGeo = new THREE.TorusGeometry(0.2, 0.1, 8, 16);
-      const curlMat = new THREE.MeshStandardMaterial({ color: 0xec4899 });
-      const curl = new THREE.Mesh(curlGeo, curlMat);
-      curl.position.set(i * 0.4, 1.1, 0.1);
-      curl.rotation.x = Math.PI / 2;
-      group.add(curl);
+      for (let j = 0; j < 3; j++) {
+        const curlGeo = new THREE.TorusGeometry(0.15, 0.08, 8, 16);
+        const curlMat = new THREE.MeshStandardMaterial({ color: 0xec4899 });
+        const curl = new THREE.Mesh(curlGeo, curlMat);
+        curl.position.set(i * 0.35, 0.9 + j * 0.25, 0.1 + j * 0.05);
+        curl.rotation.x = Math.PI / 2 + j * 0.2;
+        group.add(curl);
+      }
     }
   }
-  
-  // Background circle
-  const bgGeo = new THREE.CircleGeometry(2.5, 32);
-  const bgMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(miiState.color || '#16a34a') });
-  const bg = new THREE.Mesh(bgGeo, bgMat);
-  bg.position.z = -1.5;
-  group.add(bg);
   
   avatar3D.avatar = group;
   avatar3D.scene.add(group);
 }
 
 function updateAvatar3D() {
+  // Update background color
+  if (avatar3D.bgSphere) {
+    avatar3D.bgSphere.material.color = new THREE.Color(miiState.color || '#16a34a');
+  }
+  // Recreate avatar
   if (avatar3D.scene && avatar3D.avatar) {
     createAvatar3D();
   }
@@ -240,6 +350,10 @@ function updateAvatar3D() {
 function renderAvatar3D(containerId) {
   if (typeof THREE === 'undefined') {
     console.warn('Three.js not loaded');
+    return;
+  }
+  if (avatar3D.containers[containerId]) {
+    updateAvatar3D();
     return;
   }
   initAvatar3D(containerId);
